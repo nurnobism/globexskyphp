@@ -1,293 +1,204 @@
 <?php
-// includes/functions.php — Helper Functions
+/**
+ * Helper Functions
+ */
 
-function sanitize(string $input): string {
-    return htmlspecialchars(strip_tags(trim($input)), ENT_QUOTES, 'UTF-8');
+/**
+ * Sanitize output for HTML display
+ */
+function e(string $value): string {
+    return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
-function redirect(string $url, int $code = 302): never {
-    http_response_code($code);
-    header("Location: $url");
+/**
+ * Generate a CSRF token
+ */
+function csrfToken(): string {
+    if (empty($_SESSION['_csrf_token'])) {
+        $_SESSION['_csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['_csrf_token'];
+}
+
+/**
+ * Output a hidden CSRF input field
+ */
+function csrfField(): string {
+    return '<input type="hidden" name="_csrf_token" value="' . e(csrfToken()) . '">';
+}
+
+/**
+ * Verify CSRF token (returns true on valid, false on invalid)
+ */
+function verifyCsrf(): bool {
+    $token = $_POST['_csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+    return isset($_SESSION['_csrf_token']) && hash_equals($_SESSION['_csrf_token'], $token);
+}
+
+/**
+ * Format money amount
+ */
+function formatMoney(float $amount, string $currency = 'USD'): string {
+    return '$' . number_format($amount, 2);
+}
+
+/**
+ * Format datetime for display
+ */
+function formatDate(string $datetime, string $format = 'M j, Y'): string {
+    if (empty($datetime)) return '—';
+    return date($format, strtotime($datetime));
+}
+
+/**
+ * Format datetime with time
+ */
+function formatDateTime(string $datetime): string {
+    return formatDate($datetime, 'M j, Y g:i A');
+}
+
+/**
+ * Get base URL path for assets
+ */
+function asset(string $path): string {
+    return APP_URL . '/assets/' . ltrim($path, '/');
+}
+
+/**
+ * Redirect to a URL
+ */
+function redirect(string $url): void {
+    header('Location: ' . $url);
     exit;
 }
 
-function json_response(array $data, int $code = 200): never {
-    http_response_code($code);
+/**
+ * Return JSON response and exit
+ */
+function jsonResponse(mixed $data, int $status = 200): void {
+    http_response_code($status);
     header('Content-Type: application/json');
     echo json_encode($data);
     exit;
 }
 
-function formatCurrency(float $amount, string $currency = 'USD'): string {
-    $symbols = ['USD' => '$', 'EUR' => '€', 'GBP' => '£', 'BDT' => '৳', 'CNY' => '¥', 'INR' => '₹', 'AED' => 'د.إ'];
-    $symbol = $symbols[$currency] ?? $currency . ' ';
-    return $symbol . number_format($amount, 2);
+/**
+ * Get value from $_GET with optional default
+ */
+function get(string $key, mixed $default = null): mixed {
+    return $_GET[$key] ?? $default;
 }
 
-function formatDate(string $date, string $format = 'M d, Y'): string {
-    return date($format, strtotime($date));
+/**
+ * Get value from $_POST with optional default
+ */
+function post(string $key, mixed $default = null): mixed {
+    return $_POST[$key] ?? $default;
 }
 
-function formatDateTime(string $datetime): string {
-    return date('M d, Y H:i', strtotime($datetime));
-}
-
-function timeAgo(string $datetime): string {
-    $now  = new DateTime();
-    $then = new DateTime($datetime);
-    $diff = $now->diff($then);
-    if ($diff->y > 0) return $diff->y . ' year' . ($diff->y > 1 ? 's' : '') . ' ago';
-    if ($diff->m > 0) return $diff->m . ' month' . ($diff->m > 1 ? 's' : '') . ' ago';
-    if ($diff->d > 0) return $diff->d . ' day' . ($diff->d > 1 ? 's' : '') . ' ago';
-    if ($diff->h > 0) return $diff->h . ' hour' . ($diff->h > 1 ? 's' : '') . ' ago';
-    if ($diff->i > 0) return $diff->i . ' minute' . ($diff->i > 1 ? 's' : '') . ' ago';
-    return 'just now';
-}
-
-function generateToken(int $length = 32): string {
-    return bin2hex(random_bytes($length / 2));
-}
-
-function generateSlug(string $text): string {
-    $text = strtolower(trim($text));
-    $text = preg_replace('/[^a-z0-9\-]/', '-', $text);
-    $text = preg_replace('/-+/', '-', $text);
-    return trim($text, '-');
-}
-
-function truncate(string $text, int $length = 100, string $suffix = '...'): string {
-    if (mb_strlen($text) <= $length) return $text;
-    return mb_substr($text, 0, $length) . $suffix;
-}
-
-function uploadFile(array $file, string $folder = 'general', array $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']): array {
-    if ($file['error'] !== UPLOAD_ERR_OK) {
-        return ['success' => false, 'error' => 'Upload error: ' . $file['error']];
-    }
-    if ($file['size'] > UPLOAD_MAX_SIZE) {
-        return ['success' => false, 'error' => 'File too large (max 10MB)'];
-    }
-    $finfo = finfo_open(FILEINFO_MIME_TYPE);
-    $mimeType = finfo_file($finfo, $file['tmp_name']);
-    finfo_close($finfo);
-    if (!in_array($mimeType, $allowedTypes)) {
-        return ['success' => false, 'error' => 'File type not allowed'];
-    }
-    $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
-    $filename = generateToken(16) . '.' . strtolower($ext);
-    $uploadDir = UPLOAD_PATH . $folder . '/';
-    if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0755, true);
-    }
-    $destination = $uploadDir . $filename;
-    if (!move_uploaded_file($file['tmp_name'], $destination)) {
-        return ['success' => false, 'error' => 'Failed to move uploaded file'];
-    }
-    return ['success' => true, 'filename' => $filename, 'url' => UPLOAD_URL . $folder . '/' . $filename];
-}
-
-function paginate(int $total, int $perPage, int $currentPage): array {
-    $totalPages = (int)ceil($total / $perPage);
-    $currentPage = max(1, min($currentPage, $totalPages));
-    return [
-        'total'        => $total,
-        'per_page'     => $perPage,
-        'current_page' => $currentPage,
-        'total_pages'  => $totalPages,
-        'offset'       => ($currentPage - 1) * $perPage,
-        'has_prev'     => $currentPage > 1,
-        'has_next'     => $currentPage < $totalPages,
-    ];
-}
-
-function getCurrentUser(): ?array {
-    if (session_status() === PHP_SESSION_NONE) session_start();
-    return $_SESSION['user'] ?? null;
-}
-
-function isLoggedIn(): bool {
-    return getCurrentUser() !== null;
-}
-
-function isAdmin(): bool {
-    $user = getCurrentUser();
-    return $user && in_array($user['role'], ['admin', 'superadmin']);
-}
-
-function isSupplier(): bool {
-    $user = getCurrentUser();
-    return $user && in_array($user['role'], ['supplier', 'verified_supplier']);
-}
-
-function requireLogin(string $redirectTo = '/pages/auth/login.php'): void {
-    if (!isLoggedIn()) {
-        redirect(APP_URL . $redirectTo . '?redirect=' . urlencode($_SERVER['REQUEST_URI']));
-    }
-}
-
-function requireAdmin(): void {
-    requireLogin();
-    if (!isAdmin()) {
-        redirect(APP_URL . '/?error=unauthorized');
-    }
-}
-
-function csrfToken(): string {
-    if (session_status() === PHP_SESSION_NONE) session_start();
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = generateToken(CSRF_TOKEN_LENGTH);
-    }
-    return $_SESSION['csrf_token'];
-}
-
-function verifyCsrf(string $token): bool {
-    if (session_status() === PHP_SESSION_NONE) session_start();
-    return hash_equals($_SESSION['csrf_token'] ?? '', $token);
-}
-
-function csrfField(): string {
-    return '<input type="hidden" name="csrf_token" value="' . htmlspecialchars(csrfToken()) . '">';
-}
-
-function getSettings(): array {
-    static $settings = null;
-    if ($settings === null) {
-        try {
-            $pdo = getDB();
-            $stmt = $pdo->query("SELECT setting_key, setting_value FROM platform_settings");
-            $settings = [];
-            while ($row = $stmt->fetch()) {
-                $settings[$row['setting_key']] = $row['setting_value'];
-            }
-        } catch (Exception $e) {
-            $settings = [];
+/**
+ * Validate required fields in an array
+ * Returns array of error messages
+ */
+function validateRequired(array $data, array $fields): array {
+    $errors = [];
+    foreach ($fields as $field => $label) {
+        if (empty(trim($data[$field] ?? ''))) {
+            $errors[$field] = "$label is required.";
         }
     }
-    return $settings;
+    return $errors;
 }
 
-function getSetting(string $key, $default = null) {
-    $settings = getSettings();
-    return $settings[$key] ?? $default;
+/**
+ * Validate email format
+ */
+function isValidEmail(string $email): bool {
+    return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
 }
 
-function isFeatureEnabled(string $feature): bool {
-    try {
-        $pdo = getDB();
-        $stmt = $pdo->prepare("SELECT is_enabled FROM feature_toggles WHERE feature_key = ?");
-        $stmt->execute([$feature]);
-        $row = $stmt->fetch();
-        return $row ? (bool)$row['is_enabled'] : false;
-    } catch (Exception $e) {
-        return false;
-    }
+/**
+ * Generate a UUID v4
+ */
+function generateUuid(): string {
+    $data = random_bytes(16);
+    $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
+    $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
+    return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
 }
 
-function getCartCount(): int {
-    if (!isLoggedIn()) {
-        return isset($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
-    }
-    try {
-        $pdo = getDB();
-        $user = getCurrentUser();
-        $stmt = $pdo->prepare("SELECT SUM(quantity) as total FROM cart_items ci JOIN cart c ON ci.cart_id = c.id WHERE c.user_id = ?");
-        $stmt->execute([$user['id']]);
-        $row = $stmt->fetch();
-        return (int)($row['total'] ?? 0);
-    } catch (Exception $e) {
-        return 0;
-    }
+/**
+ * Create a slug from a string
+ */
+function slugify(string $text): string {
+    $text = preg_replace('~[^\pL\d]+~u', '-', $text);
+    $text = iconv('utf-8', 'us-ascii//TRANSLIT', $text);
+    $text = preg_replace('~[^-\w]+~', '', $text);
+    $text = trim($text, '-');
+    $text = preg_replace('~-+~', '-', $text);
+    return strtolower($text);
 }
 
-function getNotificationCount(): int {
-    if (!isLoggedIn()) return 0;
-    try {
-        $pdo = getDB();
-        $user = getCurrentUser();
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0");
-        $stmt->execute([$user['id']]);
-        return (int)$stmt->fetchColumn();
-    } catch (Exception $e) {
-        return 0;
-    }
+/**
+ * Paginate a query result
+ * Returns ['data' => [...], 'total' => n, 'pages' => n, 'current' => n]
+ */
+function paginate(PDO $db, string $sql, array $params, int $page = 1, int $perPage = ITEMS_PER_PAGE): array {
+    $countSql = 'SELECT COUNT(*) FROM (' . $sql . ') AS _count_query';
+    $stmt = $db->prepare($countSql);
+    $stmt->execute($params);
+    $total = (int)$stmt->fetchColumn();
+
+    $pages  = max(1, (int)ceil($total / $perPage));
+    $offset = ($page - 1) * $perPage;
+
+    $stmt = $db->prepare($sql . " LIMIT $perPage OFFSET $offset");
+    $stmt->execute($params);
+    $data = $stmt->fetchAll();
+
+    return ['data' => $data, 'total' => $total, 'pages' => $pages, 'current' => $page];
 }
 
-function t(string $key, string $lang = ''): string {
-    static $translations = [];
-    if (!$lang) {
-        $lang = $_SESSION['lang'] ?? APP_LOCALE;
-    }
-    if (!isset($translations[$lang])) {
-        $file = __DIR__ . '/../locales/' . $lang . '.json';
-        if (file_exists($file)) {
-            $translations[$lang] = json_decode(file_get_contents($file), true) ?? [];
-        } else {
-            $translations[$lang] = [];
-        }
-    }
-    return $translations[$lang][$key] ?? $key;
-}
-
+/**
+ * Flash message: set
+ */
 function flashMessage(string $type, string $message): void {
-    if (session_status() === PHP_SESSION_NONE) session_start();
-    $_SESSION['flash'] = ['type' => $type, 'message' => $message];
+    $_SESSION['flash'][] = ['type' => $type, 'message' => $message];
 }
 
-function getFlashMessage(): ?array {
-    if (session_status() === PHP_SESSION_NONE) session_start();
-    if (isset($_SESSION['flash'])) {
-        $flash = $_SESSION['flash'];
-        unset($_SESSION['flash']);
-        return $flash;
-    }
-    return null;
+/**
+ * Flash message: get & clear
+ */
+function getFlashMessages(): array {
+    $messages = $_SESSION['flash'] ?? [];
+    unset($_SESSION['flash']);
+    return $messages;
 }
 
-function renderFlash(): string {
-    $flash = getFlashMessage();
-    if (!$flash) return '';
-    $type = $flash['type'] === 'error' ? 'danger' : htmlspecialchars($flash['type']);
-    $msg  = htmlspecialchars($flash['message']);
-    return "<div class='alert alert-{$type} alert-dismissible fade show' role='alert'>
-        {$msg}
-        <button type='button' class='btn-close' data-bs-dismiss='alert'></button>
-    </div>";
+/**
+ * Handle file upload
+ * Returns relative path on success, null on failure
+ */
+function uploadFile(array $file, string $subfolder = 'uploads'): ?string {
+    if ($file['error'] !== UPLOAD_ERR_OK) return null;
+    if ($file['size'] > UPLOAD_MAX_SIZE) return null;
+    if (!in_array($file['type'], ALLOWED_IMAGE_TYPES)) return null;
+
+    $dir = UPLOAD_DIR . $subfolder . '/';
+    if (!is_dir($dir)) mkdir($dir, 0755, true);
+
+    $ext      = pathinfo($file['name'], PATHINFO_EXTENSION);
+    $filename = generateUuid() . '.' . strtolower($ext);
+    $dest     = $dir . $filename;
+
+    if (!move_uploaded_file($file['tmp_name'], $dest)) return null;
+
+    return 'assets/uploads/' . $subfolder . '/' . $filename;
 }
 
-function ratePerKg(string $category): float {
-    $rates = [
-        'smartphones'    => 50.0,
-        'laptops'        => 60.0,
-        'clothes'        => 25.0,
-        'jewelry'        => 80.0,
-        'electronics'    => 55.0,
-        'accessories'    => 35.0,
-        'home'           => 30.0,
-        'default'        => 40.0,
-    ];
-    return $rates[strtolower($category)] ?? $rates['default'];
-}
-
-function calculateCommission(float $orderValue, string $category = 'general'): float {
-    $categoryRates = ['electronics' => 0.07, 'fashion' => 0.10, 'general' => 0.05];
-    $tierRates     = [10000 => 0.02, 5000 => 0.03, 1000 => 0.04, 0 => $categoryRates[$category] ?? 0.05];
-
-    foreach ($tierRates as $threshold => $rate) {
-        if ($orderValue >= $threshold) {
-            $commission = $orderValue * $rate;
-            return max(5.0, $commission); // minimum $5
-        }
-    }
-    return max(5.0, $orderValue * 0.05);
-}
-
-function logActivity(int $userId, string $action, string $description, string $ipAddress = ''): void {
-    try {
-        $pdo = getDB();
-        $ip  = $ipAddress ?: ($_SERVER['REMOTE_ADDR'] ?? '');
-        $stmt = $pdo->prepare("INSERT INTO activity_logs (user_id, action, description, ip_address, created_at) VALUES (?, ?, ?, ?, NOW())");
-        $stmt->execute([$userId, $action, $description, $ip]);
-    } catch (Exception $e) {
-        // Silently fail
-    }
+/**
+ * Calculate star rating display (returns integer 1-5)
+ */
+function starRating(float $rating): int {
+    return max(1, min(5, (int)round($rating)));
 }

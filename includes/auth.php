@@ -1,123 +1,111 @@
 <?php
-// includes/auth.php — Authentication Functions
+/**
+ * Authentication & Session Functions
+ */
 
-require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/functions.php';
-
-function loginUser(string $email, string $password, bool $remember = false): array {
-    $pdo = getDB();
-    $stmt = $pdo->prepare("SELECT id, name, email, password, role, is_active, is_verified, avatar FROM users WHERE email = ? AND is_active = 1 LIMIT 1");
-    $stmt->execute([strtolower(trim($email))]);
-    $user = $stmt->fetch();
-
-    if (!$user || !password_verify($password, $user['password'])) {
-        return ['success' => false, 'error' => 'Invalid email or password'];
+/**
+ * Start session with secure settings
+ */
+function startSession(): void {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_name(SESSION_NAME);
+        session_set_cookie_params([
+            'lifetime' => SESSION_LIFETIME,
+            'path'     => '/',
+            'secure'   => isset($_SERVER['HTTPS']),
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+        session_start();
+        // Regenerate session ID periodically to prevent fixation
+        if (!isset($_SESSION['_last_regen']) || time() - $_SESSION['_last_regen'] > 300) {
+            session_regenerate_id(true);
+            $_SESSION['_last_regen'] = time();
+        }
     }
+}
 
-    if (!$user['is_verified']) {
-        return ['success' => false, 'error' => 'Please verify your email before logging in'];
+/**
+ * Check if user is logged in
+ */
+function isLoggedIn(): bool {
+    return isset($_SESSION['user_id']);
+}
+
+/**
+ * Check if logged-in user is an admin
+ */
+function isAdmin(): bool {
+    return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+}
+
+/**
+ * Check if logged-in user is a supplier
+ */
+function isSupplier(): bool {
+    return isset($_SESSION['user_role']) && in_array($_SESSION['user_role'], ['supplier', 'admin']);
+}
+
+/**
+ * Get current logged-in user data
+ */
+function getCurrentUser(): ?array {
+    if (!isLoggedIn()) return null;
+    try {
+        $db   = getDB();
+        $stmt = $db->prepare('SELECT id, email, first_name, last_name, role, avatar, is_verified FROM users WHERE id = ? AND is_active = 1');
+        $stmt->execute([$_SESSION['user_id']]);
+        return $stmt->fetch() ?: null;
+    } catch (PDOException $e) {
+        return null;
     }
+}
 
+/**
+ * Login a user (set session)
+ */
+function loginUser(array $user): void {
     session_regenerate_id(true);
-    $_SESSION['user'] = [
-        'id'     => $user['id'],
-        'name'   => $user['name'],
-        'email'  => $user['email'],
-        'role'   => $user['role'],
-        'avatar' => $user['avatar'],
-    ];
-
-    // Update last login
-    $pdo->prepare("UPDATE users SET last_login = NOW() WHERE id = ?")->execute([$user['id']]);
-    logActivity($user['id'], 'login', 'User logged in', $_SERVER['REMOTE_ADDR'] ?? '');
-
-    if ($remember) {
-        $token  = generateToken(64);
-        $expiry = date('Y-m-d H:i:s', strtotime('+30 days'));
-        $pdo->prepare("INSERT INTO user_sessions (user_id, token, expires_at) VALUES (?, ?, ?)")->execute([$user['id'], hash('sha256', $token), $expiry]);
-        setcookie('remember_token', $token, strtotime('+30 days'), '/', '', true, true);
-    }
-
-    return ['success' => true, 'user' => $_SESSION['user']];
+    $_SESSION['user_id']    = $user['id'];
+    $_SESSION['user_email'] = $user['email'];
+    $_SESSION['user_name']  = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
+    $_SESSION['user_role']  = $user['role'] ?? 'buyer';
+    $_SESSION['_last_regen'] = time();
 }
 
-function registerUser(array $data): array {
-    $pdo = getDB();
-    $email = strtolower(trim($data['email']));
-
-    // Check duplicate
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
-    $stmt->execute([$email]);
-    if ($stmt->fetch()) {
-        return ['success' => false, 'error' => 'Email already registered'];
-    }
-
-    $password   = password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 12]);
-    $verifyToken = generateToken(32);
-    $role        = $data['role'] ?? 'buyer';
-
-    $stmt = $pdo->prepare("INSERT INTO users (name, email, password, role, verify_token, is_active, created_at) VALUES (?, ?, ?, ?, ?, 1, NOW())");
-    $stmt->execute([
-        sanitize($data['name']),
-        $email,
-        $password,
-        $role,
-        $verifyToken,
-    ]);
-
-    $userId = (int)$pdo->lastInsertId();
-    logActivity($userId, 'register', 'New user registered');
-
-    return ['success' => true, 'user_id' => $userId, 'verify_token' => $verifyToken];
-}
-
+/**
+ * Logout the current user
+ */
 function logoutUser(): void {
-    if (session_status() === PHP_SESSION_NONE) session_start();
-    if (isset($_SESSION['user'])) {
-        logActivity($_SESSION['user']['id'], 'logout', 'User logged out');
-    }
-    if (isset($_COOKIE['remember_token'])) {
-        $pdo = getDB();
-        $hash = hash('sha256', $_COOKIE['remember_token']);
-        $pdo->prepare("DELETE FROM user_sessions WHERE token = ?")->execute([$hash]);
-        setcookie('remember_token', '', time() - 3600, '/', '', true, true);
+    $_SESSION = [];
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000,
+            $params['path'], $params['domain'],
+            $params['secure'], $params['httponly']
+        );
     }
     session_destroy();
 }
 
-function checkRememberToken(): bool {
-    if (isLoggedIn()) return true;
-    if (!isset($_COOKIE['remember_token'])) return false;
-
-    $pdo  = getDB();
-    $hash = hash('sha256', $_COOKIE['remember_token']);
-    $stmt = $pdo->prepare("SELECT us.user_id, u.name, u.email, u.role, u.avatar FROM user_sessions us JOIN users u ON us.user_id = u.id WHERE us.token = ? AND us.expires_at > NOW() AND u.is_active = 1");
-    $stmt->execute([$hash]);
-    $user = $stmt->fetch();
-
-    if ($user) {
-        session_start();
-        session_regenerate_id(true);
-        $_SESSION['user'] = [
-            'id'     => $user['user_id'],
-            'name'   => $user['name'],
-            'email'  => $user['email'],
-            'role'   => $user['role'],
-            'avatar' => $user['avatar'],
-        ];
-        return true;
+/**
+ * Redirect to login if not authenticated
+ */
+function requireLogin(string $redirect = ''): void {
+    if (!isLoggedIn()) {
+        $back = $redirect ?: $_SERVER['REQUEST_URI'];
+        header('Location: /pages/auth/login.php?redirect=' . urlencode($back));
+        exit;
     }
-    return false;
 }
 
-function verifyEmail(string $token): bool {
-    $pdo  = getDB();
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE verify_token = ? AND is_verified = 0");
-    $stmt->execute([$token]);
-    $user = $stmt->fetch();
-
-    if (!$user) return false;
-
-    $pdo->prepare("UPDATE users SET is_verified = 1, verify_token = NULL WHERE id = ?")->execute([$user['id']]);
-    return true;
+/**
+ * Redirect to homepage if not admin
+ */
+function requireAdmin(): void {
+    requireLogin();
+    if (!isAdmin()) {
+        header('Location: /?error=forbidden');
+        exit;
+    }
 }

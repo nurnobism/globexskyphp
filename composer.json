@@ -1,11 +1,11 @@
 {
     "name": "globexsky/globexskyphp",
-    "description": "GlobexSky Multi-Service B2B/B2C Marketplace - Pure PHP + MySQL",
+    "description": "GlobexSky — Global B2B Trade Platform (PHP + Bootstrap 5 + MySQL)",
     "type": "project",
     "require": {
-        "php": ">=8.0",
-        "phpmailer/phpmailer": "^6.8"
+        "php": ">=8.0"
     },
+    "require-dev": {},
     "autoload": {
         "psr-4": {
             "GlobexSky\\": "src/"

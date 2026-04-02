@@ -1,31 +1,35 @@
 <?php
-// config/app.php — Site Settings
+/**
+ * Application Configuration
+ */
 
-define('APP_NAME', 'Globex Sky');
-define('APP_URL', getenv('APP_URL') ?: 'https://globexsky.com');
-define('APP_ENV', getenv('APP_ENV') ?: 'production');
-define('APP_DEBUG', getenv('APP_DEBUG') === 'true');
-define('APP_TIMEZONE', 'UTC');
-define('APP_LOCALE', 'en');
-define('APP_CURRENCY', 'USD');
+define('APP_NAME',    getenv('APP_NAME')    ?: 'GlobexSky');
+define('APP_URL',     getenv('APP_URL')     ?: 'https://yourdomain.com');
 define('APP_VERSION', '1.0.0');
+define('APP_ENV',     getenv('APP_ENV')     ?: 'production');
+define('APP_DEBUG',   getenv('APP_DEBUG')   === 'true');
 
-define('UPLOAD_MAX_SIZE', 10 * 1024 * 1024); // 10MB
-define('UPLOAD_PATH', __DIR__ . '/../assets/uploads/');
-define('UPLOAD_URL', APP_URL . '/assets/uploads/');
+// Session settings
+define('SESSION_NAME',     'globexsky_session');
+define('SESSION_LIFETIME', 86400); // 24 hours
 
-define('SESSION_LIFETIME', 7200); // 2 hours
-define('CSRF_TOKEN_LENGTH', 32);
+// Pagination
+define('ITEMS_PER_PAGE', 20);
 
-define('SUPPORTED_LANGUAGES', ['en', 'bn', 'ar', 'zh', 'hi', 'fr', 'es']);
-define('SUPPORTED_CURRENCIES', ['USD', 'BDT', 'EUR', 'GBP', 'CNY', 'INR', 'AED']);
+// Upload settings
+define('UPLOAD_MAX_SIZE',  10 * 1024 * 1024); // 10 MB
+define('UPLOAD_DIR',       __DIR__ . '/../assets/uploads/');
+define('UPLOAD_URL',       APP_URL . '/assets/uploads/');
+define('ALLOWED_IMAGE_TYPES', ['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 
-date_default_timezone_set(APP_TIMEZONE);
+// Timezone
+date_default_timezone_set(getenv('APP_TIMEZONE') ?: 'UTC');
 
+// Error display
 if (APP_DEBUG) {
-    ini_set('display_errors', 1);
+    ini_set('display_errors', '1');
     error_reporting(E_ALL);
 } else {
-    ini_set('display_errors', 0);
+    ini_set('display_errors', '0');
     error_reporting(0);
 }
