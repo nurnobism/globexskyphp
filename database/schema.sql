@@ -514,6 +514,526 @@ CREATE TABLE IF NOT EXISTS password_resets (
     INDEX idx_token (token)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- -----------------------------------------------------------
+-- ADVERTISING CAMPAIGNS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS advertising_campaigns (
+    id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id          INT UNSIGNED NOT NULL,
+    title            VARCHAR(255) NOT NULL,
+    description      TEXT,
+    budget           DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    start_date       DATE NOT NULL,
+    end_date         DATE NOT NULL,
+    status           ENUM('draft','active','paused','completed') NOT NULL DEFAULT 'draft',
+    target_audience  VARCHAR(255),
+    impressions      INT UNSIGNED NOT NULL DEFAULT 0,
+    clicks           INT UNSIGNED NOT NULL DEFAULT 0,
+    created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- AD ANALYTICS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS ad_analytics (
+    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    campaign_id   INT UNSIGNED NOT NULL,
+    date          DATE NOT NULL,
+    impressions   INT UNSIGNED NOT NULL DEFAULT 0,
+    clicks        INT UNSIGNED NOT NULL DEFAULT 0,
+    conversions   INT UNSIGNED NOT NULL DEFAULT 0,
+    spend         DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_campaign (campaign_id),
+    INDEX idx_date (date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- BLOG COMMENTS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS blog_comments (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    post_id     INT UNSIGNED NOT NULL,
+    user_id     INT UNSIGNED NOT NULL,
+    content     TEXT NOT NULL,
+    parent_id   INT UNSIGNED DEFAULT NULL,
+    status      ENUM('pending','approved','spam') NOT NULL DEFAULT 'pending',
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_post (post_id),
+    INDEX idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- CHAT ROOMS & MESSAGES
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS chat_rooms (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name        VARCHAR(255),
+    type        ENUM('direct','group') NOT NULL DEFAULT 'direct',
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    room_id     INT UNSIGNED NOT NULL,
+    user_id     INT UNSIGNED NOT NULL,
+    message     TEXT NOT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_room (room_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS chat_room_members (
+    id        INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    room_id   INT UNSIGNED NOT NULL,
+    user_id   INT UNSIGNED NOT NULL,
+    joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_room_user (room_id, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- PRODUCT COMPARISONS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS product_comparisons (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT UNSIGNED DEFAULT NULL,
+    product_ids JSON,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- COUPON USAGE
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS coupon_usage (
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    coupon_id       INT UNSIGNED NOT NULL,
+    user_id         INT UNSIGNED NOT NULL,
+    order_id        INT UNSIGNED DEFAULT NULL,
+    discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    used_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_coupon (coupon_id),
+    INDEX idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- PRODUCT CUSTOMIZATIONS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS product_customizations (
+    id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id        INT UNSIGNED NOT NULL,
+    product_id     INT UNSIGNED NOT NULL,
+    options        JSON,
+    preview_image  VARCHAR(500),
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id),
+    INDEX idx_product (product_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- DISPUTES
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS disputes (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    order_id     INT UNSIGNED NOT NULL,
+    buyer_id     INT UNSIGNED NOT NULL,
+    seller_id    INT UNSIGNED NOT NULL,
+    reason       VARCHAR(255) NOT NULL,
+    description  TEXT,
+    evidence     JSON,
+    status       ENUM('open','under_review','resolved','closed') NOT NULL DEFAULT 'open',
+    resolution   TEXT,
+    resolved_at  DATETIME DEFAULT NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_order (order_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- ESCROW TRANSACTIONS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS escrow_transactions (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    order_id     INT UNSIGNED DEFAULT NULL,
+    buyer_id     INT UNSIGNED NOT NULL,
+    seller_id    INT UNSIGNED NOT NULL,
+    amount       DECIMAL(12,2) NOT NULL,
+    currency     VARCHAR(3) NOT NULL DEFAULT 'USD',
+    status       ENUM('pending','held','released','disputed') NOT NULL DEFAULT 'pending',
+    released_at  DATETIME DEFAULT NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_buyer (buyer_id),
+    INDEX idx_seller (seller_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- FLASH SALES
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS flash_sales (
+    id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    title               VARCHAR(255) NOT NULL,
+    description         TEXT,
+    start_time          DATETIME NOT NULL,
+    end_time            DATETIME NOT NULL,
+    discount_percentage DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+    status              ENUM('draft','active','ended') NOT NULL DEFAULT 'draft',
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_status (status),
+    INDEX idx_times (start_time, end_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS flash_sale_products (
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    flash_sale_id   INT UNSIGNED NOT NULL,
+    product_id      INT UNSIGNED NOT NULL,
+    original_price  DECIMAL(12,2) NOT NULL,
+    sale_price      DECIMAL(12,2) NOT NULL,
+    quantity        INT UNSIGNED NOT NULL DEFAULT 0,
+    sold_count      INT UNSIGNED NOT NULL DEFAULT 0,
+    INDEX idx_sale (flash_sale_id),
+    INDEX idx_product (product_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- GDPR REQUESTS & CONSENT
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS gdpr_requests (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id      INT UNSIGNED NOT NULL,
+    type         ENUM('export','delete') NOT NULL,
+    status       ENUM('pending','processing','completed','rejected') NOT NULL DEFAULT 'pending',
+    completed_at DATETIME DEFAULT NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS consent_logs (
+    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id       INT UNSIGNED NOT NULL,
+    consent_type  VARCHAR(100) NOT NULL,
+    granted       TINYINT(1) NOT NULL DEFAULT 1,
+    ip_address    VARCHAR(45),
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- MARKET INSIGHTS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS market_insights (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    category    VARCHAR(100) NOT NULL,
+    title       VARCHAR(255) NOT NULL,
+    data        JSON,
+    period      VARCHAR(50),
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_category (category)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- LOGISTICS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS logistics_routes (
+    id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    origin         VARCHAR(255) NOT NULL,
+    destination    VARCHAR(255) NOT NULL,
+    carrier        VARCHAR(255),
+    estimated_days INT UNSIGNED NOT NULL DEFAULT 0,
+    cost           DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    status         ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_origin (origin),
+    INDEX idx_destination (destination)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS warehouses (
+    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name          VARCHAR(255) NOT NULL,
+    address       TEXT,
+    city          VARCHAR(100),
+    country       VARCHAR(100),
+    capacity      INT UNSIGNED NOT NULL DEFAULT 0,
+    current_stock INT UNSIGNED NOT NULL DEFAULT 0,
+    manager_id    INT UNSIGNED DEFAULT NULL,
+    status        ENUM('active','inactive','maintenance') NOT NULL DEFAULT 'active',
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_country (country),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- LOYALTY
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS loyalty_points (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id      INT UNSIGNED NOT NULL,
+    points       INT NOT NULL,
+    type         ENUM('earned','redeemed') NOT NULL,
+    description  VARCHAR(255),
+    reference_id INT UNSIGNED DEFAULT NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id),
+    INDEX idx_type (type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS loyalty_rewards (
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name            VARCHAR(255) NOT NULL,
+    description     TEXT,
+    points_required INT UNSIGNED NOT NULL,
+    category        VARCHAR(100),
+    image           VARCHAR(500),
+    stock           INT UNSIGNED NOT NULL DEFAULT 0,
+    status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- MEETINGS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS meetings (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    organizer_id INT UNSIGNED NOT NULL,
+    title        VARCHAR(255) NOT NULL,
+    description  TEXT,
+    start_time   DATETIME NOT NULL,
+    end_time     DATETIME NOT NULL,
+    meeting_url  VARCHAR(500),
+    status       ENUM('scheduled','in_progress','completed','cancelled') NOT NULL DEFAULT 'scheduled',
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_organizer (organizer_id),
+    INDEX idx_status (status),
+    INDEX idx_start (start_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS meeting_participants (
+    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    meeting_id INT UNSIGNED NOT NULL,
+    user_id    INT UNSIGNED NOT NULL,
+    status     ENUM('invited','accepted','declined') NOT NULL DEFAULT 'invited',
+    joined_at  DATETIME DEFAULT NULL,
+    INDEX idx_meeting (meeting_id),
+    UNIQUE KEY uniq_meeting_user (meeting_id, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- NEWSLETTERS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS newsletters (
+    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    title      VARCHAR(255) NOT NULL,
+    subject    VARCHAR(255) NOT NULL,
+    content    TEXT NOT NULL,
+    status     ENUM('draft','sent') NOT NULL DEFAULT 'draft',
+    sent_at    DATETIME DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- NOTIFICATION PREFERENCES
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS notification_preferences (
+    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id       INT UNSIGNED NOT NULL,
+    type          VARCHAR(100) NOT NULL,
+    email_enabled TINYINT(1) NOT NULL DEFAULT 1,
+    push_enabled  TINYINT(1) NOT NULL DEFAULT 1,
+    sms_enabled   TINYINT(1) NOT NULL DEFAULT 0,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_user_type (user_id, type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- PAYMENT METHODS & TRANSACTIONS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS payment_methods (
+    id                   INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id              INT UNSIGNED NOT NULL,
+    type                 ENUM('card','bank','wallet') NOT NULL,
+    provider             VARCHAR(100),
+    account_number_last4 VARCHAR(4),
+    is_default           TINYINT(1) NOT NULL DEFAULT 0,
+    status               ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS payment_transactions (
+    id                INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    order_id          INT UNSIGNED DEFAULT NULL,
+    user_id           INT UNSIGNED NOT NULL,
+    payment_method_id INT UNSIGNED DEFAULT NULL,
+    amount            DECIMAL(12,2) NOT NULL,
+    currency          VARCHAR(3) NOT NULL DEFAULT 'USD',
+    status            ENUM('pending','completed','failed','refunded') NOT NULL DEFAULT 'pending',
+    transaction_ref   VARCHAR(100),
+    created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id),
+    INDEX idx_order (order_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- SAMPLE REQUESTS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS sample_requests (
+    id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id          INT UNSIGNED NOT NULL,
+    product_id       INT UNSIGNED NOT NULL,
+    quantity         INT UNSIGNED NOT NULL DEFAULT 1,
+    shipping_address TEXT,
+    status           ENUM('pending','approved','shipped','delivered','rejected') NOT NULL DEFAULT 'pending',
+    tracking_number  VARCHAR(100),
+    created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id),
+    INDEX idx_product (product_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- SEARCH HISTORY
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS search_history (
+    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id       INT UNSIGNED DEFAULT NULL,
+    query         VARCHAR(255) NOT NULL,
+    filters       JSON,
+    results_count INT UNSIGNED NOT NULL DEFAULT 0,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- SOURCING
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS sourcing_requests (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT UNSIGNED NOT NULL,
+    title       VARCHAR(255) NOT NULL,
+    description TEXT,
+    category    VARCHAR(100),
+    quantity    INT UNSIGNED NOT NULL DEFAULT 0,
+    budget      DECIMAL(12,2) DEFAULT NULL,
+    deadline    DATE DEFAULT NULL,
+    status      ENUM('open','in_progress','closed','cancelled') NOT NULL DEFAULT 'open',
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sourcing_quotes (
+    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    request_id    INT UNSIGNED NOT NULL,
+    supplier_id   INT UNSIGNED NOT NULL,
+    price         DECIMAL(12,2) NOT NULL,
+    quantity      INT UNSIGNED NOT NULL DEFAULT 0,
+    delivery_time INT UNSIGNED DEFAULT NULL,
+    notes         TEXT,
+    status        ENUM('pending','accepted','rejected') NOT NULL DEFAULT 'pending',
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_request (request_id),
+    INDEX idx_supplier (supplier_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- SUPPORT
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS support_tickets (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT UNSIGNED NOT NULL,
+    subject     VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    category    VARCHAR(100),
+    priority    ENUM('low','medium','high','urgent') NOT NULL DEFAULT 'medium',
+    status      ENUM('open','in_progress','resolved','closed') NOT NULL DEFAULT 'open',
+    assigned_to INT UNSIGNED DEFAULT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id),
+    INDEX idx_status (status),
+    INDEX idx_priority (priority)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS support_replies (
+    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    ticket_id  INT UNSIGNED NOT NULL,
+    user_id    INT UNSIGNED NOT NULL,
+    message    TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_ticket (ticket_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS faqs (
+    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    question   VARCHAR(500) NOT NULL,
+    answer     TEXT NOT NULL,
+    category   VARCHAR(100),
+    order_num  INT UNSIGNED NOT NULL DEFAULT 0,
+    status     ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_category (category),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- TEAMS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS teams (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name        VARCHAR(255) NOT NULL,
+    owner_id    INT UNSIGNED NOT NULL,
+    description TEXT,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_owner (owner_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS team_members (
+    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    team_id    INT UNSIGNED NOT NULL,
+    user_id    INT UNSIGNED NOT NULL,
+    role       ENUM('owner','admin','editor','member','viewer') NOT NULL DEFAULT 'member',
+    invited_by INT UNSIGNED DEFAULT NULL,
+    status     ENUM('pending','active','removed') NOT NULL DEFAULT 'pending',
+    joined_at  DATETIME DEFAULT NULL,
+    INDEX idx_team (team_id),
+    UNIQUE KEY uniq_team_user (team_id, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- SUPPLIER SCORECARDS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS supplier_scorecards (
+    id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    supplier_id         INT UNSIGNED NOT NULL,
+    quality_score       DECIMAL(3,1) NOT NULL DEFAULT 0.0,
+    delivery_score      DECIMAL(3,1) NOT NULL DEFAULT 0.0,
+    communication_score DECIMAL(3,1) NOT NULL DEFAULT 0.0,
+    overall_score       DECIMAL(3,1) NOT NULL DEFAULT 0.0,
+    review_period       VARCHAR(50),
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_supplier (supplier_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- ACTIVITY LOGS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS activity_logs (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT UNSIGNED DEFAULT NULL,
+    action      VARCHAR(100) NOT NULL,
+    description TEXT,
+    ip_address  VARCHAR(45),
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id),
+    INDEX idx_action (action)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- -----------------------------------------------------------

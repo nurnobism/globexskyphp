@@ -91,6 +91,57 @@ if (isLoggedIn()) {
                 <li class="nav-item">
                     <a class="nav-link" href="<?= APP_URL ?>/pages/rfq/create.php">Get Quote</a>
                 </li>
+
+                <!-- Services Dropdown -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        <i class="bi bi-grid"></i> Services
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/sourcing/index.php"><i class="bi bi-search me-2"></i>Sourcing</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/shipment/index.php"><i class="bi bi-truck me-2"></i>Shipment</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/logistics/index.php"><i class="bi bi-geo-alt me-2"></i>Logistics</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/inspection/request.php"><i class="bi bi-clipboard-check me-2"></i>Inspection</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/escrow/index.php"><i class="bi bi-shield-lock me-2"></i>Escrow</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/samples/index.php"><i class="bi bi-box-seam me-2"></i>Samples</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/dropshipping/index.php"><i class="bi bi-shop me-2"></i>Dropshipping</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/customization/index.php"><i class="bi bi-palette me-2"></i>Customization</a></li>
+                    </ul>
+                </li>
+
+                <!-- Trade & Events -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        <i class="bi bi-calendar-event"></i> Trade
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/trade-shows/index.php"><i class="bi bi-building me-2"></i>Trade Shows</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/livestream/index.php"><i class="bi bi-broadcast me-2"></i>Live Streams</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/vr-showroom/index.php"><i class="bi bi-headset-vr me-2"></i>VR Showroom</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/meetings/index.php"><i class="bi bi-camera-video me-2"></i>Meetings</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/flash-sales/index.php"><i class="bi bi-lightning me-2"></i>Flash Sales</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/campaigns/index.php"><i class="bi bi-megaphone me-2"></i>Campaigns</a></li>
+                    </ul>
+                </li>
+
+                <!-- AI & Tools -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        <i class="bi bi-robot"></i> AI & Tools
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/ai/index.php"><i class="bi bi-robot me-2"></i>AI Hub</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/ai/chatbot.php"><i class="bi bi-chat-dots me-2"></i>AI Chatbot</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/ai/search.php"><i class="bi bi-search-heart me-2"></i>AI Search</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/barcode-scanner/index.php"><i class="bi bi-upc-scan me-2"></i>Barcode Scanner</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/insights/index.php"><i class="bi bi-graph-up me-2"></i>Insights</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/api-platform/index.php"><i class="bi bi-plug me-2"></i>API Platform</a></li>
+                    </ul>
+                </li>
+
                 <?php if (isLoggedIn()): ?>
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
@@ -100,11 +151,18 @@ if (isLoggedIn()) {
                         <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/account/profile.php"><i class="bi bi-person me-2"></i>Profile</a></li>
                         <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/order/index.php"><i class="bi bi-bag me-2"></i>My Orders</a></li>
                         <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/rfq/index.php"><i class="bi bi-file-text me-2"></i>My RFQs</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/notifications/index.php"><i class="bi bi-bell me-2"></i>Notifications</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/communication/index.php"><i class="bi bi-chat-left-text me-2"></i>Messages</a></li>
                         <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/payment/index.php"><i class="bi bi-credit-card me-2"></i>Payments</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/loyalty/index.php"><i class="bi bi-trophy me-2"></i>Loyalty Rewards</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/teams/index.php"><i class="bi bi-people me-2"></i>Teams</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/support/index.php"><i class="bi bi-life-preserver me-2"></i>Support</a></li>
                         <?php if (isAdmin()): ?>
                         <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/admin/dashboard.php"><i class="bi bi-speedometer2 me-2"></i>Admin Panel</a></li>
-                        <li><hr class="dropdown-divider"></li>
                         <?php endif; ?>
+                        <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item text-danger" href="<?= APP_URL ?>/api/auth.php?action=logout"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
                     </ul>
                 </li>
