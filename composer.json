@@ -1,0 +1,17 @@
+{
+    "name": "globexsky/globexskyphp",
+    "description": "GlobexSky — Global B2B Trade Platform (PHP + Bootstrap 5 + MySQL)",
+    "type": "project",
+    "require": {
+        "php": ">=8.0"
+    },
+    "require-dev": {},
+    "autoload": {
+        "psr-4": {
+            "GlobexSky\\": "src/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}
