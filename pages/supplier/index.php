@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/middleware.php';
+requireRole(['supplier', 'admin', 'super_admin']);
 
 $db   = getDB();
 $page = max(1, (int)get('page', 1));

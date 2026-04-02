@@ -37,9 +37,53 @@ if (isLoggedIn()) {
         <span><i class="bi bi-telephone-fill"></i> +1 (800) GLOBEX-SKY</span>
         <div class="d-flex gap-3">
             <a href="<?= APP_URL ?>/pages/help.php" class="text-white text-decoration-none">Help</a>
-            <?php if (isLoggedIn()): ?>
-                <span class="text-white-50">Hi, <?= e($currentUser['first_name'] ?? 'User') ?></span>
-                <a href="<?= APP_URL ?>/api/auth.php?action=logout" class="text-white text-decoration-none">Logout</a>
+            <?php if (isLoggedIn() && $currentUser): ?>
+                <?php
+                $email       = $currentUser['email'] ?? '';
+                $displayName = $currentUser['first_name']
+                    ?? (!empty($email) ? explode('@', $email)[0] : 'User');
+                $userRole    = $currentUser['role'] ?? ($_SESSION['user_role'] ?? '');
+                ?>
+                <?php if (in_array($userRole, ['admin', 'super_admin'])): ?>
+                    <a href="<?= APP_URL ?>/pages/admin/index.php" class="text-warning text-decoration-none fw-semibold">
+                        <i class="bi bi-shield-fill"></i> Admin Panel
+                    </a>
+                <?php elseif ($userRole === 'supplier'): ?>
+                    <a href="<?= APP_URL ?>/pages/supplier/index.php" class="text-white text-decoration-none">
+                        <i class="bi bi-building"></i> Supplier Dashboard
+                    </a>
+                <?php elseif ($userRole === 'carrier'): ?>
+                    <a href="<?= APP_URL ?>/pages/shipment/carrier/" class="text-white text-decoration-none">
+                        <i class="bi bi-truck"></i> Carrier Dashboard
+                    </a>
+                <?php endif; ?>
+                <div class="dropdown">
+                    <a href="#" class="text-white text-decoration-none dropdown-toggle" data-bs-toggle="dropdown">
+                        <?php if (!empty($currentUser['avatar'])): ?>
+                            <img src="<?= e($currentUser['avatar']) ?>" alt="avatar"
+                                 style="width:24px;height:24px;border-radius:50%;object-fit:cover;">
+                        <?php else: ?>
+                            <i class="bi bi-person-circle"></i>
+                        <?php endif; ?>
+                        <?= e($displayName) ?>
+                        <span class="badge bg-<?= in_array($userRole,['admin','super_admin'])?'danger':($userRole==='supplier'?'primary':($userRole==='carrier'?'success':'secondary')) ?> ms-1 small">
+                            <?= e(ucfirst(str_replace('_',' ', $userRole))) ?>
+                        </span>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/account/profile.php"><i class="bi bi-person me-2"></i>My Profile</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/order/index.php"><i class="bi bi-bag me-2"></i>My Orders</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <form method="POST" action="/api/auth.php?action=logout" class="d-inline">
+                                <?= csrfField() ?>
+                                <button type="submit" class="dropdown-item text-danger">
+                                    <i class="bi bi-box-arrow-right me-2"></i>Logout
+                                </button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
             <?php else: ?>
                 <a href="<?= APP_URL ?>/pages/auth/login.php" class="text-white text-decoration-none">Login</a>
                 <a href="<?= APP_URL ?>/pages/auth/register.php" class="text-white text-decoration-none">Register</a>

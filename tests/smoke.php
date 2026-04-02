@@ -71,7 +71,7 @@ assertFile("$root/.htaccess");
 
 // ── Includes ────────────────────────────────────────────────
 echo "\nIncludes:\n";
-foreach (['middleware.php', 'header.php', 'footer.php', 'auth.php', 'functions.php'] as $f) {
+foreach (['middleware.php', 'header.php', 'footer.php', 'auth.php', 'functions.php', 'auth_guard.php'] as $f) {
     assertFile("$root/includes/$f");
 }
 
@@ -80,6 +80,7 @@ echo "\nDatabase:\n";
 assertFile("$root/database/schema.sql");
 assertFile("$root/database/seed.sql");
 assertFile("$root/database/schema_v2.sql");
+assertFile("$root/database/install.sql");
 
 // ── New page directories ─────────────────────────────────────
 echo "\nNew page directories:\n";
@@ -125,9 +126,22 @@ assertFile("$root/Dockerfile");
 assertFile("$root/docker-compose.yml");
 assertFile("$root/.github/workflows/ci.yml");
 
-// ── PHP syntax checks (new files only) ──────────────────────
+// ── Phase 1 Foundation files ─────────────────────────────────
+echo "\nPhase 1 Foundation files:\n";
+$phase1Files = [
+    'includes/auth_guard.php',
+    'database/install.sql',
+    'pages/admin/login.php',
+    'pages/admin/index.php',
+    'api/auth.php',
+];
+foreach ($phase1Files as $f) {
+    assertFile("$root/$f");
+}
+
+// ── PHP syntax checks ────────────────────────────────────────
 echo "\nPHP syntax:\n";
-$allPhp = array_merge($newPages, $newApis);
+$allPhp = array_merge($newPages, $newApis, array_filter($phase1Files, fn($f) => str_ends_with($f, '.php')));
 foreach ($allPhp as $f) {
     assertSyntax("$root/$f");
 }

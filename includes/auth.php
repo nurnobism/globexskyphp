@@ -33,17 +33,55 @@ function isLoggedIn(): bool {
 }
 
 /**
- * Check if logged-in user is an admin
+ * Check if logged-in user is an admin or super_admin
  */
 function isAdmin(): bool {
-    return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+    return isset($_SESSION['user_role']) && in_array($_SESSION['user_role'], ['admin', 'super_admin']);
 }
 
 /**
  * Check if logged-in user is a supplier
  */
 function isSupplier(): bool {
-    return isset($_SESSION['user_role']) && in_array($_SESSION['user_role'], ['supplier', 'admin']);
+    return isset($_SESSION['user_role']) && in_array($_SESSION['user_role'], ['supplier', 'admin', 'super_admin']);
+}
+
+/**
+ * Check if the current user has a specific role (or one of several roles)
+ * @param string|string[] $role
+ */
+function hasRole(string|array $role): bool {
+    $current = $_SESSION['user_role'] ?? '';
+    $roles = is_array($role) ? $role : [$role];
+    return in_array($current, $roles, true);
+}
+
+/**
+ * Require user to have one of the given roles; redirect/403 otherwise
+ * @param string[] $roles
+ */
+function requireRole(array $roles): void {
+    if (!isLoggedIn()) {
+        redirect('/pages/auth/login.php?redirect=' . urlencode($_SERVER['REQUEST_URI']));
+    }
+    if (!hasRole($roles)) {
+        http_response_code(403);
+        echo '<!DOCTYPE html><html><head><title>Access Denied</title>'
+           . '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"></head>'
+           . '<body><div class="container py-5 text-center">'
+           . '<h2 class="text-danger">403 — Access Denied</h2>'
+           . '<p>You do not have permission to view this page.</p>'
+           . '<a href="/" class="btn btn-primary">Go Home</a>'
+           . '</div></body></html>';
+        exit;
+    }
+}
+
+/**
+ * Shortcut: require super_admin role
+ */
+function requireSuperAdmin(): void {
+    requireRole(['super_admin']);
 }
 
 /**

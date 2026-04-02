@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/middleware.php';
+requireLogin();
 
 $db = getDB();
 
