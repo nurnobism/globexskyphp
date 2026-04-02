@@ -6,12 +6,14 @@ $search = get('search', '');
 $page = max(1, (int)get('page', 1));
 $admin = isLoggedIn() && isAdmin();
 
+$escapedSearch = str_replace(['%', '_'], ['\\%', '\\_'], $search);
+
 if ($admin) {
     $sql = "SELECT * FROM coupons WHERE 1=1";
     $params = [];
     if ($search) {
         $sql .= " AND code LIKE ?";
-        $params[] = "%$search%";
+        $params[] = "%$escapedSearch%";
     }
     $sql .= " ORDER BY created_at DESC";
     $result = paginate($db, $sql, $params, $page);
@@ -22,7 +24,7 @@ if ($admin) {
     $params = [];
     if ($search) {
         $sql .= " AND code LIKE ?";
-        $params[] = "%$search%";
+        $params[] = "%$escapedSearch%";
     }
     $sql .= " ORDER BY created_at DESC";
     $result = paginate($db, $sql, $params, $page);

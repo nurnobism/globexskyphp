@@ -119,7 +119,7 @@ include __DIR__ . '/../../includes/header.php';
                                             </span>
                                         </td>
                                         <td><?= formatDate($req['created_at'] ?? '') ?></td>
-                                        <td><?= !empty($req['completed_at']) ? formatDate($req['completed_at']) : '<span class="text-muted">—</span>' ?></td>
+                                        <td><?php if (!empty($req['completed_at'])): ?><?= formatDate($req['completed_at']) ?><?php else: ?><span class="text-muted">—</span><?php endif; ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>

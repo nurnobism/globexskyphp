@@ -215,7 +215,10 @@ function updateHeroCountdown() {
     if (minutesEl) minutesEl.textContent = String(m).padStart(2, '0');
     if (secondsEl) secondsEl.textContent = String(s).padStart(2, '0');
 
-    if (diff <= 0) location.reload();
+    if (diff <= 0) {
+        el.closest('.card')?.querySelector('.badge')?.classList.replace('bg-danger', 'bg-secondary');
+        el.innerHTML = '<span class="text-white-50">This sale has ended</span>';
+    }
 }
 updateHeroCountdown();
 setInterval(updateHeroCountdown, 1000);
