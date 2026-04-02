@@ -29,6 +29,7 @@ switch ($action) {
         $stmt->execute($ids);
         $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
         jsonOut(['success' => true, 'data' => $products, 'count' => count($products)]);
+    break;
 
     case 'add':
         $product_id = (int)($_POST['product_id'] ?? $_GET['product_id'] ?? 0);
@@ -44,6 +45,7 @@ switch ($action) {
         }
         $_SESSION['compare'][] = $product_id;
         jsonOut(['success' => true, 'message' => 'Product added to comparison', 'count' => count($_SESSION['compare'])]);
+    break;
 
     case 'remove':
         $product_id = (int)($_POST['product_id'] ?? $_GET['product_id'] ?? 0);
@@ -54,10 +56,12 @@ switch ($action) {
         }
         array_splice($_SESSION['compare'], $key, 1);
         jsonOut(['success' => true, 'message' => 'Product removed from comparison', 'count' => count($_SESSION['compare'])]);
+    break;
 
     case 'clear':
         $_SESSION['compare'] = [];
         jsonOut(['success' => true, 'message' => 'Comparison list cleared']);
+    break;
 
     default:
         jsonOut(['success' => false, 'message' => 'Invalid action'], 400);

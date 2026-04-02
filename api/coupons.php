@@ -12,6 +12,7 @@ switch ($action) {
         $sql    = 'SELECT * FROM coupons ORDER BY created_at DESC';
         $result = paginate($db, $sql, [], $page);
         jsonOut(['success' => true, 'data' => $result]);
+    break;
 
     case 'detail':
         $id   = (int)($_GET['id'] ?? 0);
@@ -28,6 +29,7 @@ switch ($action) {
         $coupon = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$coupon) jsonOut(['success' => false, 'message' => 'Coupon not found'], 404);
         jsonOut(['success' => true, 'data' => $coupon]);
+    break;
 
     case 'create':
         requireRole('admin');
@@ -52,6 +54,7 @@ switch ($action) {
         $stmt->execute([$code, $type, $discount, $min_order, $usage_limit ?: null, $expires_at ?: null, $description]);
         $newId = $db->lastInsertId();
         jsonOut(['success' => true, 'message' => 'Coupon created', 'id' => $newId], 201);
+    break;
 
     case 'update':
         requireRole('admin');
@@ -79,6 +82,7 @@ switch ($action) {
         );
         $stmt->execute([$code, $type, $discount, $min_order, $usage_limit ?: null, $expires_at ?: null, $description, $id]);
         jsonOut(['success' => true, 'message' => 'Coupon updated']);
+    break;
 
     case 'delete':
         requireRole('admin');
@@ -91,6 +95,7 @@ switch ($action) {
         $db->prepare('DELETE FROM coupon_usage WHERE coupon_id = ?')->execute([$id]);
         $db->prepare('DELETE FROM coupons WHERE id = ?')->execute([$id]);
         jsonOut(['success' => true, 'message' => 'Coupon deleted']);
+    break;
 
     case 'validate':
         $code      = sanitize($_GET['code'] ?? $_POST['code'] ?? '');
@@ -129,6 +134,7 @@ switch ($action) {
             'coupon'          => $coupon,
             'discount_amount' => $discount_amount,
         ]);
+    break;
 
     case 'redeem':
         requireAuth();
@@ -169,6 +175,7 @@ switch ($action) {
             'message'         => 'Coupon redeemed',
             'discount_amount' => $discount_amount,
         ]);
+    break;
 
     default:
         jsonOut(['success' => false, 'message' => 'Invalid action'], 400);

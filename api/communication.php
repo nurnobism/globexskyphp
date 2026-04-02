@@ -14,6 +14,7 @@ switch ($action) {
         $sql    = 'SELECT id, sender_id, subject, read_at, created_at FROM messages WHERE recipient_id = ? ORDER BY created_at DESC';
         $result = paginate($db, $sql, [$user['id']], $page);
         jsonOut(['success' => true, 'data' => $result]);
+    break;
 
     case 'send_message':
         requireAuth();
@@ -36,6 +37,7 @@ switch ($action) {
         $stmt->execute([$user['id'], $recipient_id, $subject, $content, $thread_id ?: null]);
         $newId = $db->lastInsertId();
         jsonOut(['success' => true, 'message' => 'Message sent', 'id' => $newId], 201);
+    break;
 
     case 'get_thread':
         requireAuth();
@@ -50,6 +52,7 @@ switch ($action) {
         $stmt->execute([$thread_id, $user['id'], $user['id']]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         jsonOut(['success' => true, 'data' => $rows]);
+    break;
 
     case 'list_rooms':
         requireAuth();
@@ -63,6 +66,7 @@ switch ($action) {
         $stmt->execute([$user['id']]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         jsonOut(['success' => true, 'data' => $rows]);
+    break;
 
     case 'create_room':
         requireAuth();
@@ -88,6 +92,7 @@ switch ($action) {
             }
         }
         jsonOut(['success' => true, 'message' => 'Room created', 'id' => $roomId], 201);
+    break;
 
     case 'send_chat':
         requireAuth();
@@ -109,6 +114,7 @@ switch ($action) {
         $stmt->execute([$room_id, $user['id'], $content]);
         $newId = $db->lastInsertId();
         jsonOut(['success' => true, 'message' => 'Message sent', 'id' => $newId], 201);
+    break;
 
     case 'get_history':
         requireAuth();
@@ -124,6 +130,7 @@ switch ($action) {
         $sql    = 'SELECT * FROM chat_messages WHERE room_id = ? ORDER BY created_at ASC';
         $result = paginate($db, $sql, [$room_id], $page);
         jsonOut(['success' => true, 'data' => $result]);
+    break;
 
     case 'mark_read':
         requireAuth();
@@ -139,6 +146,7 @@ switch ($action) {
             jsonOut(['success' => false, 'message' => 'Message not found or already read'], 404);
         }
         jsonOut(['success' => true, 'message' => 'Message marked as read']);
+    break;
 
     default:
         jsonOut(['success' => false, 'message' => 'Invalid action'], 400);

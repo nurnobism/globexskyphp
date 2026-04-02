@@ -62,6 +62,7 @@ switch ($action) {
             $row['options'] = json_decode($row['options_json'], true);
         }
         jsonOut(['success' => true, 'data' => $row]);
+    break;
 
     case 'list':
         requireAuth();
@@ -74,6 +75,7 @@ switch ($action) {
                  ORDER BY pc.created_at DESC';
         $result = paginate($db, $sql, [$user['id']], $page);
         jsonOut(['success' => true, 'data' => $result]);
+    break;
 
     case 'delete':
         requireAuth();
@@ -90,6 +92,7 @@ switch ($action) {
         }
         $db->prepare('DELETE FROM product_customizations WHERE id = ? AND user_id = ?')->execute([$id, $user['id']]);
         jsonOut(['success' => true, 'message' => 'Customization deleted']);
+    break;
 
     default:
         jsonOut(['success' => false, 'message' => 'Invalid action'], 400);

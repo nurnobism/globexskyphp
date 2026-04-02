@@ -20,6 +20,7 @@ switch ($action) {
         $sql .= ' ORDER BY created_at DESC';
         $result = paginate($db, $sql, $params, $page);
         jsonOut(['success' => true, 'data' => $result]);
+    break;
 
     case 'detail':
         $id   = (int)($_GET['id'] ?? 0);
@@ -36,6 +37,7 @@ switch ($action) {
         $post = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$post) jsonOut(['success' => false, 'message' => 'Post not found'], 404);
         jsonOut(['success' => true, 'data' => $post]);
+    break;
 
     case 'create':
         requireAuth();
@@ -59,6 +61,7 @@ switch ($action) {
         $stmt->execute([$title, $slug, $content, $excerpt, $user['id'], $category, $tags, $status]);
         $newId = $db->lastInsertId();
         jsonOut(['success' => true, 'message' => 'Post created', 'id' => $newId], 201);
+    break;
 
     case 'update':
         requireAuth();
@@ -84,6 +87,7 @@ switch ($action) {
         );
         $stmt->execute([$title, $content, $excerpt, $category, $tags, $status, $id]);
         jsonOut(['success' => true, 'message' => 'Post updated']);
+    break;
 
     case 'delete':
         requireAuth();
@@ -101,6 +105,7 @@ switch ($action) {
         $db->prepare('DELETE FROM blog_comments WHERE post_id = ?')->execute([$id]);
         $db->prepare('DELETE FROM blog_posts WHERE id = ?')->execute([$id]);
         jsonOut(['success' => true, 'message' => 'Post deleted']);
+    break;
 
     case 'add_comment':
         requireAuth();
@@ -120,6 +125,7 @@ switch ($action) {
         $stmt->execute([$post_id, $user['id'], $content]);
         $newId = $db->lastInsertId();
         jsonOut(['success' => true, 'message' => 'Comment added', 'id' => $newId], 201);
+    break;
 
     case 'list_comments':
         $post_id = (int)($_GET['post_id'] ?? 0);
@@ -129,6 +135,7 @@ switch ($action) {
                    FROM blog_comments bc WHERE bc.post_id = ? ORDER BY bc.created_at ASC';
         $result = paginate($db, $sql, [$post_id], $page);
         jsonOut(['success' => true, 'data' => $result]);
+    break;
 
     default:
         jsonOut(['success' => false, 'message' => 'Invalid action'], 400);

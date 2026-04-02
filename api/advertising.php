@@ -19,6 +19,7 @@ switch ($action) {
         $sql .= ' ORDER BY created_at DESC';
         $result = paginate($db, $sql, $params, $page);
         jsonOut(['success' => true, 'data' => $result]);
+    break;
 
     case 'detail':
         $id = (int)($_GET['id'] ?? 0);
@@ -28,6 +29,7 @@ switch ($action) {
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$row) jsonOut(['success' => false, 'message' => 'Campaign not found'], 404);
         jsonOut(['success' => true, 'data' => $row]);
+    break;
 
     case 'create':
         requireAuth();
@@ -49,6 +51,7 @@ switch ($action) {
         $stmt->execute([$title, $description, $budget, $start_date, $end_date, $target_audience, $type]);
         $newId = $db->lastInsertId();
         jsonOut(['success' => true, 'message' => 'Campaign created', 'id' => $newId], 201);
+    break;
 
     case 'update':
         requireAuth();
@@ -73,6 +76,7 @@ switch ($action) {
         );
         $stmt->execute([$title, $description, $budget, $start_date, $end_date, $target_audience, $type, $status, $id]);
         jsonOut(['success' => true, 'message' => 'Campaign updated']);
+    break;
 
     case 'delete':
         requireAuth();
@@ -85,6 +89,7 @@ switch ($action) {
         $db->prepare('DELETE FROM ad_analytics WHERE campaign_id = ?')->execute([$id]);
         $db->prepare('DELETE FROM advertising_campaigns WHERE id = ?')->execute([$id]);
         jsonOut(['success' => true, 'message' => 'Campaign deleted']);
+    break;
 
     case 'analytics':
         $id = (int)($_GET['id'] ?? 0);
@@ -111,6 +116,7 @@ switch ($action) {
         $detail->execute([$id]);
         $rows = $detail->fetchAll(PDO::FETCH_ASSOC);
         jsonOut(['success' => true, 'data' => ['summary' => $summary, 'daily' => $rows]]);
+    break;
 
     default:
         jsonOut(['success' => false, 'message' => 'Invalid action'], 400);
