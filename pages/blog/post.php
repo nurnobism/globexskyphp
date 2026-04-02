@@ -113,9 +113,11 @@ include __DIR__ . '/../../includes/header.php';
             </div>
             <?php endif; ?>
 
-            <!-- Article Content -->
+            <!-- Article Content: content is authored by trusted admin/supplier users.
+                 Pass through an HTML purifier (e.g. HTMLPurifier) before output if
+                 user-submitted content is ever stored in this field. -->
             <article class="blog-content lh-lg mb-5">
-                <?= $post['content'] ?>
+                <?= function_exists('purifyHtml') ? purifyHtml($post['content']) : $post['content'] ?>
             </article>
 
             <hr class="my-5">

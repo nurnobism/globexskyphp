@@ -25,7 +25,7 @@ include __DIR__ . '/../../includes/header.php';
                     </h5>
                 </div>
                 <div class="card-body p-4">
-                    <form method="POST" action="/api/blog.php" enctype="multipart/form-data">
+                    <form method="POST" action="/api/blog.php">
                         <?= csrfField() ?>
                         <input type="hidden" name="action" value="create">
 
@@ -83,14 +83,6 @@ include __DIR__ . '/../../includes/header.php';
                                        placeholder="e.g. trade, B2B, export">
                                 <div class="form-text">Comma-separated list of tags.</div>
                             </div>
-                        </div>
-
-                        <!-- Featured Image (optional) -->
-                        <div class="mb-4">
-                            <label for="featured_image" class="form-label fw-semibold">Featured Image</label>
-                            <input type="file" id="featured_image" name="featured_image" class="form-control"
-                                   accept="image/png,image/jpeg,image/webp">
-                            <div class="form-text">Optional. Accepted formats: PNG, JPEG, WebP. Max 2 MB.</div>
                         </div>
 
                         <!-- Actions -->
