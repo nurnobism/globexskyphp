@@ -1,0 +1,17 @@
+{
+    "name": "globexsky/globexskyphp",
+    "description": "GlobexSky Multi-Service B2B/B2C Marketplace - Pure PHP + MySQL",
+    "type": "project",
+    "require": {
+        "php": ">=8.0",
+        "phpmailer/phpmailer": "^6.8"
+    },
+    "autoload": {
+        "psr-4": {
+            "GlobexSky\\": "src/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}
