@@ -804,6 +804,169 @@ VALUES
 (1, 'WELCOME10', 'percent', 10.00, 50.00, NULL, 1, DATE_ADD(NOW(), INTERVAL 1 YEAR));
 
 -- =============================================================
+-- SEED DATA FOR NEW TABLES
+-- =============================================================
+
+-- Advertising Campaigns
+INSERT IGNORE INTO advertising_campaigns (id, user_id, title, description, budget, start_date, end_date, status, target_audience, impressions, clicks) VALUES
+(1, 1, 'Spring Electronics Sale', 'Promote top electronics with discounts up to 40%', 5000.00, '2026-03-01', '2026-04-30', 'active', 'electronics-buyers', 125000, 4800),
+(2, 1, 'New Supplier Onboarding', 'Attract new suppliers to the platform', 2500.00, '2026-04-01', '2026-06-30', 'active', 'manufacturers', 45000, 1200),
+(3, 1, 'Summer Fashion Collection', 'Feature summer apparel and accessories', 3000.00, '2026-05-01', '2026-08-31', 'draft', 'fashion-retailers', 0, 0);
+
+-- Ad Analytics
+INSERT IGNORE INTO ad_analytics (campaign_id, date, impressions, clicks, conversions, spend) VALUES
+(1, '2026-03-15', 8500, 320, 45, 180.00),
+(1, '2026-03-16', 9200, 350, 52, 195.00),
+(2, '2026-04-01', 3200, 85, 12, 55.00);
+
+-- Flash Sales
+INSERT IGNORE INTO flash_sales (id, title, description, start_time, end_time, discount_percentage, status) VALUES
+(1, 'Electronics Mega Flash', 'Huge discounts on electronics for 24 hours!', '2026-04-10 00:00:00', '2026-04-11 00:00:00', 35.00, 'active'),
+(2, 'Fashion Friday', 'Up to 50% off on fashion items!', '2026-04-15 08:00:00', '2026-04-15 20:00:00', 50.00, 'draft'),
+(3, 'Summer Clearance', 'End of season clearance event', '2026-05-01 00:00:00', '2026-05-03 00:00:00', 60.00, 'draft');
+
+-- Flash Sale Products
+INSERT IGNORE INTO flash_sale_products (flash_sale_id, product_id, original_price, sale_price, quantity, sold_count) VALUES
+(1, 1, 99.99, 64.99, 100, 45),
+(1, 2, 149.99, 97.49, 50, 22),
+(2, 3, 59.99, 29.99, 200, 0);
+
+-- Escrow Transactions
+INSERT IGNORE INTO escrow_transactions (id, order_id, buyer_id, seller_id, amount, currency, status) VALUES
+(1, 1, 1, 1, 2500.00, 'USD', 'held'),
+(2, 2, 1, 1, 850.00, 'USD', 'released');
+
+-- Logistics Routes
+INSERT IGNORE INTO logistics_routes (id, origin, destination, carrier, estimated_days, cost, status) VALUES
+(1, 'Shanghai, China', 'Los Angeles, USA', 'COSCO Shipping', 18, 2500.00, 'active'),
+(2, 'Shenzhen, China', 'Rotterdam, Netherlands', 'Maersk Line', 25, 3200.00, 'active'),
+(3, 'Mumbai, India', 'Dubai, UAE', 'MSC', 7, 800.00, 'active'),
+(4, 'Istanbul, Turkey', 'Hamburg, Germany', 'Hapag-Lloyd', 12, 1500.00, 'active'),
+(5, 'Ho Chi Minh, Vietnam', 'Tokyo, Japan', 'Evergreen', 8, 1100.00, 'active');
+
+-- Warehouses
+INSERT IGNORE INTO warehouses (id, name, address, city, country, capacity, current_stock, manager_id, status) VALUES
+(1, 'GlobexSky Main Warehouse', '123 Trade Blvd', 'Los Angeles', 'United States', 50000, 32000, 1, 'active'),
+(2, 'Europe Distribution Center', '45 Harbor Rd', 'Rotterdam', 'Netherlands', 35000, 18000, 1, 'active'),
+(3, 'Asia Fulfillment Hub', '78 Port Avenue', 'Shenzhen', 'China', 80000, 65000, 1, 'active'),
+(4, 'Middle East Logistics', '12 Free Zone Dr', 'Dubai', 'UAE', 25000, 12000, 1, 'active');
+
+-- Loyalty Points
+INSERT IGNORE INTO loyalty_points (user_id, points, type, description, reference_id) VALUES
+(1, 500, 'earned', 'Welcome bonus', NULL),
+(1, 150, 'earned', 'Order #1 purchase reward', 1),
+(1, -200, 'redeemed', 'Redeemed for $10 discount coupon', NULL),
+(1, 75, 'earned', 'Product review bonus', NULL);
+
+-- Loyalty Rewards
+INSERT IGNORE INTO loyalty_rewards (id, name, description, points_required, category, image, stock, status) VALUES
+(1, '$5 Discount Coupon', 'Get $5 off your next order', 100, 'discounts', NULL, 999, 'active'),
+(2, '$10 Discount Coupon', 'Get $10 off your next order', 200, 'discounts', NULL, 999, 'active'),
+(3, 'Free Shipping Voucher', 'Free shipping on your next order', 150, 'shipping', NULL, 500, 'active'),
+(4, 'Priority Support Access', '30 days of priority customer support', 300, 'services', NULL, 100, 'active'),
+(5, 'Exclusive Sample Pack', 'Curated sample pack from top suppliers', 500, 'products', NULL, 50, 'active');
+
+-- Meetings
+INSERT IGNORE INTO meetings (id, organizer_id, title, description, start_time, end_time, meeting_url, status) VALUES
+(1, 1, 'Q2 Supplier Review', 'Quarterly supplier performance review', '2026-04-15 10:00:00', '2026-04-15 11:00:00', 'https://meet.globexsky.com/q2-review', 'scheduled'),
+(2, 1, 'New Product Launch Planning', 'Discuss upcoming product launches', '2026-04-20 14:00:00', '2026-04-20 15:30:00', 'https://meet.globexsky.com/product-launch', 'scheduled'),
+(3, 1, 'Trade Show Prep', 'Prepare for upcoming trade show', '2026-04-10 09:00:00', '2026-04-10 10:00:00', NULL, 'completed');
+
+-- Meeting Participants
+INSERT IGNORE INTO meeting_participants (meeting_id, user_id, status) VALUES
+(1, 1, 'accepted'),
+(2, 1, 'accepted'),
+(3, 1, 'accepted');
+
+-- Newsletters
+INSERT IGNORE INTO newsletters (id, title, subject, content, status, sent_at) VALUES
+(1, 'March 2026 Newsletter', 'GlobexSky Monthly — March 2026', 'This month we launched new AI-powered search features, added 500+ verified suppliers, and expanded our logistics network.', 'sent', '2026-03-01 09:00:00'),
+(2, 'April 2026 Newsletter', 'GlobexSky Monthly — April 2026', 'Exciting new features including loyalty programs, team management, and advanced sourcing tools.', 'draft', NULL);
+
+-- Notification Preferences
+INSERT IGNORE INTO notification_preferences (user_id, type, email_enabled, push_enabled, sms_enabled) VALUES
+(1, 'order_updates', 1, 1, 0),
+(1, 'promotions', 1, 0, 0),
+(1, 'messages', 1, 1, 0),
+(1, 'shipments', 1, 1, 1),
+(1, 'system_alerts', 1, 1, 0);
+
+-- Payment Methods
+INSERT IGNORE INTO payment_methods (id, user_id, type, provider, account_number_last4, is_default, status) VALUES
+(1, 1, 'card', 'Visa', '4242', 1, 'active'),
+(2, 1, 'card', 'Mastercard', '8888', 0, 'active'),
+(3, 1, 'wallet', 'PayPal', '1234', 0, 'active');
+
+-- Payment Transactions
+INSERT IGNORE INTO payment_transactions (id, order_id, user_id, payment_method_id, amount, currency, status, transaction_ref) VALUES
+(1, 1, 1, 1, 299.99, 'USD', 'completed', 'TXN-2026-001'),
+(2, 2, 1, 1, 149.50, 'USD', 'completed', 'TXN-2026-002'),
+(3, 3, 1, 2, 75.00, 'USD', 'pending', 'TXN-2026-003');
+
+-- Sample Requests
+INSERT IGNORE INTO sample_requests (id, user_id, product_id, quantity, shipping_address, status, tracking_number) VALUES
+(1, 1, 1, 2, '123 Main St, Los Angeles, CA 90001, USA', 'shipped', 'SAMP-TRK-001'),
+(2, 1, 2, 1, '123 Main St, Los Angeles, CA 90001, USA', 'pending', NULL);
+
+-- Sourcing Requests
+INSERT IGNORE INTO sourcing_requests (id, user_id, title, description, category, quantity, budget, deadline, status) VALUES
+(1, 1, 'Custom Printed T-Shirts', 'Looking for supplier of custom printed organic cotton t-shirts, MOQ 500 pcs', 'apparel-fashion', 500, 5000.00, '2026-05-15', 'open'),
+(2, 1, 'Electronic Components', 'Need capacitors and resistors for PCB assembly', 'electronics', 10000, 2000.00, '2026-04-30', 'in_progress'),
+(3, 1, 'Packaging Materials', 'Eco-friendly packaging boxes and bags', 'construction', 5000, 3000.00, '2026-06-01', 'open');
+
+-- Sourcing Quotes
+INSERT IGNORE INTO sourcing_quotes (request_id, supplier_id, price, quantity, delivery_time, notes, status) VALUES
+(1, 1, 4200.00, 500, 14, 'Organic GOTS certified cotton, 180gsm.', 'pending'),
+(2, 1, 1800.00, 10000, 7, 'All components in stock, can ship immediately.', 'accepted');
+
+-- Support Tickets
+INSERT IGNORE INTO support_tickets (id, user_id, subject, description, category, priority, status, assigned_to) VALUES
+(1, 1, 'Cannot track my shipment', 'I placed an order 5 days ago but the tracking page shows no updates.', 'shipping', 'high', 'open', 1),
+(2, 1, 'Request for bulk discount', 'Interested in ordering 1000+ units. Can we get a bulk discount?', 'orders', 'medium', 'resolved', 1),
+(3, 1, 'How to become a verified supplier?', 'What documents are needed for supplier verification?', 'account', 'low', 'closed', 1);
+
+-- Support Replies
+INSERT IGNORE INTO support_replies (ticket_id, user_id, message) VALUES
+(1, 1, 'Hi, thank you for reaching out. Let me check the status of your shipment.'),
+(2, 1, 'For orders over 1000 units, we offer a 15% bulk discount.'),
+(3, 1, 'To become a verified supplier, please submit your business license and certifications.');
+
+-- FAQs
+INSERT IGNORE INTO faqs (question, answer, category, order_num, status) VALUES
+('How do I create an account?', 'Click the Register button in the top navigation and fill in your details.', 'General', 1, 'active'),
+('Is GlobexSky free to use?', 'Creating an account and browsing is free. We charge a small commission on completed transactions.', 'General', 2, 'active'),
+('How do I place an order?', 'Browse products, add to cart, and proceed to checkout. Pay via credit card, bank transfer, or escrow.', 'Orders', 3, 'active'),
+('Can I cancel an order?', 'Orders can be cancelled before they are shipped. Go to My Orders and click Cancel.', 'Orders', 4, 'active'),
+('How long does shipping take?', 'International shipping takes 7-25 business days depending on origin and destination.', 'Shipping', 5, 'active'),
+('How do I track my shipment?', 'Go to the Shipment Tracking page and enter your tracking number.', 'Shipping', 6, 'active'),
+('What payment methods are accepted?', 'We accept Visa, Mastercard, PayPal, bank wire transfers, and escrow payments.', 'Payments', 7, 'active'),
+('Is my payment secure?', 'All payments are processed through encrypted connections with escrow protection available.', 'Payments', 8, 'active'),
+('How do I return a product?', 'Contact the supplier within 7 days. If defective, you can file a dispute.', 'Returns', 9, 'active'),
+('What is the refund policy?', 'Refunds are processed within 5-10 business days after a resolved dispute.', 'Returns', 10, 'active'),
+('How do I change my password?', 'Go to Account > Profile and click Change Password.', 'Account', 11, 'active'),
+('How do I delete my account?', 'Go to GDPR > Delete Account. Note this action is permanent.', 'Account', 12, 'active');
+
+-- Teams
+INSERT IGNORE INTO teams (id, name, owner_id, description) VALUES
+(1, 'GlobexSky Admin Team', 1, 'Main administration and operations team'),
+(2, 'Procurement Team', 1, 'Team responsible for sourcing and procurement');
+
+-- Team Members
+INSERT IGNORE INTO team_members (team_id, user_id, role, invited_by, status, joined_at) VALUES
+(1, 1, 'owner', NULL, 'active', NOW()),
+(2, 1, 'owner', NULL, 'active', NOW());
+
+-- Supplier Scorecards
+INSERT IGNORE INTO supplier_scorecards (supplier_id, quality_score, delivery_score, communication_score, overall_score, review_period) VALUES
+(1, 4.5, 4.2, 4.8, 4.5, 'Q1 2026');
+
+-- Market Insights
+INSERT IGNORE INTO market_insights (id, category, title, data, period) VALUES
+(1, 'electronics', 'Electronics Market Q1 2026', '{"growth":12.5,"top_products":["Wireless Earbuds","Smart Watches"],"demand":"high"}', 'Q1 2026'),
+(2, 'apparel-fashion', 'Fashion Trends Spring 2026', '{"growth":8.3,"top_products":["Sustainable Fabrics","Athleisure"],"demand":"medium"}', 'Spring 2026'),
+(3, 'machinery', 'Industrial Machinery Outlook', '{"growth":5.7,"top_products":["CNC Machines","3D Printers"],"demand":"steady"}', 'Q1 2026');
+
+-- =============================================================
 -- ACTIVITY LOG: Seed marker
 -- =============================================================
 
