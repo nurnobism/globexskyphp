@@ -7,10 +7,6 @@ $userId = (int)$_SESSION['user_id'];
 
 // Quick stats
 try {
-    $aiQueries = (int)$db->prepare(
-        "SELECT COUNT(*) FROM admin_logs WHERE action='ai_search'"
-    )->execute() ? $db->query("SELECT COUNT(*) FROM admin_logs WHERE action='ai_search'")->fetchColumn() : 0;
-
     $stmt = $db->query("SELECT COUNT(*) FROM admin_logs WHERE action='ai_search'");
     $aiQueries = (int)$stmt->fetchColumn();
 

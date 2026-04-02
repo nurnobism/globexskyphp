@@ -100,7 +100,7 @@ try {
     // Ask AI to pick best product IDs from the trending pool
     $candidateIds = array_column($trendingProducts, 'id');
     if (!empty($candidateIds) && (!empty($orderedProducts) || !empty($browsedProducts))) {
-        $historyStr    = json_encode(array_slice($orderedProducts + $browsedProducts, 0, 10));
+        $historyStr    = json_encode(array_slice(array_merge($orderedProducts, $browsedProducts), 0, 10));
         $candidateStr  = json_encode($candidateIds);
 
         $aiRaw = $deepseek->chat(

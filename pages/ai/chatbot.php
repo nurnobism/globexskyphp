@@ -287,8 +287,6 @@ document.getElementById('clearChatBtn').addEventListener('click', () => {
     // Keep only welcome message
     const msgs = container.querySelectorAll('.msg-wrap:not(#welcomeMsg)');
     msgs.forEach(m => m.remove());
-    conversationId = '';
-    localStorage.setItem('globex_conv_id', '');
 });
 
 // New chat

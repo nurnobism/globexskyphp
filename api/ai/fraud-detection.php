@@ -207,10 +207,6 @@ elseif ($action === 'list') {
     $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
     $offset   = ($page - 1) * $limit;
 
-    $total = (int)$db->prepare("SELECT COUNT(*) FROM fraud_flags ff $whereSql")
-                     ->execute($params) ? $db->query("SELECT COUNT(*) FROM fraud_flags ff $whereSql")->fetchColumn() : 0;
-
-    // Re-run properly
     $countStmt = $db->prepare("SELECT COUNT(*) FROM fraud_flags ff $whereSql");
     $countStmt->execute($params);
     $total = (int)$countStmt->fetchColumn();
