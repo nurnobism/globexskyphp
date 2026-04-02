@@ -21,7 +21,7 @@ function validatePasswordStrength(string $password): ?string {
 }
 
 /**
- * Get redirect URL based on user role
+ * Get redirect URL based on user role (PHP 8.0+ match expression)
  */
 function getRoleRedirect(string $role): string {
     return match($role) {
@@ -95,7 +95,8 @@ switch ($action) {
         $redirect     = $_POST['redirect'] ?? $roleRedirect;
 
         if (isset($_POST['_redirect'])) {
-            $displayName = $user['first_name'] ?? explode('@', $user['email'])[0];
+            $userEmail   = $user['email'] ?? '';
+            $displayName = $user['first_name'] ?? (!empty($userEmail) ? explode('@', $userEmail)[0] : 'User');
             flashMessage('success', 'Welcome back, ' . $displayName . '!');
             redirect($redirect);
         }

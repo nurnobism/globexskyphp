@@ -39,7 +39,9 @@ if (isLoggedIn()) {
             <a href="<?= APP_URL ?>/pages/help.php" class="text-white text-decoration-none">Help</a>
             <?php if (isLoggedIn() && $currentUser): ?>
                 <?php
-                $displayName = $currentUser['first_name'] ?? explode('@', $currentUser['email'])[0];
+                $email       = $currentUser['email'] ?? '';
+                $displayName = $currentUser['first_name']
+                    ?? (!empty($email) ? explode('@', $email)[0] : 'User');
                 $userRole    = $currentUser['role'] ?? ($_SESSION['user_role'] ?? '');
                 ?>
                 <?php if (in_array($userRole, ['admin', 'super_admin'])): ?>

@@ -29,8 +29,12 @@ try {
 
     $phpVersion   = PHP_VERSION;
     $mysqlVersion = $db->query('SELECT VERSION()')->fetchColumn();
-    $diskFree     = function_exists('disk_free_space') ? disk_free_space('/') : null;
-    $diskTotal    = function_exists('disk_total_space') ? disk_total_space('/') : null;
+    // Use document root path for disk space; suppress errors for open_basedir restrictions
+    $diskPath  = defined('UPLOAD_DIR') ? UPLOAD_DIR : __DIR__;
+    $diskFree  = function_exists('disk_free_space')  ? @disk_free_space($diskPath)  : null;
+    $diskTotal = function_exists('disk_total_space') ? @disk_total_space($diskPath) : null;
+    if ($diskFree === false)  $diskFree  = null;
+    if ($diskTotal === false) $diskTotal = null;
     $dbOk = true;
 } catch (PDOException $e) {
     $dbOk = false;
