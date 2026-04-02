@@ -2,10 +2,12 @@
 // includes/header.php — Global header, meta tags, and navbar
 
 if (session_status() === PHP_SESSION_NONE) {
+    $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+             || ($_SERVER['SERVER_PORT'] ?? 80) == 443;
     session_set_cookie_params([
         'lifetime' => SESSION_LIFETIME ?? 7200,
         'path'     => '/',
-        'secure'   => true,
+        'secure'   => $isSecure,
         'httponly' => true,
         'samesite' => 'Lax',
     ]);
@@ -19,7 +21,7 @@ require_once __DIR__ . '/../includes/functions.php';
 // Resolve logged-in user from session or remember-me cookie
 if (!isset($_SESSION['user']) && isset($_COOKIE['remember_token'])) {
     require_once __DIR__ . '/../includes/auth.php';
-    resumeSession();
+    checkRememberToken();
 }
 
 $currentUser   = $_SESSION['user'] ?? null;

@@ -44,11 +44,10 @@ INSERT INTO `users`
     (`id`, `name`, `email`, `password`, `role`, `is_active`, `is_verified`, `created_at`)
 VALUES
     (1, 'Super Admin', 'admin@globexsky.com',
-     '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+     '$2y$12$EQoPsvtRKVFuI7MoV/Y8xuJgR3UlVHItT9CYuIsVX7GvTMuEZJv/K',
      'superadmin', 1, 1, NOW());
 
--- Note: The hash above is bcrypt of 'Admin@123'.
--- For real deployment run: password_hash('Admin@123', PASSWORD_BCRYPT, ['cost' => 12])
+-- Note: password is Admin@123 (bcrypt cost 12)
 
 INSERT INTO `user_profiles` (`user_id`, `company_name`, `country`, `city`) VALUES
     (1, 'GlobexSky Inc.', 'United States', 'New York');
@@ -58,7 +57,7 @@ INSERT INTO `users`
     (`id`, `name`, `email`, `password`, `role`, `is_active`, `is_verified`, `created_at`)
 VALUES
     (2, 'Demo Buyer', 'buyer@demo.com',
-     '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+     '$2y$12$iA1Uvk1prM6JbGffLHib0uXc2F.yCKkUEr1.3vonrmtwW/BMR.0n6',
      'buyer', 1, 1, NOW());
 
 INSERT INTO `user_profiles` (`user_id`, `country`, `city`) VALUES (2, 'United Kingdom', 'London');
@@ -68,7 +67,7 @@ INSERT INTO `users`
     (`id`, `name`, `email`, `password`, `role`, `is_active`, `is_verified`, `created_at`)
 VALUES
     (3, 'Demo Supplier', 'supplier@demo.com',
-     '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+     '$2y$12$/OcmQG6.D43IQPus/3ADsO.fMFAiAvfYqGlZVoD6LeVo/BD64pVP6',
      'supplier', 1, 1, NOW());
 
 INSERT INTO `user_profiles` (`user_id`, `company_name`, `country`, `city`) VALUES
