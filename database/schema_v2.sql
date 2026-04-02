@@ -333,3 +333,81 @@ CREATE TABLE IF NOT EXISTS translations (
     UNIQUE KEY uq_translation (locale, translation_key),
     INDEX idx_translations_locale (locale)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- Returns & Refunds
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS return_requests (
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT UNSIGNED NOT NULL,
+    order_id        INT UNSIGNED NOT NULL,
+    reason_code     VARCHAR(50)  NOT NULL DEFAULT 'other',
+    reason          TEXT         NOT NULL,
+    resolution_type ENUM('refund','replacement','partial_refund') NOT NULL DEFAULT 'refund',
+    evidence_url    VARCHAR(500),
+    status          ENUM('pending','approved','rejected','shipped','refunded','cancelled') NOT NULL DEFAULT 'pending',
+    refund_amount   DECIMAL(12,2),
+    admin_notes     TEXT,
+    reviewed_at     DATETIME,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id)  REFERENCES users(id)  ON DELETE CASCADE,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    INDEX idx_user_id  (user_id),
+    INDEX idx_order_id (order_id),
+    INDEX idx_status   (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- Barcode Scan History
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS scan_history (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT UNSIGNED NOT NULL,
+    barcode     VARCHAR(100) NOT NULL,
+    product_id  INT UNSIGNED,
+    scanned_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL,
+    INDEX idx_user_id  (user_id),
+    INDEX idx_barcode  (barcode)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- Trade Shows
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS trade_shows (
+    id                      INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name                    VARCHAR(200) NOT NULL,
+    description             TEXT,
+    location                VARCHAR(300),
+    start_date              DATE NOT NULL,
+    end_date                DATE NOT NULL,
+    registration_deadline   DATE,
+    status                  ENUM('draft','open','closed','cancelled') NOT NULL DEFAULT 'draft',
+    banner_image            VARCHAR(500),
+    website_url             VARCHAR(500),
+    max_booths              INT UNSIGNED,
+    created_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_start_date (start_date),
+    INDEX idx_status     (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS trade_show_booths (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    show_id     INT UNSIGNED NOT NULL,
+    supplier_id INT UNSIGNED NOT NULL,
+    booth_number VARCHAR(20),
+    notes       TEXT,
+    status      ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (show_id)     REFERENCES trade_shows(id) ON DELETE CASCADE,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id)   ON DELETE CASCADE,
+    UNIQUE KEY uq_show_supplier (show_id, supplier_id),
+    INDEX idx_show_id     (show_id),
+    INDEX idx_supplier_id (supplier_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

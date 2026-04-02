@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: globexsky_app
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      APP_ENV: development
+      APP_URL: http://localhost:8080
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-globexsky}
+      DB_USER: ${DB_USER:-globexsky}
+      DB_PASS: ${DB_PASS:-secret}
+      MAIL_HOST: ${MAIL_HOST:-mailpit}
+      MAIL_PORT: ${MAIL_PORT:-1025}
+      MAIL_FROM_EMAIL: ${MAIL_FROM_EMAIL:-noreply@globexsky.com}
+    volumes:
+      - .:/var/www/html
+      - uploads_data:/var/www/html/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - globexsky_net
+
+  db:
+    image: mysql:8.0
+    container_name: globexsky_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-globexsky}
+      MYSQL_USER: ${DB_USER:-globexsky}
+      MYSQL_PASSWORD: ${DB_PASS:-secret}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS:-rootsecret}
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/schema_v2.sql:/docker-entrypoint-initdb.d/02-schema_v2.sql:ro
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/03-seed.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - globexsky_net
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: globexsky_mail
+    restart: unless-stopped
+    ports:
+      - "8025:8025"   # Web UI
+      - "1025:1025"   # SMTP
+    networks:
+      - globexsky_net
+
+volumes:
+  db_data:
+  uploads_data:
+
+networks:
+  globexsky_net:
+    driver: bridge
