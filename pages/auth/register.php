@@ -13,9 +13,9 @@ include __DIR__ . '/../../includes/header.php';
                 <div class="card-body p-4">
                     <div class="text-center mb-4">
                         <h3 class="fw-bold"><i class="bi bi-person-plus-fill text-primary"></i> Create Account</h3>
-                        <p class="text-muted small">Join <?= e(APP_NAME) ?> as a buyer or supplier</p>
+                        <p class="text-muted small">Join <?= e(APP_NAME) ?> as a buyer, supplier, or carrier</p>
                     </div>
-                    <form method="POST" action="/api/auth.php?action=register">
+                    <form method="POST" action="/api/auth.php?action=register" id="registerForm">
                         <?= csrfField() ?>
                         <input type="hidden" name="_redirect" value="<?= e($_SERVER['REQUEST_URI']) ?>">
                         <div class="row g-3 mb-3">
@@ -34,20 +34,57 @@ include __DIR__ . '/../../includes/header.php';
                         </div>
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Account Type</label>
-                            <select name="role" class="form-select" onchange="toggleCompany(this.value)">
+                            <select name="role" id="roleSelect" class="form-select" onchange="toggleRoleFields(this.value)">
                                 <option value="buyer">Buyer — I want to purchase products</option>
                                 <option value="supplier">Supplier — I want to sell products</option>
+                                <option value="carrier">Carrier — I deliver packages internationally</option>
                             </select>
                         </div>
-                        <div id="companyField" class="mb-3 d-none">
-                            <label class="form-label fw-semibold">Company Name *</label>
-                            <input type="text" name="company_name" class="form-control" placeholder="Your company name">
+
+                        <!-- Supplier fields -->
+                        <div id="supplierFields" class="d-none">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Company Name *</label>
+                                <input type="text" name="company_name" class="form-control" placeholder="Your company name">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Business Type</label>
+                                <select name="business_type" class="form-select">
+                                    <option value="">Select type</option>
+                                    <option value="manufacturer">Manufacturer</option>
+                                    <option value="trading_company">Trading Company</option>
+                                    <option value="wholesaler">Wholesaler</option>
+                                    <option value="retailer">Retailer</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Country</label>
+                                <input type="text" name="country" class="form-control" placeholder="e.g. China, USA">
+                            </div>
                         </div>
+
+                        <!-- Carrier fields -->
+                        <div id="carrierFields" class="d-none">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Passport Number *</label>
+                                <input type="text" name="passport_number" class="form-control" placeholder="e.g. AB1234567">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Nationality</label>
+                                <input type="text" name="nationality" class="form-control" placeholder="e.g. Bangladeshi">
+                            </div>
+                        </div>
+
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Password *</label>
                             <div class="input-group">
-                                <input type="password" name="password" id="regPwd" class="form-control" placeholder="Min 8 characters" required minlength="8">
+                                <input type="password" name="password" id="regPwd" class="form-control"
+                                       placeholder="Min 8 chars, uppercase, number, special" required minlength="8">
                                 <button type="button" class="btn btn-outline-secondary" onclick="togglePwd('regPwd',this)"><i class="bi bi-eye"></i></button>
+                            </div>
+                            <div class="form-text small text-muted">
+                                <i class="bi bi-info-circle"></i>
+                                Must contain: uppercase letter, number, and special character (e.g. @!#$)
                             </div>
                         </div>
                         <div class="mb-3">
@@ -72,8 +109,9 @@ include __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 <script>
-function toggleCompany(role) {
-    document.getElementById('companyField').classList.toggle('d-none', role !== 'supplier');
+function toggleRoleFields(role) {
+    document.getElementById('supplierFields').classList.toggle('d-none', role !== 'supplier');
+    document.getElementById('carrierFields').classList.toggle('d-none', role !== 'carrier');
 }
 function togglePwd(id, btn) {
     const input = document.getElementById(id);
@@ -82,3 +120,4 @@ function togglePwd(id, btn) {
 }
 </script>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
+

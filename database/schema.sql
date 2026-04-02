@@ -14,21 +14,44 @@ CREATE TABLE IF NOT EXISTS users (
     id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     email         VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
+    name          VARCHAR(200),
     first_name    VARCHAR(100),
     last_name     VARCHAR(100),
     phone         VARCHAR(30),
-    role          ENUM('buyer','supplier','admin') NOT NULL DEFAULT 'buyer',
+    role          ENUM('buyer','supplier','carrier','admin','super_admin','inspector','support','api_client') NOT NULL DEFAULT 'buyer',
+    status        ENUM('active','suspended','banned','pending') NOT NULL DEFAULT 'active',
     avatar        VARCHAR(500),
     company_name  VARCHAR(255),
     bio           TEXT,
+    language      VARCHAR(10) DEFAULT 'en',
+    currency      VARCHAR(10) DEFAULT 'USD',
+    timezone      VARCHAR(100) DEFAULT 'UTC',
     is_verified   TINYINT(1) NOT NULL DEFAULT 0,
     is_active     TINYINT(1) NOT NULL DEFAULT 1,
     email_verified_at DATETIME,
     last_login_at DATETIME,
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_email (email),
-    INDEX idx_role  (role)
+    INDEX idx_email  (email),
+    INDEX idx_role   (role),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- USER SESSIONS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id       INT UNSIGNED NOT NULL,
+    session_token VARCHAR(255) NOT NULL UNIQUE,
+    ip_address    VARCHAR(45),
+    user_agent    VARCHAR(500),
+    expires_at    DATETIME NOT NULL,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id      (user_id),
+    INDEX idx_session_token (session_token),
+    INDEX idx_expires_at   (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------
@@ -48,6 +71,27 @@ CREATE TABLE IF NOT EXISTS addresses (
     country     VARCHAR(100) NOT NULL DEFAULT 'US',
     is_default  TINYINT(1) NOT NULL DEFAULT 0,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
+-- USER ADDRESSES (alias with extended fields)
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_addresses (
+    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id       INT UNSIGNED NOT NULL,
+    label         VARCHAR(100) DEFAULT 'Home',
+    address_line1 VARCHAR(255) NOT NULL,
+    address_line2 VARCHAR(255),
+    city          VARCHAR(100) NOT NULL,
+    state         VARCHAR(100),
+    country       VARCHAR(100) NOT NULL DEFAULT 'US',
+    postal_code   VARCHAR(20),
+    phone         VARCHAR(30),
+    is_default    TINYINT(1) NOT NULL DEFAULT 0,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -483,6 +527,19 @@ CREATE TABLE IF NOT EXISTS settings (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------
+-- SYSTEM SETTINGS (structured key-value)
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS system_settings (
+    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    setting_key   VARCHAR(255) NOT NULL UNIQUE,
+    setting_value TEXT,
+    setting_group VARCHAR(100) NOT NULL DEFAULT 'general',
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_group (setting_group)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
 -- ADMIN LOGS
 -- -----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS admin_logs (
@@ -501,15 +558,35 @@ CREATE TABLE IF NOT EXISTS admin_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------
+-- ADMIN ACTIVITY LOGS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS admin_activity_logs (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    admin_id    INT UNSIGNED NOT NULL,
+    action      VARCHAR(255) NOT NULL,
+    target_type VARCHAR(100),
+    target_id   INT UNSIGNED,
+    details     JSON,
+    ip_address  VARCHAR(45),
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_admin      (admin_id),
+    INDEX idx_target     (target_type, target_id),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------
 -- PASSWORD RESETS
 -- -----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS password_resets (
     id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT UNSIGNED,
     email       VARCHAR(255) NOT NULL,
     token       VARCHAR(255) NOT NULL,
     expires_at  DATETIME NOT NULL,
     used        TINYINT(1) NOT NULL DEFAULT 0,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_email (email),
     INDEX idx_token (token)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1041,10 +1118,10 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- -----------------------------------------------------------
 
 -- Default admin user (password: Admin@123)
-INSERT IGNORE INTO users (email, password_hash, first_name, last_name, role, is_verified, is_active)
+INSERT IGNORE INTO users (email, password_hash, name, first_name, last_name, role, status, is_verified, is_active)
 VALUES ('admin@globexsky.com',
-        '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
-        'Admin', 'User', 'admin', 1, 1);
+        '$2y$12$qEaCi0r7V1ZoHpwQySEoNOGm2W0WwleHbLKysWkDV68mvXrx9SRbe',
+        'Super Admin', 'Super', 'Admin', 'super_admin', 'active', 1, 1);
 
 -- Default categories
 INSERT IGNORE INTO categories (name, slug, description, sort_order) VALUES
@@ -1069,3 +1146,14 @@ INSERT IGNORE INTO settings (`key`, `value`, group_name) VALUES
 ('currency_symbol',        '$',                        'general'),
 ('maintenance_mode',       '0',                        'general'),
 ('registration_enabled',   '1',                        'general');
+
+-- System settings (structured)
+INSERT IGNORE INTO system_settings (setting_key, setting_value, setting_group) VALUES
+('site_name',          'GlobexSky',                  'general'),
+('site_logo',          '/assets/images/logo.png',    'general'),
+('default_language',   'en',                         'general'),
+('default_currency',   'USD',                        'general'),
+('maintenance_mode',   '0',                          'general'),
+('registration_enabled', '1',                        'general'),
+('contact_email',      'support@globexsky.com',      'general'),
+('site_tagline',       'Global B2B Trade Platform',  'general');

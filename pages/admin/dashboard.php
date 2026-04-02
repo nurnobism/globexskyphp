@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/middleware.php';
-requireAdmin();
+requireRole(['admin', 'super_admin']);
 
 $db = getDB();
 $stats = [
