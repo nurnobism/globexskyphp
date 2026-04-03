@@ -153,6 +153,7 @@ switch ($action) {
         }
         $_SESSION['cart'] = [];
         jsonResponse(['success' => true]);
+        break;
 
     default:
         jsonResponse(['error' => 'Unknown action'], 400);
