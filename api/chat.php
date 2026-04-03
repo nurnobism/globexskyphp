@@ -7,6 +7,9 @@ $action = $_GET['action'] ?? $_POST['action'] ?? '';
 function jsonOut($data, $code = 200) { http_response_code($code); echo json_encode($data); exit; }
 function validateCsrf(): void { if (!verifyCsrf()) { jsonOut(['error' => 'Invalid CSRF token'], 403); } }
 
+define('CHAT_MESSAGE_DELETE_WINDOW', 300); // seconds within which a sender may delete a message
+define('CHAT_PREVIEW_MAX_LENGTH', 120);    // characters kept in room last_message_preview
+
 switch ($action) {
 
     // ── GET ROOMS ─────────────────────────────────────────────────────────────
@@ -230,8 +233,8 @@ switch ($action) {
             $msgId = (int) $db->lastInsertId();
 
             $preview = $message ?: ($fileName ?: '[file]');
-            if (strlen($preview) > 120) {
-                $preview = substr($preview, 0, 120) . '…';
+            if (strlen($preview) > CHAT_PREVIEW_MAX_LENGTH) {
+                $preview = substr($preview, 0, CHAT_PREVIEW_MAX_LENGTH) . '…';
             }
             $upd = $db->prepare(
                 'UPDATE chat_rooms SET last_message_at = NOW(), last_message_preview = ? WHERE id = ?'
@@ -335,7 +338,7 @@ switch ($action) {
             jsonOut(['success' => false, 'message' => 'You can only delete your own messages'], 403);
         }
         $age = time() - strtotime($msg['created_at']);
-        if ($age > 300) {
+        if ($age > CHAT_MESSAGE_DELETE_WINDOW) {
             jsonOut(['success' => false, 'message' => 'Messages can only be deleted within 5 minutes of sending'], 403);
         }
 
@@ -380,8 +383,14 @@ switch ($action) {
             mkdir($uploadDir, 0755, true);
         }
 
-        $ext      = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-        $filename = generateUuid() . ($ext ? '.' . $ext : '');
+        $allowedExts = [
+            'jpg' => true, 'jpeg' => true, 'png' => true, 'gif' => true, 'webp' => true,
+            'pdf' => true, 'doc' => true, 'docx' => true, 'xls' => true, 'xlsx' => true,
+            'txt' => true, 'zip' => true,
+        ];
+        $rawExt = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        $ext    = isset($allowedExts[$rawExt]) ? $rawExt : 'bin';
+        $filename = generateUuid() . '.' . $ext;
         $dest     = $uploadDir . $filename;
 
         if (!move_uploaded_file($file['tmp_name'], $dest)) {

@@ -583,6 +583,9 @@ switch ($action) {
         if (empty($ids)) {
             jsonOut(['success' => false, 'message' => 'No message IDs provided'], 400);
         }
+        if (count($ids) > 100) {
+            jsonOut(['success' => false, 'message' => 'Maximum 100 messages per bulk operation'], 400);
+        }
 
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
 
