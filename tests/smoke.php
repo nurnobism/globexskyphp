@@ -240,6 +240,96 @@ foreach ($phase2Files as $f) {
     if (str_ends_with($f, '.php')) assertSyntax("$root/$f");
 }
 
+// ── Phase 5: Real-Time Chat + Notifications + Webmail ────────
+echo "\nPhase 5 database:\n";
+assertFile("$root/database/schema_v5.sql");
+
+echo "\nPhase 5 Node.js server:\n";
+assertFile("$root/nodejs/server.js");
+assertFile("$root/nodejs/package.json");
+assertFile("$root/nodejs/.env.example");
+
+echo "\nPhase 5 includes:\n";
+$phase5Includes = [
+    'includes/notifications.php',
+    'includes/mailer.php',
+];
+foreach ($phase5Includes as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 5 APIs:\n";
+$phase5Apis = [
+    'api/chat.php',
+    'api/notifications.php',
+    'api/webmail.php',
+];
+foreach ($phase5Apis as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 5 chat pages:\n";
+$phase5ChatPages = [
+    'pages/messages/index.php',
+    'pages/messages/conversation.php',
+    'pages/messages/compose.php',
+];
+foreach ($phase5ChatPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 5 notification pages:\n";
+$phase5NotifPages = [
+    'pages/notifications/index.php',
+    'pages/notifications/preferences.php',
+];
+foreach ($phase5NotifPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 5 webmail pages:\n";
+$phase5WebmailPages = [
+    'pages/webmail/inbox.php',
+    'pages/webmail/compose.php',
+    'pages/webmail/sent.php',
+    'pages/webmail/drafts.php',
+    'pages/webmail/trash.php',
+    'pages/webmail/read.php',
+    'pages/webmail/labels.php',
+];
+foreach ($phase5WebmailPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 5 email templates:\n";
+$phase5Templates = [
+    'templates/emails/base.php',
+    'templates/emails/welcome.php',
+    'templates/emails/order-confirmation.php',
+    'templates/emails/password-reset.php',
+    'templates/emails/new-message.php',
+];
+foreach ($phase5Templates as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 5 JavaScript:\n";
+$phase5Js = [
+    'assets/js/chat.js',
+    'assets/js/socket-client.js',
+    'assets/js/notifications.js',
+    'assets/js/notification-sounds.js',
+];
+foreach ($phase5Js as $f) {
+    assertFile("$root/$f");
+}
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
