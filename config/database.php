@@ -4,10 +4,22 @@
  * Update these values with your Namecheap cPanel MySQL credentials
  */
 
+/**
+ * Require an environment variable; die with an error if it is not set.
+ */
+function requireEnvVar(string $name): string {
+    $value = getenv($name);
+    if ($value === false) {
+        error_log('FATAL: ' . $name . ' environment variable not set');
+        die(json_encode(['error' => 'Server configuration error']));
+    }
+    return $value;
+}
+
 define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
-define('DB_NAME', getenv('DB_NAME') ?: 'your_database_name');
-define('DB_USER', getenv('DB_USER') ?: 'your_database_user');
-define('DB_PASS', getenv('DB_PASS') ?: 'your_database_password');
+define('DB_NAME', requireEnvVar('DB_NAME'));
+define('DB_USER', requireEnvVar('DB_USER'));
+define('DB_PASS', requireEnvVar('DB_PASS'));
 define('DB_CHARSET', 'utf8mb4');
 
 /**
@@ -25,6 +37,7 @@ function getDB(): PDO {
         try {
             $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
         } catch (PDOException $e) {
+            error_log('Database connection failed: ' . $e->getMessage());
             http_response_code(500);
             die(json_encode(['error' => 'Database connection failed']));
         }
