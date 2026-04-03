@@ -1,0 +1,7 @@
+RewriteEngine On
+RewriteBase /api/v1/
+
+# Route /api/v1/{resource}/{action} to gateway.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^([a-z_]+)/?([a-z_]*)/?$ gateway.php?resource=$1&action=$2 [QSA,L]
