@@ -6,6 +6,9 @@ const mysql = require('mysql2/promise');
 
 const PORT = process.env.PORT || 3001;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+if (CORS_ORIGIN === '*') {
+    console.warn('[security] WARNING: CORS_ORIGIN is set to "*". Restrict this in production.');
+}
 const SHUTDOWN_TIMEOUT_MS = parseInt(process.env.SHUTDOWN_TIMEOUT_MS || '5000', 10);
 
 // Require JWT_SECRET and INTERNAL_API_KEY to be explicitly configured
