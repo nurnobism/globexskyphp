@@ -189,7 +189,15 @@ switch ($action) {
             $req = $reqStmt->fetch(PDO::FETCH_ASSOC);
             if (!$req) jsonResponse(['error' => 'Request not found or already matched'], 404);
             $agreedPrice = (float)($req['budget'] ?? 0);
-            $commission  = round($agreedPrice * 0.10, 2);
+            // Read commission rate from carry_service_settings (fallback to 15%)
+            $commPct = 15.0;
+            try {
+                $cStmt = $db->prepare("SELECT setting_value FROM carry_service_settings WHERE setting_key='platform_commission_percent' LIMIT 1");
+                $cStmt->execute();
+                $cRow = $cStmt->fetch(PDO::FETCH_ASSOC);
+                if ($cRow) $commPct = (float)$cRow['setting_value'];
+            } catch (Exception $ignored) {}
+            $commission  = round($agreedPrice * ($commPct / 100), 2);
             $carrierEarn = round($agreedPrice - $commission, 2);
             $matchStmt = $db->prepare("INSERT INTO carry_matches (request_id, trip_id, carrier_id, sender_id, agreed_price, platform_commission, carrier_earning, status, created_at) VALUES (?,?,?,?,?,?,?,'pending',NOW())");
             $matchStmt->execute([$requestId, $trip['id'], $carrierId, $req['sender_id'], $agreedPrice, $commission, $carrierEarn]);

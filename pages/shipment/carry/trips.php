@@ -185,7 +185,7 @@ include __DIR__ . '/../../../includes/header.php';
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Travel Date *</label>
                             <input type="date" name="travel_date" class="form-control" required
-                                   min="<?= date('Y-m-d') ?>">
+                                   min="<?= gmdate('Y-m-d') ?>">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Transport Mode *</label>

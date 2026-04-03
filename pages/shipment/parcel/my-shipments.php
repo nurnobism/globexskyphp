@@ -6,7 +6,7 @@ $db     = getDB();
 $userId = $_SESSION['user_id'];
 
 $allowedStatuses = ['all', 'in_transit', 'delivered', 'cancelled', 'pending'];
-$statusFilter    = in_array($_GET['status'] ?? '', $allowedStatuses) ? ($_GET['status'] ?? 'all') : 'all';
+$statusFilter    = in_array($_GET['status'] ?? '', $allowedStatuses) ? $_GET['status'] : 'all';
 
 $shipments = [];
 try {
