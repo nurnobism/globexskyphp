@@ -120,11 +120,11 @@ function refreshExchangeRates(): bool {
     // Cache raw JSON; keep only the 10 most recent entries to prevent unbounded growth
     $db->prepare('INSERT INTO exchange_rate_cache (base_currency, rates_json, fetched_at) VALUES (?,?,NOW())')
        ->execute(['USD', json_encode($data['conversion_rates'])]);
-    $db->prepare(
-        'DELETE FROM exchange_rate_cache WHERE id NOT IN (
-             SELECT id FROM (SELECT id FROM exchange_rate_cache ORDER BY fetched_at DESC LIMIT 10) t
-         )'
-    )->execute();
+    // Delete old entries: find cutoff ID at position 10, delete anything older
+    $cutoff = $db->query('SELECT id FROM exchange_rate_cache ORDER BY fetched_at DESC LIMIT 10, 1')->fetchColumn();
+    if ($cutoff !== false) {
+        $db->prepare('DELETE FROM exchange_rate_cache WHERE id <= ?')->execute([$cutoff]);
+    }
 
     return true;
 }

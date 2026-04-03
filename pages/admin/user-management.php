@@ -85,7 +85,7 @@ include __DIR__ . '/../../includes/header.php';
             </button>
         </div>
         <div class="col-md-3 text-end">
-            <a href="?export=csv&role=<?= urlencode($role) ?>&q=<?= urlencode($q) ?>" class="btn btn-outline-success btn-sm">
+            <a href="?export=csv&role=<?= urlencode($role) ?>&q=<?= urlencode($q) ?>&kyc=<?= urlencode($kyc) ?>" class="btn btn-outline-success btn-sm">
                 <i class="bi bi-download me-1"></i>Export CSV
             </a>
         </div>

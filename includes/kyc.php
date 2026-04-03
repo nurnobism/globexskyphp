@@ -135,16 +135,15 @@ function upgradeKYCLevelIfEligible(int $userId, int $level): void {
     $approvedCount = (int)$stmt->fetchColumn();
 
     if ($approvedCount >= count($required)) {
-        // Whitelist column names to prevent SQL injection
-        $colMap = [1 => 'l1_verified_at', 2 => 'l2_verified_at', 3 => 'l3_verified_at', 4 => 'l4_verified_at'];
+        // Use separate parameterized queries per level to avoid column name interpolation
+        $colMap = [
+            1 => 'INSERT INTO kyc_levels (user_id, current_level, l1_verified_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE current_level = GREATEST(current_level, ?), l1_verified_at = COALESCE(l1_verified_at, NOW())',
+            2 => 'INSERT INTO kyc_levels (user_id, current_level, l2_verified_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE current_level = GREATEST(current_level, ?), l2_verified_at = COALESCE(l2_verified_at, NOW())',
+            3 => 'INSERT INTO kyc_levels (user_id, current_level, l3_verified_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE current_level = GREATEST(current_level, ?), l3_verified_at = COALESCE(l3_verified_at, NOW())',
+            4 => 'INSERT INTO kyc_levels (user_id, current_level, l4_verified_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE current_level = GREATEST(current_level, ?), l4_verified_at = COALESCE(l4_verified_at, NOW())',
+        ];
         if (!isset($colMap[$level])) return;
-        $col = $colMap[$level];
-        // Upsert kyc_levels
-        $db->prepare(
-            "INSERT INTO kyc_levels (user_id, current_level, $col)
-             VALUES (?, ?, NOW())
-             ON DUPLICATE KEY UPDATE current_level = GREATEST(current_level, ?), $col = COALESCE($col, NOW())"
-        )->execute([$userId, $level, $level]);
+        $db->prepare($colMap[$level])->execute([$userId, $level, $level]);
     }
 }
 

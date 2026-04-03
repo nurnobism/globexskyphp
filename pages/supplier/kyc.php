@@ -100,9 +100,7 @@ include __DIR__ . '/../../includes/header.php';
                             <?php if ($sub['review_notes']): ?>
                                 <small class="text-muted d-block mt-1"><?= e($sub['review_notes']) ?></small>
                             <?php endif; ?>
-                            <?php if ($sub['status'] === 'rejected'): ?>
-                                <small class="text-muted d-block mt-1">Submitted: <?= e(date('M j, Y', strtotime($sub['submitted_at']))) ?></small>
-                            <?php endif; ?>
+                            <small class="text-muted d-block mt-1">Submitted: <?= e(date('M j, Y', strtotime($sub['submitted_at']))) ?></small>
                         <?php else: ?>
                             <span class="badge bg-secondary">Not Submitted</span>
                         <?php endif; ?>
