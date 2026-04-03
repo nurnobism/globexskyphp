@@ -51,3 +51,51 @@ if (!function_exists('validateCSRFToken')) {
     }
 }
 
+if (!function_exists('requireKycApproved')) {
+    /**
+     * Require KYC approval for the current user.
+     * Loads kyc.php if needed, then redirects if status != approved.
+     */
+    function requireKycApproved(): void {
+        if (!isLoggedIn()) {
+            redirect('/pages/auth/login.php?redirect=' . urlencode($_SERVER['REQUEST_URI']));
+        }
+        if (!function_exists('getKycStatus')) {
+            $f = __DIR__ . '/kyc.php';
+            if (file_exists($f)) require_once $f;
+        }
+        if (function_exists('getKycStatus')) {
+            $status = getKycStatus((int)$_SESSION['user_id']);
+            if ($status !== 'approved') {
+                redirect('/pages/account/kyc.php?required=1');
+            }
+        }
+    }
+}
+
+if (!function_exists('requireKycForSellers')) {
+    /**
+     * Require KYC for supplier/carrier roles when the system setting is enabled.
+     */
+    function requireKycForSellers(): void {
+        if (!isLoggedIn()) return;
+        $role = $_SESSION['user_role'] ?? '';
+        if (!in_array($role, ['supplier', 'carrier'], true)) return;
+        if (!function_exists('getSystemSetting')) {
+            $f = __DIR__ . '/admin_permissions.php';
+            if (file_exists($f)) require_once $f;
+        }
+        if (function_exists('getSystemSetting') && getSystemSetting('kyc_required_for_sellers') !== '1') return;
+        if (!function_exists('getKycStatus')) {
+            $f = __DIR__ . '/kyc.php';
+            if (file_exists($f)) require_once $f;
+        }
+        if (function_exists('getKycStatus')) {
+            $status = getKycStatus((int)$_SESSION['user_id']);
+            if ($status !== 'approved') {
+                redirect('/pages/account/kyc.php?required=1&reason=seller_kyc');
+            }
+        }
+    }
+}
+

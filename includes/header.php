@@ -90,6 +90,45 @@ if (isLoggedIn()) {
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/account/profile.php"><i class="bi bi-person me-2"></i>My Profile</a></li>
                         <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/order/index.php"><i class="bi bi-bag me-2"></i>My Orders</a></li>
+                        <?php
+                        // KYC status badge in dropdown
+                        if (function_exists('getKycStatus')) {
+                            $kycStatusDropdown = getKycStatus((int)$_SESSION['user_id']);
+                        } else {
+                            // Lightweight inline check
+                            try {
+                                $stmt = getDB()->prepare('SELECT kyc_status FROM users WHERE id = ?');
+                                $stmt->execute([$_SESSION['user_id']]);
+                                $kycStatusDropdown = $stmt->fetchColumn() ?: 'none';
+                            } catch (Exception $e) {
+                                $kycStatusDropdown = 'none';
+                            }
+                        }
+                        $kycBadgeClass = match($kycStatusDropdown) {
+                            'none'     => 'secondary',
+                            'pending'  => 'warning',
+                            'approved' => 'success',
+                            'rejected' => 'danger',
+                            'expired'  => 'warning',
+                            default    => 'secondary'
+                        };
+                        $kycLabel = match($kycStatusDropdown) {
+                            'none'         => 'Not Verified',
+                            'pending'      => 'KYC Pending',
+                            'under_review' => 'Under Review',
+                            'approved'     => 'KYC Verified',
+                            'rejected'     => 'KYC Rejected',
+                            'expired'      => 'KYC Expired',
+                            default        => 'KYC'
+                        };
+                        ?>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2" href="<?= APP_URL ?>/pages/account/kyc.php">
+                                <i class="bi bi-shield-check"></i>
+                                KYC Verification
+                                <span class="badge bg-<?= $kycBadgeClass ?> ms-auto"><?= e($kycLabel) ?></span>
+                            </a>
+                        </li>
                         <li><hr class="dropdown-divider"></li>
                         <li>
                             <form method="POST" action="/api/auth.php?action=logout" class="d-inline">

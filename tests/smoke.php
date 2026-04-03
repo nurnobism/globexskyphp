@@ -552,6 +552,56 @@ foreach ($phase8Cron as $f) {
     assertSyntax("$root/$f");
 }
 
+// ── Phase 9: KYC + Advanced Admin ────────────────────────────
+echo "\nPhase 9 database:\n";
+assertFile("$root/database/schema_v5_kyc.sql");
+
+echo "\nPhase 9 includes:\n";
+$phase9Includes = [
+    'includes/kyc.php',
+    'includes/admin_permissions.php',
+];
+foreach ($phase9Includes as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 9 APIs:\n";
+$phase9Apis = [
+    'api/kyc.php',
+    'api/admin-kyc.php',
+    'api/admin-users.php',
+    'api/admin-settings.php',
+];
+foreach ($phase9Apis as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 9 user pages:\n";
+assertFile("$root/pages/account/kyc.php");
+assertSyntax("$root/pages/account/kyc.php");
+
+echo "\nPhase 9 admin KYC pages:\n";
+$phase9AdminKycPages = [
+    'pages/admin/kyc/index.php',
+    'pages/admin/kyc/review.php',
+];
+foreach ($phase9AdminKycPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 9 admin pages:\n";
+$phase9AdminPages = [
+    'pages/admin/users.php',
+    'pages/admin/audit-log.php',
+    'pages/admin/settings.php',
+];
+foreach ($phase9AdminPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
 
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
