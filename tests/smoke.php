@@ -388,6 +388,77 @@ foreach ($phase6All as $f) {
     assertSyntax("$root/$f");
 }
 
+// ── Phase 8: AI Integration (DeepSeek) ───────────────────────
+echo "\nPhase 8 database:\n";
+assertFile("$root/database/schema_v8.sql");
+
+echo "\nPhase 8 includes:\n";
+$phase8Includes = [
+    'includes/deepseek.php',
+    'includes/ai-recommendations.php',
+    'includes/ai-fraud.php',
+    'includes/ai-content.php',
+    'includes/ai-analytics.php',
+];
+foreach ($phase8Includes as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 8 AI pages:\n";
+$phase8Pages = [
+    'pages/ai/index.php',
+    'pages/ai/chatbot.php',
+    'pages/ai/recommendations.php',
+    'pages/ai/fraud-detection.php',
+    'pages/ai/search.php',
+    'pages/ai/analytics.php',
+    'pages/ai/insights.php',
+    'pages/ai/content-generator.php',
+    'pages/admin/ai-dashboard.php',
+];
+foreach ($phase8Pages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 8 AI APIs:\n";
+$phase8Apis = [
+    'api/ai/chatbot.php',
+    'api/ai/recommendations.php',
+    'api/ai/fraud-detection.php',
+    'api/ai/search.php',
+    'api/ai/analytics.php',
+    'api/ai/insights.php',
+    'api/ai/content.php',
+    'api/ai/supplier.php',
+];
+foreach ($phase8Apis as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 8 JavaScript assets:\n";
+$phase8Js = [
+    'assets/js/ai-chat.js',
+    'assets/js/ai-recommendations.js',
+    'assets/js/ai-fraud.js',
+    'assets/js/ai-content.js',
+    'assets/js/ai-analytics.js',
+];
+foreach ($phase8Js as $f) {
+    assertFile("$root/$f");
+}
+
+echo "\nPhase 8 cron jobs:\n";
+$phase8Cron = [
+    'cron/ai-recommendations.php',
+    'cron/ai-fraud-scan.php',
+];
+foreach ($phase8Cron as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
 
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);

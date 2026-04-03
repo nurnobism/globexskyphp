@@ -1,356 +1,175 @@
 <?php
+/**
+ * pages/ai/search.php — AI-Powered Search (Phase 8)
+ */
 require_once __DIR__ . '/../../includes/middleware.php';
-$pageTitle = 'AI Smart Search';
-include __DIR__ . '/../../includes/header.php';
+requireLogin();
+require_once __DIR__ . '/../../includes/header.php';
 ?>
+<div class="container-fluid py-4">
+    <div class="d-flex align-items-center mb-4">
+        <i class="bi bi-search fs-2 text-info me-3"></i>
+        <div>
+            <h1 class="h3 mb-0">AI-Powered Search</h1>
+            <p class="text-muted mb-0">Search in natural language — AI understands what you mean</p>
+        </div>
+    </div>
 
-<style>
-    :root { --brand-orange: #FF6B35; --brand-dark: #1B2A4A; }
-    .search-hero { background: linear-gradient(135deg, #1B2A4A 0%, #243660 100%); }
-    .search-box  { border-radius: 50px; border: 3px solid transparent; background: #fff;
-                   transition: border-color .25s, box-shadow .25s; }
-    .search-box:focus-within { border-color: var(--brand-orange); box-shadow: 0 0 0 4px rgba(255,107,53,.15); }
-    .search-box input { border: none; background: transparent; padding: .75rem 1.25rem; font-size: 1.05rem; }
-    .search-box input:focus { box-shadow: none; outline: none; }
-    .search-mode-btn { border-radius: 50%; width: 44px; height: 44px; padding: 0;
-                       display:inline-flex; align-items:center; justify-content:center;
-                       border: 2px solid transparent; transition: all .2s; }
-    .search-mode-btn.active, .search-mode-btn:hover { border-color: var(--brand-orange); color: var(--brand-orange); }
-    .search-mode-btn.recording { background: #dc3545; color: #fff; border-color: #dc3545; animation: pulse 1s infinite; }
-    @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(220,53,69,.4)} 50%{box-shadow:0 0 0 8px rgba(220,53,69,0)} }
-    .filter-chip { border-radius: 50px; padding: .3rem .9rem; font-size: .82rem; border: 1.5px solid #dee2e6;
-                   cursor: pointer; transition: all .2s; }
-    .filter-chip:hover, .filter-chip.active { background: var(--brand-orange); color: #fff; border-color: var(--brand-orange); }
-    .result-card { border-radius: 14px; border: 1.5px solid #f0f0f0; transition: transform .2s, box-shadow .2s; }
-    .result-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,.1); }
-    .relevance-bar { height: 4px; border-radius: 2px; background: #f0f0f0; }
-    .relevance-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--brand-orange), #ffbb45); }
-    .interpretation-badge { background: rgba(255,107,53,.1); border: 1px solid rgba(255,107,53,.3);
-                            border-radius: 8px; padding: .4rem .8rem; font-size: .85rem; }
-    #qrReader { border-radius: 12px; overflow: hidden; }
-</style>
+    <!-- Search Bar -->
+    <div class="card border-0 shadow mb-4">
+        <div class="card-body p-3">
+            <div class="input-group input-group-lg">
+                <input type="text" class="form-control border-end-0" id="search-input" placeholder='Try: "red wireless headphones under $100" or "organic cotton t-shirts bulk order"'>
+                <span class="input-group-text bg-white">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="ai-toggle" checked>
+                        <label class="form-check-label small" for="ai-toggle">AI</label>
+                    </div>
+                </span>
+                <button class="btn btn-primary" id="search-btn"><i class="bi bi-search me-1"></i>Search</button>
+            </div>
+            <div class="mt-2">
+                <small class="text-muted me-2">Try:</small>
+                <?php
+                $examples = ['best laptops for gaming', 'organic food suppliers', 'bulk electronics under $50', 'certified medical equipment'];
+                foreach ($examples as $ex): ?>
+                <button class="btn btn-outline-secondary btn-sm me-1 mb-1 example-query"><?= e($ex) ?></button>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
 
-<!-- Search Hero -->
-<div class="search-hero text-white py-5">
-    <div class="container py-2">
-        <h2 class="fw-bold text-center mb-1"><i class="bi bi-cpu-fill text-warning me-2"></i>AI Smart Search</h2>
-        <p class="text-center text-white-75 mb-4">Search in plain English · Speak · Scan a barcode · Upload an image</p>
-
-        <!-- Main Search Form -->
-        <div class="row justify-content-center">
-            <div class="col-lg-8">
-                <div class="search-box d-flex align-items-center pe-2 py-1">
-                    <input type="text" id="searchInput" class="form-control flex-grow-1 rounded-pill"
-                           placeholder='Try "wholesale electronics under $500" or scan a barcode…'
-                           autocomplete="off">
-                    <!-- Voice -->
-                    <button class="search-mode-btn btn btn-light ms-1" id="voiceBtn" title="Voice Search">
-                        <i class="bi bi-mic-fill"></i>
-                    </button>
-                    <!-- Image -->
-                    <label class="search-mode-btn btn btn-light ms-1 mb-0" title="Image Search" id="imageBtn">
-                        <i class="bi bi-camera-fill"></i>
-                        <input type="file" id="imageInput" accept="image/*" class="d-none">
-                    </label>
-                    <!-- Barcode -->
-                    <button class="search-mode-btn btn btn-light ms-1" id="barcodeBtn" title="Barcode / QR Scanner">
-                        <i class="bi bi-upc-scan"></i>
-                    </button>
-                    <!-- Search -->
-                    <button class="btn text-white px-4 ms-2 rounded-pill" id="searchBtn"
-                            style="background:var(--brand-orange); min-width:90px;">
-                        <i class="bi bi-search"></i> Search
-                    </button>
-                </div>
-
-                <!-- Filter chips -->
-                <div class="d-flex flex-wrap gap-2 mt-3 justify-content-center">
-                    <span class="filter-chip" data-q="electronics">Electronics</span>
-                    <span class="filter-chip" data-q="clothing wholesale">Clothing</span>
-                    <span class="filter-chip" data-q="industrial machinery">Machinery</span>
-                    <span class="filter-chip" data-q="food packaging">Food & Packaging</span>
-                    <span class="filter-chip" data-q="under $100">Under $100</span>
-                    <span class="filter-chip" data-q="certified ISO products">ISO Certified</span>
+    <!-- AI Analysis Result -->
+    <div id="ai-analysis" class="d-none mb-4">
+        <div class="card border-0 shadow-sm border-start border-primary border-4">
+            <div class="card-body">
+                <h6 class="text-primary"><i class="bi bi-robot me-2"></i>AI Understanding</h6>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <small class="text-muted">Detected Intent</small>
+                        <div id="ai-intent" class="fw-semibold"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-muted">Enhanced Query</small>
+                        <div id="ai-enhanced-query"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-muted">AI-Suggested Filters</small>
+                        <div id="ai-filters"></div>
+                    </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- AI loading animation -->
+    <div id="ai-thinking" class="d-none text-center py-3 text-muted">
+        <div class="spinner-border spinner-border-sm me-2"></div>
+        AI is understanding your search...
+    </div>
+
+    <!-- Results -->
+    <div id="search-results" class="row g-3"></div>
+
+    <!-- Search History -->
+    <div class="card border-0 shadow-sm mt-4">
+        <div class="card-header bg-transparent border-0 pt-3">
+            <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent AI Searches</h5>
+        </div>
+        <div class="card-body p-0">
+            <ul class="list-group list-group-flush" id="search-history-list">
+                <li class="list-group-item text-muted text-center py-3">Loading history...</li>
+            </ul>
         </div>
     </div>
 </div>
 
-<div class="container py-4">
-
-    <!-- Barcode scanner panel (hidden by default) -->
-    <div id="scannerPanel" class="d-none mb-4">
-        <div class="card border-0 shadow-sm rounded-4">
-            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center rounded-top-4">
-                <span><i class="bi bi-upc-scan me-2"></i>Barcode / QR Scanner</span>
-                <button class="btn btn-sm btn-outline-light" id="closeScanner">
-                    <i class="bi bi-x-lg"></i> Close
-                </button>
-            </div>
-            <div class="card-body p-3">
-                <div id="qrReader" style="max-width:500px;margin:0 auto;"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Status / interpretation -->
-    <div id="searchStatus" class="d-none mb-3">
-        <div class="d-flex align-items-center gap-3 flex-wrap">
-            <div class="interpretation-badge">
-                <i class="bi bi-magic text-warning me-1"></i>
-                AI interpreted: <strong id="interpretationText"></strong>
-            </div>
-            <small class="text-muted" id="resultCount"></small>
-        </div>
-    </div>
-
-    <!-- Loading -->
-    <div id="loadingSpinner" class="d-none text-center py-5">
-        <div class="spinner-border text-warning" style="width:3rem;height:3rem;" role="status"></div>
-        <p class="text-muted mt-3">Searching with AI…</p>
-    </div>
-
-    <!-- Results Grid -->
-    <div id="resultsGrid" class="row g-3"></div>
-
-    <!-- Pagination -->
-    <div id="pagination" class="d-flex justify-content-center gap-2 mt-4"></div>
-
-    <!-- Empty state -->
-    <div id="emptyState" class="d-none text-center py-5">
-        <i class="bi bi-search text-muted" style="font-size:4rem;"></i>
-        <h5 class="text-muted mt-3">No products found</h5>
-        <p class="text-muted small">Try a different query or remove some filters.</p>
-    </div>
-
-    <!-- Initial prompt -->
-    <div id="initialPrompt" class="text-center py-5">
-        <div class="row justify-content-center">
-            <div class="col-lg-6">
-                <i class="bi bi-search-heart text-warning" style="font-size:3.5rem;"></i>
-                <h4 class="mt-3 fw-bold">Start your AI-powered search</h4>
-                <p class="text-muted">
-                    Type naturally, like <em>"stainless steel bolts, minimum order 1000, under $0.50 each"</em>
-                    — our AI will extract the right filters automatically.
-                </p>
-            </div>
-        </div>
-        <!-- Example queries -->
-        <div class="row justify-content-center g-3 mt-2">
-            <?php
-            $examples = [
-                ['Organic cotton t-shirts bulk order', 'bi-shop'],
-                ['Industrial LED lighting 50W+', 'bi-lightbulb'],
-                ['Bluetooth headphones under $30', 'bi-headphones'],
-                ['Food grade packaging boxes', 'bi-box-seam'],
-            ];
-            foreach ($examples as [$text, $icon]):
-            ?>
-            <div class="col-sm-6 col-lg-3">
-                <div class="card border rounded-3 p-3 example-query" role="button" data-q="<?= e($text) ?>">
-                    <i class="bi <?= $icon ?> text-warning fs-4 mb-2"></i>
-                    <small class="text-muted"><?= e($text) ?></small>
-                </div>
-            </div>
-            <?php endforeach; ?>
-        </div>
-    </div>
-
-</div>
-
-<!-- html5-qrcode CDN -->
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
-const SEARCH_URL = '<?= APP_URL ?>/api/ai/search.php';
-let currentPage = 1, html5QrCode = null, isRecording = false;
-let recognition = null;
+document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('search-input');
+    const searchBtn   = document.getElementById('search-btn');
+    const aiToggle    = document.getElementById('ai-toggle');
 
-// ---- Utility ----
-function starHtml(rating) {
-    let html = '';
-    for (let i = 1; i <= 5; i++) {
-        html += `<i class="bi bi-star${i <= Math.round(rating) ? '-fill' : ''} text-warning" style="font-size:.7rem;"></i>`;
-    }
-    return html;
-}
+    // Load search history
+    fetch('/api/ai/search.php?action=history')
+        .then(r => r.json())
+        .then(d => {
+            const list = document.getElementById('search-history-list');
+            if (d.success && d.data.length) {
+                list.innerHTML = d.data.map(h => `
+                    <li class="list-group-item d-flex justify-content-between align-items-center" style="cursor:pointer" onclick="document.getElementById('search-input').value='${h.original_query.replace(/'/g,"\\'")}'; document.getElementById('search-btn').click();">
+                        <div>
+                            <i class="bi bi-search me-2 text-muted"></i>${h.original_query}
+                            ${h.intent ? '<span class="badge bg-light text-dark ms-2">' + h.intent + '</span>' : ''}
+                        </div>
+                        <small class="text-muted">${new Date(h.created_at).toLocaleDateString()}</small>
+                    </li>`).join('');
+            } else {
+                list.innerHTML = '<li class="list-group-item text-muted text-center py-3">No search history yet</li>';
+            }
+        }).catch(() => {});
 
-function productCard(p) {
-    const rel = Math.min(100, Math.round(p.relevance_score));
-    const img = p.image && p.image !== '/assets/img/no-image.png'
-        ? p.image : '<?= APP_URL ?>/assets/img/no-image.png';
-    return `
-    <div class="col-sm-6 col-md-4 col-lg-3">
-        <div class="card result-card h-100">
-            <a href="<?= APP_URL ?>/pages/product/detail.php?id=${p.id}" class="text-decoration-none">
-                <img src="${img}" class="card-img-top" alt="${p.name}"
-                     style="height:180px;object-fit:cover;border-radius:13px 13px 0 0;"
-                     onerror="this.src='<?= APP_URL ?>/assets/img/no-image.png'">
-            </a>
-            <div class="card-body p-3 d-flex flex-column">
-                <small class="text-muted">${p.category || ''}</small>
-                <a href="<?= APP_URL ?>/pages/product/detail.php?id=${p.id}"
-                   class="text-decoration-none text-dark fw-semibold small lh-sm mt-1">
-                    ${p.name}
-                </a>
-                <div class="mt-1 mb-2">${starHtml(p.rating)} <small class="text-muted">(${p.review_count})</small></div>
-                <div class="fw-bold text-primary mt-auto" style="color:var(--brand-orange)!important;">
-                    $${parseFloat(p.price).toFixed(2)}
-                </div>
-                ${p.min_order_qty > 1 ? `<small class="text-muted">MOQ: ${p.min_order_qty}</small>` : ''}
-                <div class="mt-2">
-                    <div class="d-flex justify-content-between small text-muted mb-1">
-                        <span>Relevance</span><span>${rel}%</span>
-                    </div>
-                    <div class="relevance-bar">
-                        <div class="relevance-fill" style="width:${rel}%"></div>
-                    </div>
-                </div>
-                <a href="<?= APP_URL ?>/pages/product/detail.php?id=${p.id}"
-                   class="btn btn-sm btn-outline-primary mt-3 rounded-pill">View Product</a>
-            </div>
-        </div>
-    </div>`;
-}
+    // Example queries
+    document.querySelectorAll('.example-query').forEach(btn => {
+        btn.addEventListener('click', () => { searchInput.value = btn.textContent; searchBtn.click(); });
+    });
 
-// ---- Search ----
-async function doSearch(q, type = 'text', page = 1) {
-    if (!q.trim()) return;
-    currentPage = page;
-    document.getElementById('initialPrompt').classList.add('d-none');
-    document.getElementById('emptyState').classList.add('d-none');
-    document.getElementById('searchStatus').classList.add('d-none');
-    document.getElementById('loadingSpinner').classList.remove('d-none');
-    document.getElementById('resultsGrid').innerHTML = '';
-    document.getElementById('pagination').innerHTML = '';
+    searchBtn.addEventListener('click', performSearch);
+    searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') performSearch(); });
 
-    try {
-        const res  = await fetch(`${SEARCH_URL}?q=${encodeURIComponent(q)}&type=${type}&page=${page}`);
-        const data = await res.json();
-        document.getElementById('loadingSpinner').classList.add('d-none');
+    async function performSearch() {
+        const query = searchInput.value.trim();
+        if (!query) return;
+        const useAI = aiToggle.checked;
+        const resultsDiv = document.getElementById('search-results');
+        resultsDiv.innerHTML = '<div class="col-12 text-center py-4"><div class="spinner-border text-primary"></div></div>';
 
-        if (!data.success) throw new Error(data.message || 'Search failed');
-
-        if (data.results.length === 0) {
-            document.getElementById('emptyState').classList.remove('d-none');
-            return;
+        if (useAI) {
+            document.getElementById('ai-thinking').classList.remove('d-none');
+            document.getElementById('ai-analysis').classList.add('d-none');
+            try {
+                const res = await fetch('/api/ai/search.php?action=enhance&q=' + encodeURIComponent(query));
+                const data = await res.json();
+                document.getElementById('ai-thinking').classList.add('d-none');
+                if (data.success) {
+                    const d = data.data;
+                    document.getElementById('ai-intent').textContent = d.intent || 'Product search';
+                    document.getElementById('ai-enhanced-query').textContent = d.enhanced_query || query;
+                    const filters = d.filters || {};
+                    const filterParts = [];
+                    if (filters.category) filterParts.push('<span class="badge bg-primary me-1">' + filters.category + '</span>');
+                    if (filters.min_price) filterParts.push('<span class="badge bg-success me-1">Min: $' + filters.min_price + '</span>');
+                    if (filters.max_price) filterParts.push('<span class="badge bg-warning text-dark me-1">Max: $' + filters.max_price + '</span>');
+                    document.getElementById('ai-filters').innerHTML = filterParts.join('') || '<span class="text-muted">None</span>';
+                    document.getElementById('ai-analysis').classList.remove('d-none');
+                }
+            } catch (e) {
+                document.getElementById('ai-thinking').classList.add('d-none');
+            }
         }
 
-        document.getElementById('searchStatus').classList.remove('d-none');
-        document.getElementById('interpretationText').textContent = data.query_interpretation || q;
-        document.getElementById('resultCount').textContent = `${data.total.toLocaleString()} result(s) found`;
-
-        document.getElementById('resultsGrid').innerHTML = data.results.map(productCard).join('');
-
-        // Pagination
-        if (data.pages > 1) {
-            let pHtml = '';
-            for (let i = 1; i <= Math.min(data.pages, 10); i++) {
-                pHtml += `<button class="btn btn-sm ${i === page ? 'btn-warning' : 'btn-outline-secondary'} rounded-pill"
-                          onclick="doSearch(document.getElementById('searchInput').value,'${type}',${i})">${i}</button>`;
+        // Basic product search
+        try {
+            const searchRes = await fetch('/api/products.php?action=search&q=' + encodeURIComponent(query) + '&limit=12');
+            const searchData = await searchRes.json();
+            if (searchData.success && searchData.data?.length) {
+                resultsDiv.innerHTML = searchData.data.map(p => `
+                    <div class="col-sm-6 col-md-4 col-lg-3">
+                        <div class="card border-0 shadow-sm h-100">
+                            <img src="${p.image || '/assets/img/no-image.png'}" class="card-img-top" style="height:180px;object-fit:cover;" alt="">
+                            <div class="card-body p-3">
+                                <h6 class="card-title mb-1">${p.name}</h6>
+                                <div class="text-primary fw-bold">$${parseFloat(p.price || 0).toFixed(2)}</div>
+                            </div>
+                        </div>
+                    </div>`).join('');
+            } else {
+                resultsDiv.innerHTML = '<div class="col-12 text-center py-4 text-muted"><i class="bi bi-search fs-2 d-block mb-2"></i>No products found. Try different keywords.</div>';
             }
-            document.getElementById('pagination').innerHTML = pHtml;
+        } catch (e) {
+            resultsDiv.innerHTML = '<div class="col-12 text-center py-4 text-muted">Search unavailable. Please try again.</div>';
         }
-    } catch (err) {
-        document.getElementById('loadingSpinner').classList.add('d-none');
-        document.getElementById('resultsGrid').innerHTML =
-            `<div class="col-12 text-center text-danger py-4"><i class="bi bi-exclamation-triangle me-2"></i>${err.message}</div>`;
     }
-}
-
-// ---- Event listeners ----
-document.getElementById('searchBtn').addEventListener('click', () => {
-    doSearch(document.getElementById('searchInput').value);
-});
-document.getElementById('searchInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') doSearch(e.target.value);
-});
-
-document.querySelectorAll('.filter-chip').forEach(el => {
-    el.addEventListener('click', () => {
-        document.getElementById('searchInput').value = el.dataset.q;
-        doSearch(el.dataset.q);
-    });
-});
-document.querySelectorAll('.example-query').forEach(el => {
-    el.addEventListener('click', () => {
-        document.getElementById('searchInput').value = el.dataset.q;
-        doSearch(el.dataset.q);
-    });
-});
-
-// ---- Voice Search ----
-document.getElementById('voiceBtn').addEventListener('click', () => {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        alert('Voice search is not supported in this browser. Please use Chrome or Edge.');
-        return;
-    }
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (isRecording) {
-        recognition && recognition.stop();
-        return;
-    }
-    recognition = new SpeechRecognition();
-    recognition.lang       = 'en-US';
-    recognition.continuous = false;
-    recognition.onstart  = () => {
-        isRecording = true;
-        document.getElementById('voiceBtn').classList.add('recording');
-    };
-    recognition.onresult = e => {
-        const transcript = e.results[0][0].transcript;
-        document.getElementById('searchInput').value = transcript;
-        doSearch(transcript, 'voice');
-    };
-    recognition.onend = () => {
-        isRecording = false;
-        document.getElementById('voiceBtn').classList.remove('recording');
-    };
-    recognition.onerror = () => {
-        isRecording = false;
-        document.getElementById('voiceBtn').classList.remove('recording');
-    };
-    recognition.start();
-});
-
-// ---- Image Search ----
-document.getElementById('imageInput').addEventListener('change', async function () {
-    const file = this.files[0];
-    if (!file) return;
-    // Use filename as search hint
-    const name = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
-    document.getElementById('searchInput').value = name;
-    doSearch(name, 'image');
-    this.value = '';
-});
-
-// ---- Barcode Scanner ----
-document.getElementById('barcodeBtn').addEventListener('click', () => {
-    const panel = document.getElementById('scannerPanel');
-    panel.classList.toggle('d-none');
-    if (!panel.classList.contains('d-none') && !html5QrCode) {
-        html5QrCode = new Html5Qrcode('qrReader');
-        html5QrCode.start(
-            { facingMode: 'environment' },
-            { fps: 10, qrbox: { width: 280, height: 180 } },
-            decodedText => {
-                document.getElementById('searchInput').value = decodedText;
-                doSearch(decodedText, 'barcode');
-                html5QrCode.stop();
-                panel.classList.add('d-none');
-                html5QrCode = null;
-            }
-        ).catch(() => {});
-    } else if (panel.classList.contains('d-none') && html5QrCode) {
-        html5QrCode.stop().catch(() => {});
-        html5QrCode = null;
-    }
-});
-
-document.getElementById('closeScanner').addEventListener('click', () => {
-    document.getElementById('scannerPanel').classList.add('d-none');
-    if (html5QrCode) { html5QrCode.stop().catch(() => {}); html5QrCode = null; }
 });
 </script>
-
-<?php include __DIR__ . '/../../includes/footer.php'; ?>
+<?php require_once __DIR__ . '/../../includes/footer.php'; ?>
