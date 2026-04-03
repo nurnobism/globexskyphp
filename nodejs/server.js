@@ -1,68 +1,379 @@
-/**
- * GlobexSky Node.js Streaming & Real-time Server
- *
- * Extends the existing server with live streaming events:
- * - Stream start/end/join/leave
- * - Live chat during streams
- * - Emoji reactions
- * - Product pin/unpin during stream
- * - Viewer questions
- * - Viewer count updates
- * - Stream moderation (bans)
- *
- * Uses Socket.io for real-time communication.
- * Uses PeerJS for WebRTC signaling.
- */
-
+require('dotenv').config();
 const http = require('http');
 const { Server } = require('socket.io');
-const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+const mysql = require('mysql2/promise');
 
 const PORT = process.env.PORT || 3001;
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+const SHUTDOWN_TIMEOUT_MS = parseInt(process.env.SHUTDOWN_TIMEOUT_MS || '5000', 10);
 
+// Require JWT_SECRET and INTERNAL_API_KEY to be explicitly configured
+const JWT_SECRET = process.env.JWT_SECRET;
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
+
+if (!JWT_SECRET) {
+    console.error('[startup] FATAL: JWT_SECRET environment variable is required.');
+    process.exit(1);
+}
+if (!INTERNAL_API_KEY) {
+    console.error('[startup] FATAL: INTERNAL_API_KEY environment variable is required.');
+    process.exit(1);
+}
+
+// --- Database pool ---
+const db = mysql.createPool({
+    host: process.env.DB_HOST || 'localhost',
+    database: process.env.DB_NAME || 'globexsky',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASS || '',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+});
+
+// --- HTTP server ---
+// All request handling is consolidated here to avoid double-execution.
 const server = http.createServer((req, res) => {
-    // Basic health check endpoint
-    if (req.url === '/health') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'ok', service: 'globexsky-streaming', uptime: process.uptime() }));
+    if (req.method === 'POST' && req.url === '/internal/notify') {
+        const authHeader = req.headers['authorization'] || '';
+        if (authHeader !== `Bearer ${INTERNAL_API_KEY}`) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ error: 'Unauthorized' }));
+        }
+
+        let body = '';
+        req.on('data', (chunk) => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const { targetUserId, notification } = JSON.parse(body);
+                const uid = parseInt(targetUserId, 10);
+                if (!Number.isFinite(uid) || !notification) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ error: 'Valid targetUserId (integer) and notification required' }));
+                }
+                const delivered = pushNotificationToUser(uid, notification);
+                io.to(`user:${uid}`).emit('notification', notification);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, delivered }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid JSON' }));
+            }
+        });
         return;
     }
-    res.writeHead(404);
-    res.end('Not found');
+
+    // Health-check for all other requests
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'GlobexSky Realtime OK' }));
 });
 
+// --- Socket.io ---
 const io = new Server(server, {
     cors: {
-        origin: '*',
-        methods: ['GET', 'POST']
-    }
+        origin: CORS_ORIGIN,
+        methods: ['GET', 'POST'],
+        credentials: true,
+    },
+    pingTimeout: 60000,
+    pingInterval: 25000,
 });
 
-// In-memory state for active streams
+// In-memory map: userId -> Set of socketIds (a user may have multiple tabs open)
+const userSockets = new Map();
+
+// ── Phase 7: Live Streaming In-Memory State ──────────────────────────────────
 const activeStreams = new Map();   // streamId -> { streamerId, title, viewers: Set, pinnedProduct, startedAt }
 const streamBans   = new Map();   // streamId -> Set of banned userIds
-const viewerCounts = new Map();   // streamId -> count
 
-/**
- * Generate a unique room name for a stream
- */
 function streamRoom(streamId) {
     return `stream_${streamId}`;
 }
 
-io.on('connection', (socket) => {
-    console.log(`Client connected: ${socket.id}`);
+function handleViewerLeave(socket, streamId) {
+    const room = streamRoom(streamId);
+    const stream = activeStreams.get(streamId);
+    if (stream) {
+        stream.viewers.delete(socket.id);
+        const count = stream.viewers.size;
+        io.to(room).emit('stream_viewer_count', { streamId, count });
+    }
+    socket.leave(room);
+}
 
-    // ── stream_start ─────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+async function setUserOnline(userId, socketId) {
+    try {
+        await db.execute(
+            `INSERT INTO user_online_status (user_id, is_online, last_seen, socket_id)
+             VALUES (?, 1, NOW(), ?)
+             ON DUPLICATE KEY UPDATE is_online = 1, last_seen = NOW(), socket_id = ?`,
+            [userId, socketId, socketId]
+        );
+    } catch (err) {
+        console.error('[DB] setUserOnline error:', err.message);
+    }
+}
+
+async function setUserOffline(userId) {
+    try {
+        await db.execute(
+            `UPDATE user_online_status
+             SET is_online = 0, last_seen = NOW(), socket_id = NULL
+             WHERE user_id = ?`,
+            [userId]
+        );
+    } catch (err) {
+        console.error('[DB] setUserOffline error:', err.message);
+    }
+}
+
+async function saveMessage(roomId, senderId, message, type, extra) {
+    const { fileUrl = null, fileName = null, fileSize = null, replyToId = null } = extra || {};
+    const [result] = await db.execute(
+        `INSERT INTO chat_messages
+            (room_id, sender_id, message, type, file_url, file_name, file_size, reply_to_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [roomId, senderId, message, type || 'text', fileUrl, fileName, fileSize, replyToId]
+    );
+    // Update room's last-message preview
+    const preview = String(message || fileName || '').substring(0, 120);
+    await db.execute(
+        `UPDATE chat_rooms
+         SET last_message_at = NOW(), last_message_preview = ?
+         WHERE id = ?`,
+        [preview, roomId]
+    );
+    return result.insertId;
+}
+
+async function markMessageRead(messageId, userId) {
+    try {
+        await db.execute(
+            `INSERT IGNORE INTO message_read_receipts (message_id, user_id, read_at)
+             VALUES (?, ?, NOW())`,
+            [messageId, userId]
+        );
+        // Also bump participant last_read_at
+        await db.execute(
+            `UPDATE chat_participants SET last_read_at = NOW()
+             WHERE room_id = (SELECT room_id FROM chat_messages WHERE id = ?)
+               AND user_id = ?`,
+            [messageId, userId]
+        );
+    } catch (err) {
+        console.error('[DB] markMessageRead error:', err.message);
+    }
+}
+
+async function isRoomParticipant(roomId, userId) {
+    const [rows] = await db.execute(
+        'SELECT id FROM chat_participants WHERE room_id = ? AND user_id = ?',
+        [roomId, userId]
+    );
+    return rows.length > 0;
+}
+
+function broadcastOnlineStatus(userId, isOnline) {
+    io.emit('user_status', { userId, isOnline, lastSeen: new Date().toISOString() });
+}
+
+function pushNotificationToUser(targetUserId, notification) {
+    const sockets = userSockets.get(targetUserId);
+    if (sockets && sockets.size > 0) {
+        sockets.forEach((sid) => {
+            io.to(sid).emit('notification', notification);
+        });
+        return true;
+    }
+    return false;
+}
+
+// ── JWT Middleware ────────────────────────────────────────────────────────────
+
+io.use((socket, next) => {
+    const token =
+        socket.handshake.auth?.token ||
+        socket.handshake.headers?.authorization?.replace('Bearer ', '');
+
+    if (!token) {
+        return next(new Error('Authentication token required'));
+    }
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        // JWT must include `user_id` (integer) as the canonical user identifier
+        const userId = parseInt(decoded.user_id, 10);
+        if (!Number.isFinite(userId)) {
+            return next(new Error('Invalid token payload: user_id must be an integer'));
+        }
+        socket.userId = userId;
+        socket.userRole = decoded.role || 'buyer';
+        socket.userName = decoded.name || decoded.username || '';
+        next();
+    } catch (err) {
+        next(new Error('Invalid or expired token'));
+    }
+});
+
+// ── Connection handler ────────────────────────────────────────────────────────
+
+io.on('connection', async (socket) => {
+    const userId = socket.userId;
+    console.log(`[connect] user=${userId} socket=${socket.id}`);
+
+    // Track socket
+    if (!userSockets.has(userId)) {
+        userSockets.set(userId, new Set());
+    }
+    userSockets.get(userId).add(socket.id);
+
+    // Mark online in DB and broadcast
+    await setUserOnline(userId, socket.id);
+    broadcastOnlineStatus(userId, true);
+
+    // Auto-join the user's personal notification room
+    socket.join(`user:${userId}`);
+
+    // ── join_room ──────────────────────────────────────────────────────────────
+    socket.on('join_room', async ({ roomId }, ack) => {
+        if (!roomId) return ack && ack({ error: 'roomId required' });
+
+        try {
+            const allowed = await isRoomParticipant(roomId, userId);
+            if (!allowed) return ack && ack({ error: 'Not a participant of this room' });
+
+            socket.join(`room:${roomId}`);
+            console.log(`[join_room] user=${userId} room=${roomId}`);
+            ack && ack({ success: true, roomId });
+        } catch (err) {
+            console.error('[join_room] error:', err.message);
+            ack && ack({ error: 'Server error' });
+        }
+    });
+
+    // ── leave_room ─────────────────────────────────────────────────────────────
+    socket.on('leave_room', ({ roomId }, ack) => {
+        if (!roomId) return ack && ack({ error: 'roomId required' });
+        socket.leave(`room:${roomId}`);
+        console.log(`[leave_room] user=${userId} room=${roomId}`);
+        ack && ack({ success: true });
+    });
+
+    // ── send_message ───────────────────────────────────────────────────────────
+    socket.on('send_message', async (data, ack) => {
+        const { roomId, message, type = 'text', fileUrl, fileName, fileSize, replyToId } = data || {};
+
+        if (!roomId) return ack && ack({ error: 'roomId required' });
+        if (!message && !fileUrl) return ack && ack({ error: 'message or fileUrl required' });
+
+        try {
+            const allowed = await isRoomParticipant(roomId, userId);
+            if (!allowed) return ack && ack({ error: 'Not a participant of this room' });
+
+            const messageId = await saveMessage(roomId, userId, message, type, {
+                fileUrl,
+                fileName,
+                fileSize,
+                replyToId,
+            });
+
+            const payload = {
+                id: messageId,
+                roomId,
+                senderId: userId,
+                senderName: socket.userName,
+                message,
+                type,
+                fileUrl: fileUrl || null,
+                fileName: fileName || null,
+                fileSize: fileSize || null,
+                replyToId: replyToId || null,
+                createdAt: new Date().toISOString(),
+            };
+
+            // Broadcast to everyone in the room (including sender for multi-tab sync)
+            io.to(`room:${roomId}`).emit('new_message', payload);
+
+            ack && ack({ success: true, messageId });
+        } catch (err) {
+            console.error('[send_message] error:', err.message);
+            ack && ack({ error: 'Failed to send message' });
+        }
+    });
+
+    // ── typing_start ───────────────────────────────────────────────────────────
+    socket.on('typing_start', ({ roomId }) => {
+        if (!roomId) return;
+        socket.to(`room:${roomId}`).emit('user_typing', {
+            roomId,
+            userId,
+            userName: socket.userName,
+            isTyping: true,
+        });
+    });
+
+    // ── typing_stop ────────────────────────────────────────────────────────────
+    socket.on('typing_stop', ({ roomId }) => {
+        if (!roomId) return;
+        socket.to(`room:${roomId}`).emit('user_typing', {
+            roomId,
+            userId,
+            userName: socket.userName,
+            isTyping: false,
+        });
+    });
+
+    // ── read_receipt ───────────────────────────────────────────────────────────
+    socket.on('read_receipt', async ({ messageId, roomId }, ack) => {
+        if (!messageId) return ack && ack({ error: 'messageId required' });
+
+        try {
+            await markMessageRead(messageId, userId);
+
+            // Notify others in the room about the read receipt
+            if (roomId) {
+                socket.to(`room:${roomId}`).emit('message_read', {
+                    messageId,
+                    userId,
+                    readAt: new Date().toISOString(),
+                });
+            }
+
+            ack && ack({ success: true });
+        } catch (err) {
+            console.error('[read_receipt] error:', err.message);
+            ack && ack({ error: 'Failed to record read receipt' });
+        }
+    });
+
+    // ── push_notification (admin-only socket event) ────────────────────────────
+    socket.on('push_notification', (data, ack) => {
+        if (socket.userRole !== 'admin') {
+            return ack && ack({ error: 'Unauthorized' });
+        }
+        const { targetUserId, notification } = data || {};
+        const uid = parseInt(targetUserId, 10);
+        if (!Number.isFinite(uid) || !notification) {
+            return ack && ack({ error: 'Valid targetUserId (integer) and notification required' });
+        }
+        const delivered = pushNotificationToUser(uid, notification);
+        ack && ack({ success: true, delivered });
+    });
+
+    // ── Phase 7: Live Streaming Events ─────────────────────────────────────────
+
     socket.on('stream_start', (data) => {
-        const { streamId, streamerId, title, category } = data;
-        if (!streamId || !streamerId) return;
+        const { streamId, title, category } = data || {};
+        if (!streamId) return;
 
         const room = streamRoom(streamId);
         socket.join(room);
 
         activeStreams.set(streamId, {
-            streamerId,
+            streamerId: userId,
             title: title || 'Live Stream',
             category: category || 'general',
             viewers: new Set(),
@@ -70,117 +381,90 @@ io.on('connection', (socket) => {
             startedAt: Date.now(),
             streamerSocketId: socket.id
         });
-        viewerCounts.set(streamId, 0);
         streamBans.set(streamId, new Set());
 
-        // Broadcast that a new stream started
         io.emit('stream_started', {
             streamId,
-            streamerId,
+            streamerId: userId,
             title,
             category,
             startedAt: new Date().toISOString()
         });
-
-        console.log(`Stream ${streamId} started by user ${streamerId}`);
+        console.log(`[stream_start] stream=${streamId} user=${userId}`);
     });
 
-    // ── stream_end ───────────────────────────────────────────
     socket.on('stream_end', (data) => {
-        const { streamId, streamerId } = data;
+        const { streamId } = data || {};
         if (!streamId) return;
 
         const stream = activeStreams.get(streamId);
-        if (stream && stream.streamerId === streamerId) {
+        if (stream && stream.streamerId === userId) {
             const room = streamRoom(streamId);
-
-            // Notify all viewers
             io.to(room).emit('stream_ended', {
                 streamId,
                 duration: Date.now() - stream.startedAt,
-                peakViewers: viewerCounts.get(streamId) || 0
+                peakViewers: stream.viewers.size
             });
-
-            // Clean up
             activeStreams.delete(streamId);
-            viewerCounts.delete(streamId);
             streamBans.delete(streamId);
-
-            console.log(`Stream ${streamId} ended`);
+            console.log(`[stream_end] stream=${streamId}`);
         }
     });
 
-    // ── stream_join ──────────────────────────────────────────
     socket.on('stream_join', (data) => {
-        const { streamId, userId, username } = data;
+        const { streamId } = data || {};
         if (!streamId) return;
 
-        const room = streamRoom(streamId);
-        const stream = activeStreams.get(streamId);
-
-        // Check if banned
         const bans = streamBans.get(streamId);
         if (bans && bans.has(userId)) {
             socket.emit('stream_error', { message: 'You are banned from this stream.' });
             return;
         }
 
+        const room = streamRoom(streamId);
+        const stream = activeStreams.get(streamId);
+
         socket.join(room);
         socket.streamId = streamId;
-        socket.userId = userId;
-        socket.username = username || 'Anonymous';
 
         if (stream) {
             stream.viewers.add(socket.id);
             const count = stream.viewers.size;
-            viewerCounts.set(streamId, count);
-
-            // Notify streamer
             io.to(room).emit('stream_viewer_count', { streamId, count });
 
-            // Send current pinned product to new viewer
             if (stream.pinnedProduct) {
                 socket.emit('stream_product_pin', stream.pinnedProduct);
             }
         }
-
-        console.log(`Viewer ${userId || socket.id} joined stream ${streamId}`);
+        console.log(`[stream_join] user=${userId} stream=${streamId}`);
     });
 
-    // ── stream_leave ─────────────────────────────────────────
     socket.on('stream_leave', (data) => {
-        const { streamId } = data;
-        if (!streamId) return;
-
-        handleViewerLeave(socket, streamId);
+        const { streamId } = data || {};
+        if (streamId) handleViewerLeave(socket, streamId);
     });
 
-    // ── stream_chat ──────────────────────────────────────────
     socket.on('stream_chat', (data) => {
-        const { streamId, userId, username, message, type } = data;
+        const { streamId, message, type } = data || {};
         if (!streamId || !message) return;
 
-        // Check if banned
         const bans = streamBans.get(streamId);
         if (bans && bans.has(userId)) return;
 
         const room = streamRoom(streamId);
-        const chatMessage = {
-            id: crypto.randomUUID(),
+        io.to(room).emit('stream_chat_message', {
+            id: require('crypto').randomUUID(),
             streamId,
             userId,
-            username: username || 'Anonymous',
-            message: message.substring(0, 500),  // Limit message length
+            username: socket.userName || 'Anonymous',
+            message: String(message).substring(0, 500),
             type: type || 'message',
             timestamp: new Date().toISOString()
-        };
-
-        io.to(room).emit('stream_chat_message', chatMessage);
+        });
     });
 
-    // ── stream_reaction ──────────────────────────────────────
     socket.on('stream_reaction', (data) => {
-        const { streamId, userId, emoji } = data;
+        const { streamId, emoji } = data || {};
         if (!streamId || !emoji) return;
 
         const room = streamRoom(streamId);
@@ -188,46 +472,36 @@ io.on('connection', (socket) => {
             streamId,
             userId,
             emoji,
-            id: crypto.randomUUID()
+            id: require('crypto').randomUUID()
         });
     });
 
-    // ── stream_product_pin ───────────────────────────────────
     socket.on('stream_product_pin', (data) => {
-        const { streamId, streamerId, product } = data;
+        const { streamId, product } = data || {};
         if (!streamId || !product) return;
 
         const stream = activeStreams.get(streamId);
-        if (stream && stream.streamerId === streamerId) {
+        if (stream && stream.streamerId === userId) {
             stream.pinnedProduct = product;
-
             const room = streamRoom(streamId);
-            io.to(room).emit('stream_product_pin', {
-                streamId,
-                product
-            });
-
-            console.log(`Product pinned in stream ${streamId}: ${product.name}`);
+            io.to(room).emit('stream_product_pin', { streamId, product });
         }
     });
 
-    // ── stream_product_unpin ─────────────────────────────────
     socket.on('stream_product_unpin', (data) => {
-        const { streamId, streamerId } = data;
+        const { streamId } = data || {};
         if (!streamId) return;
 
         const stream = activeStreams.get(streamId);
-        if (stream && stream.streamerId === streamerId) {
+        if (stream && stream.streamerId === userId) {
             stream.pinnedProduct = null;
-
             const room = streamRoom(streamId);
             io.to(room).emit('stream_product_unpin', { streamId });
         }
     });
 
-    // ── stream_question ──────────────────────────────────────
     socket.on('stream_question', (data) => {
-        const { streamId, userId, username, question } = data;
+        const { streamId, question } = data || {};
         if (!streamId || !question) return;
 
         const stream = activeStreams.get(streamId);
@@ -235,106 +509,114 @@ io.on('connection', (socket) => {
 
         const room = streamRoom(streamId);
         const questionData = {
-            id: crypto.randomUUID(),
+            id: require('crypto').randomUUID(),
             streamId,
             userId,
-            username: username || 'Anonymous',
-            question: question.substring(0, 500),
+            username: socket.userName || 'Anonymous',
+            question: String(question).substring(0, 500),
             timestamp: new Date().toISOString()
         };
-
-        // Send to streamer
         io.to(stream.streamerSocketId).emit('stream_question_received', questionData);
-        // Also broadcast to all viewers
         io.to(room).emit('stream_question_broadcast', questionData);
     });
 
-    // ── stream_ban ───────────────────────────────────────────
     socket.on('stream_ban', (data) => {
-        const { streamId, streamerId, targetUserId } = data;
+        const { streamId, targetUserId } = data || {};
         if (!streamId || !targetUserId) return;
 
         const stream = activeStreams.get(streamId);
-        if (stream && stream.streamerId === streamerId) {
+        if (stream && stream.streamerId === userId) {
             let bans = streamBans.get(streamId);
             if (!bans) {
                 bans = new Set();
                 streamBans.set(streamId, bans);
             }
             bans.add(targetUserId);
-
-            // Notify the banned user
             const room = streamRoom(streamId);
             io.to(room).emit('stream_user_banned', { streamId, userId: targetUserId });
-
-            console.log(`User ${targetUserId} banned from stream ${streamId}`);
+            console.log(`[stream_ban] user=${targetUserId} from stream=${streamId}`);
         }
     });
 
-    // ── WebRTC signaling ─────────────────────────────────────
+    // WebRTC signaling
     socket.on('webrtc_offer', (data) => {
-        const { streamId, offer, targetId } = data;
+        const { streamId, offer, targetId } = data || {};
         if (targetId) {
             io.to(targetId).emit('webrtc_offer', { offer, senderId: socket.id, streamId });
-        } else {
-            const room = streamRoom(streamId);
-            socket.to(room).emit('webrtc_offer', { offer, senderId: socket.id, streamId });
+        } else if (streamId) {
+            socket.to(streamRoom(streamId)).emit('webrtc_offer', { offer, senderId: socket.id, streamId });
         }
     });
 
     socket.on('webrtc_answer', (data) => {
-        const { targetId, answer, streamId } = data;
+        const { targetId, answer, streamId } = data || {};
         if (targetId) {
             io.to(targetId).emit('webrtc_answer', { answer, senderId: socket.id, streamId });
         }
     });
 
     socket.on('webrtc_ice_candidate', (data) => {
-        const { targetId, candidate, streamId } = data;
+        const { targetId, candidate, streamId } = data || {};
         if (targetId) {
             io.to(targetId).emit('webrtc_ice_candidate', { candidate, senderId: socket.id, streamId });
-        } else {
-            const room = streamRoom(streamId);
-            socket.to(room).emit('webrtc_ice_candidate', { candidate, senderId: socket.id, streamId });
+        } else if (streamId) {
+            socket.to(streamRoom(streamId)).emit('webrtc_ice_candidate', { candidate, senderId: socket.id, streamId });
         }
     });
 
-    // ── Disconnect ───────────────────────────────────────────
-    socket.on('disconnect', () => {
+    // ── disconnect ─────────────────────────────────────────────────────────────
+    socket.on('disconnect', async (reason) => {
+        console.log(`[disconnect] user=${userId} socket=${socket.id} reason=${reason}`);
+
+        // Clean up streaming state
         if (socket.streamId) {
             handleViewerLeave(socket, socket.streamId);
         }
-        console.log(`Client disconnected: ${socket.id}`);
+
+        const sockets = userSockets.get(userId);
+        if (sockets) {
+            sockets.delete(socket.id);
+            if (sockets.size === 0) {
+                userSockets.delete(userId);
+                // Only mark offline when the last socket closes
+                await setUserOffline(userId);
+                broadcastOnlineStatus(userId, false);
+            }
+        }
+    });
+
+    socket.on('error', (err) => {
+        console.error(`[socket error] user=${userId}:`, err.message);
     });
 });
 
-/**
- * Handle a viewer leaving a stream
- */
-function handleViewerLeave(socket, streamId) {
-    const room = streamRoom(streamId);
-    const stream = activeStreams.get(streamId);
-
-    if (stream) {
-        stream.viewers.delete(socket.id);
-        const count = stream.viewers.size;
-        viewerCounts.set(streamId, count);
-
-        io.to(room).emit('stream_viewer_count', { streamId, count });
-    }
-
-    socket.leave(room);
-}
-
-// ── Periodic viewer count broadcast ──────────────────────────
+// ── Phase 7: Periodic viewer count broadcast ─────────────────────────────────
 setInterval(() => {
     for (const [streamId, stream] of activeStreams.entries()) {
         const room = streamRoom(streamId);
         const count = stream.viewers.size;
         io.to(room).emit('stream_viewer_count', { streamId, count });
     }
-}, 10000);  // Every 10 seconds
+}, 10000);
+
+// ── Graceful shutdown ─────────────────────────────────────────────────────────
+
+async function shutdown(signal) {
+    console.log(`\n[shutdown] Received ${signal}. Closing server…`);
+    io.close(() => console.log('[shutdown] Socket.io closed'));
+    server.close(async () => {
+        await db.end();
+        console.log('[shutdown] DB pool closed. Bye!');
+        process.exit(0);
+    });
+    setTimeout(() => process.exit(1), SHUTDOWN_TIMEOUT_MS);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+// ── Start ─────────────────────────────────────────────────────────────────────
 
 server.listen(PORT, () => {
-    console.log(`GlobexSky Streaming Server running on port ${PORT}`);
+    console.log(`[GlobexSky Realtime] Listening on port ${PORT}`);
 });

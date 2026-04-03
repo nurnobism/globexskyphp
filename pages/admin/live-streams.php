@@ -56,7 +56,7 @@ $statusColors = ['live' => 'danger', 'scheduled' => 'warning', 'ended' => 'secon
     <h1 class="h3 fw-bold mb-4"><i class="bi bi-broadcast text-danger"></i> Live Stream Management</h1>
 
     <?php if (!$dbOk): ?>
-        <div class="alert alert-warning">Live stream tables not initialized. Run schema_v4.sql first.</div>
+        <div class="alert alert-warning">Live stream tables not initialized. Run schema_v7.sql first.</div>
     <?php endif; ?>
 
     <!-- Stats -->

@@ -69,7 +69,7 @@ require_once __DIR__ . '/../../includes/header.php';
     <h1 class="h3 fw-bold mb-4"><i class="bi bi-code-slash text-primary"></i> API Management</h1>
 
     <?php if (!$dbOk): ?>
-        <div class="alert alert-warning">API tables not initialized. Run schema_v4.sql first.</div>
+        <div class="alert alert-warning">API tables not initialized. Run schema_v7.sql first.</div>
     <?php endif; ?>
 
     <!-- Stats -->

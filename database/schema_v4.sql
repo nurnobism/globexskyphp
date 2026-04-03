@@ -1,191 +1,177 @@
 -- GlobexSky Database Schema v4
--- REST API Platform + Live Streaming + Webhooks
+-- Dropshipping Engine — Full Module
 -- Run after schema.sql, schema_v2.sql, and schema_v3.sql
 
 SET NAMES utf8mb4;
 
--- -----------------------------------------------------------
--- API Keys
--- -----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS api_keys (
-    id                  INT AUTO_INCREMENT PRIMARY KEY,
-    user_id             INT NOT NULL,
-    name                VARCHAR(100) NOT NULL,
-    api_key             VARCHAR(64) NOT NULL UNIQUE,
-    key_prefix          VARCHAR(20) NOT NULL,
-    environment         ENUM('live','test') DEFAULT 'live',
-    permissions         JSON,
-    ip_whitelist        TEXT,
-    is_active           TINYINT(1) DEFAULT 1,
-    last_used_at        DATETIME,
-    requests_today      INT DEFAULT 0,
-    requests_month      INT DEFAULT 0,
-    rate_limit_per_day  INT DEFAULT 100,
-    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    revoked_at          DATETIME,
-    INDEX idx_user   (user_id),
-    INDEX idx_key    (api_key),
+-- Dropshipping store for each dropshipper
+CREATE TABLE IF NOT EXISTS dropship_stores (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    store_name VARCHAR(200) NOT NULL,
+    store_slug VARCHAR(200) UNIQUE,
+    store_description TEXT,
+    logo_url VARCHAR(500),
+    banner_url VARCHAR(500),
+    theme_color VARCHAR(7) DEFAULT '#0d6efd',
+    custom_domain VARCHAR(200),
+    is_active TINYINT(1) DEFAULT 1,
+    total_products INT DEFAULT 0,
+    total_orders INT DEFAULT 0,
+    total_revenue DECIMAL(12,2) DEFAULT 0.00,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id),
+    INDEX idx_slug (store_slug),
     INDEX idx_active (is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- -----------------------------------------------------------
--- API Request Logs
--- -----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS api_request_logs (
-    id               INT AUTO_INCREMENT PRIMARY KEY,
-    api_key_id       INT NOT NULL,
-    user_id          INT NOT NULL,
-    method           VARCHAR(10) NOT NULL,
-    endpoint         VARCHAR(200) NOT NULL,
-    params           TEXT,
-    request_body     TEXT,
-    response_code    INT NOT NULL,
-    response_time_ms INT DEFAULT 0,
-    ip_address       VARCHAR(45),
-    user_agent       VARCHAR(500),
-    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_api_key  (api_key_id),
-    INDEX idx_created  (created_at),
-    INDEX idx_endpoint (endpoint)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- -----------------------------------------------------------
--- Webhooks
--- -----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS webhooks (
-    id                INT AUTO_INCREMENT PRIMARY KEY,
-    user_id           INT NOT NULL,
-    url               VARCHAR(500) NOT NULL,
-    secret            VARCHAR(64) NOT NULL,
-    events            JSON NOT NULL,
-    is_active         TINYINT(1) DEFAULT 1,
-    last_triggered_at DATETIME,
-    success_count     INT DEFAULT 0,
-    failure_count     INT DEFAULT 0,
-    created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_user   (user_id),
-    INDEX idx_active (is_active)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- -----------------------------------------------------------
--- Webhook Delivery Logs
--- -----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS webhook_deliveries (
-    id               INT AUTO_INCREMENT PRIMARY KEY,
-    webhook_id       INT NOT NULL,
-    event            VARCHAR(50) NOT NULL,
-    payload          JSON NOT NULL,
-    response_code    INT,
-    response_body    TEXT,
-    response_time_ms INT,
-    delivery_id      VARCHAR(36) NOT NULL,
-    status           ENUM('pending','success','failed','retrying') DEFAULT 'pending',
-    retry_count      INT DEFAULT 0,
-    max_retries      INT DEFAULT 3,
-    next_retry_at    DATETIME,
-    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    delivered_at     DATETIME,
-    INDEX idx_webhook (webhook_id),
-    INDEX idx_status  (status),
-    INDEX idx_created (created_at),
-    FOREIGN KEY (webhook_id) REFERENCES webhooks(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- -----------------------------------------------------------
--- Live Streams
--- -----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS live_streams (
-    id                     INT AUTO_INCREMENT PRIMARY KEY,
-    streamer_id            INT NOT NULL,
-    title                  VARCHAR(300) NOT NULL,
-    description            TEXT,
-    category               ENUM('product_showcase','unboxing','tutorial','flash_sale','qa','general') DEFAULT 'general',
-    thumbnail_url          VARCHAR(500),
-    stream_key             VARCHAR(100) UNIQUE,
-    status                 ENUM('scheduled','live','ended','cancelled') DEFAULT 'scheduled',
-    scheduled_at           DATETIME,
-    started_at             DATETIME,
-    ended_at               DATETIME,
-    duration_seconds       INT DEFAULT 0,
-    peak_viewers           INT DEFAULT 0,
-    total_viewers          INT DEFAULT 0,
-    total_messages         INT DEFAULT 0,
-    total_reactions        INT DEFAULT 0,
-    orders_during_stream   INT DEFAULT 0,
-    revenue_during_stream  DECIMAL(12,2) DEFAULT 0.00,
-    vod_url                VARCHAR(500),
-    is_vod_available       TINYINT(1) DEFAULT 0,
-    is_featured            TINYINT(1) DEFAULT 0,
-    created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_streamer  (streamer_id),
-    INDEX idx_status    (status),
-    INDEX idx_scheduled (scheduled_at),
-    INDEX idx_featured  (is_featured)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- -----------------------------------------------------------
--- Stream Products
--- -----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS stream_products (
-    id                    INT AUTO_INCREMENT PRIMARY KEY,
-    stream_id             INT NOT NULL,
-    product_id            INT NOT NULL,
-    sort_order            INT DEFAULT 0,
-    is_pinned             TINYINT(1) DEFAULT 0,
-    pinned_at             DATETIME,
-    special_price         DECIMAL(12,2),
-    special_price_expires DATETIME,
-    clicks                INT DEFAULT 0,
-    orders                INT DEFAULT 0,
-    FOREIGN KEY (stream_id) REFERENCES live_streams(id) ON DELETE CASCADE,
-    INDEX idx_stream (stream_id),
-    INDEX idx_pinned (is_pinned)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- -----------------------------------------------------------
--- Stream Chat Messages
--- -----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS stream_chat (
-    id             INT AUTO_INCREMENT PRIMARY KEY,
-    stream_id      INT NOT NULL,
-    user_id        INT NOT NULL,
-    message        TEXT NOT NULL,
-    type           ENUM('message','question','system','reaction') DEFAULT 'message',
-    is_highlighted TINYINT(1) DEFAULT 0,
-    is_deleted     TINYINT(1) DEFAULT 0,
-    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_stream  (stream_id),
-    INDEX idx_created (created_at),
-    FOREIGN KEY (stream_id) REFERENCES live_streams(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- -----------------------------------------------------------
--- Stream Viewers
--- -----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS stream_viewers (
-    id         INT AUTO_INCREMENT PRIMARY KEY,
-    stream_id  INT NOT NULL,
-    user_id    INT,
-    session_id VARCHAR(100),
-    joined_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-    left_at    DATETIME,
-    is_active  TINYINT(1) DEFAULT 1,
-    INDEX idx_stream (stream_id),
+-- Imported products (dropshipper's copy of supplier products)
+CREATE TABLE IF NOT EXISTS dropship_products (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    store_id INT NOT NULL,
+    dropshipper_id INT NOT NULL,
+    original_product_id INT NOT NULL,
+    supplier_id INT NOT NULL,
+    custom_title VARCHAR(300),
+    custom_description TEXT,
+    custom_images JSON,
+    markup_type ENUM('percentage','fixed') DEFAULT 'percentage',
+    markup_value DECIMAL(10,2) NOT NULL DEFAULT 20.00,
+    selling_price DECIMAL(12,2) NOT NULL,
+    original_price DECIMAL(12,2) NOT NULL,
+    is_active TINYINT(1) DEFAULT 1,
+    is_auto_sync TINYINT(1) DEFAULT 1,
+    last_synced_at DATETIME,
+    import_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_store (store_id),
+    INDEX idx_dropshipper (dropshipper_id),
+    INDEX idx_original (original_product_id),
+    INDEX idx_supplier (supplier_id),
     INDEX idx_active (is_active),
-    FOREIGN KEY (stream_id) REFERENCES live_streams(id) ON DELETE CASCADE
+    FOREIGN KEY (store_id) REFERENCES dropship_stores(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- -----------------------------------------------------------
--- Streamer Followers
--- -----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS streamer_followers (
-    id          INT AUTO_INCREMENT PRIMARY KEY,
-    streamer_id INT NOT NULL,
-    follower_id INT NOT NULL,
-    followed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_follow (streamer_id, follower_id),
-    INDEX idx_streamer (streamer_id),
-    INDEX idx_follower (follower_id)
+-- Dropship product variation overrides
+CREATE TABLE IF NOT EXISTS dropship_product_variations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    dropship_product_id INT NOT NULL,
+    original_variation_id INT NOT NULL,
+    custom_price DECIMAL(12,2),
+    markup_value DECIMAL(10,2),
+    is_active TINYINT(1) DEFAULT 1,
+    FOREIGN KEY (dropship_product_id) REFERENCES dropship_products(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Dropship orders
+CREATE TABLE IF NOT EXISTS dropship_orders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    dropshipper_id INT NOT NULL,
+    supplier_id INT NOT NULL,
+    store_id INT NOT NULL,
+    customer_id INT NOT NULL,
+    original_price DECIMAL(12,2) NOT NULL,
+    selling_price DECIMAL(12,2) NOT NULL,
+    markup_amount DECIMAL(12,2) NOT NULL,
+    platform_dropship_fee DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    dropshipper_earning DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    supplier_earning DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    platform_earning DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    status ENUM('pending','routed','processing','shipped','delivered','cancelled','refunded') DEFAULT 'pending',
+    is_white_label TINYINT(1) DEFAULT 0,
+    white_label_brand VARCHAR(200),
+    tracking_number VARCHAR(100),
+    tracking_url VARCHAR(500),
+    routed_at DATETIME,
+    shipped_at DATETIME,
+    delivered_at DATETIME,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_order (order_id),
+    INDEX idx_dropshipper (dropshipper_id),
+    INDEX idx_supplier (supplier_id),
+    INDEX idx_store (store_id),
+    INDEX idx_status (status),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Dropship earnings/payouts
+CREATE TABLE IF NOT EXISTS dropship_earnings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    dropshipper_id INT NOT NULL,
+    dropship_order_id INT NOT NULL,
+    order_id INT NOT NULL,
+    gross_amount DECIMAL(12,2) NOT NULL,
+    platform_fee DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    net_amount DECIMAL(12,2) NOT NULL,
+    status ENUM('pending','available','requested','paid','cancelled') DEFAULT 'pending',
+    available_at DATETIME,
+    paid_at DATETIME,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_dropshipper (dropshipper_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Dropship analytics (daily aggregation)
+CREATE TABLE IF NOT EXISTS dropship_analytics (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    store_id INT NOT NULL,
+    dropshipper_id INT NOT NULL,
+    date DATE NOT NULL,
+    impressions INT DEFAULT 0,
+    clicks INT DEFAULT 0,
+    orders INT DEFAULT 0,
+    revenue DECIMAL(12,2) DEFAULT 0.00,
+    earnings DECIMAL(12,2) DEFAULT 0.00,
+    conversion_rate DECIMAL(5,2) DEFAULT 0.00,
+    UNIQUE KEY unique_store_date (store_id, date),
+    INDEX idx_dropshipper (dropshipper_id),
+    INDEX idx_date (date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Supplier dropshipping settings
+CREATE TABLE IF NOT EXISTS supplier_dropship_settings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    supplier_id INT NOT NULL UNIQUE,
+    allow_dropshipping TINYINT(1) DEFAULT 0,
+    min_markup_percent DECIMAL(5,2) DEFAULT 5.00,
+    max_markup_percent DECIMAL(5,2) DEFAULT 300.00,
+    white_label_available TINYINT(1) DEFAULT 0,
+    auto_approve_dropshippers TINYINT(1) DEFAULT 0,
+    dropship_terms TEXT,
+    processing_time_days INT DEFAULT 3,
+    return_policy ENUM('no_returns','7_days','14_days','30_days') DEFAULT '14_days',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_supplier (supplier_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Dropship supplier applications
+CREATE TABLE IF NOT EXISTS dropship_applications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    dropshipper_id INT NOT NULL,
+    supplier_id INT NOT NULL,
+    store_id INT NOT NULL,
+    message TEXT,
+    status ENUM('pending','approved','rejected') DEFAULT 'pending',
+    reviewed_at DATETIME,
+    reviewed_by INT,
+    rejection_reason TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_dropshipper_supplier (dropshipper_id, supplier_id),
+    INDEX idx_supplier (supplier_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Dropship markup rules (admin-configurable per category)
+CREATE TABLE IF NOT EXISTS dropship_markup_rules (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    category_id INT,
+    markup_pct DECIMAL(5,2) NOT NULL DEFAULT 20.00,
+    is_active TINYINT(1) DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_category (category_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

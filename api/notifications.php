@@ -5,6 +5,7 @@ $db = getDB();
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 function jsonOut($data, $code = 200) { http_response_code($code); echo json_encode($data); exit; }
+function validateCsrf(): void { if (!verifyCsrf()) { jsonOut(['error' => 'Invalid CSRF token'], 403); } }
 
 $defaultPreferences = [
     'order_update'  => ['email' => true,  'push' => true,  'sms' => false],
@@ -104,6 +105,83 @@ switch ($action) {
             }
         }
         jsonOut(['success' => true, 'message' => 'Preferences updated']);
+        break;
+
+    case 'count':
+        requireAuth();
+        $userId = $_SESSION['user_id'];
+        $stmt = $db->prepare(
+            'SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0'
+        );
+        $stmt->execute([$userId]);
+        jsonOut(['success' => true, 'count' => (int) $stmt->fetchColumn()]);
+        break;
+
+    case 'delete':
+        requireAuth();
+        validateCsrf();
+        $userId = $_SESSION['user_id'];
+        $id = (int) ($_POST['id'] ?? 0);
+        if (!$id) {
+            jsonOut(['success' => false, 'message' => 'Notification ID required'], 400);
+        }
+        $stmt = $db->prepare(
+            'DELETE FROM notifications WHERE id = ? AND user_id = ?'
+        );
+        $stmt->execute([$id, $userId]);
+        if (!$stmt->rowCount()) {
+            jsonOut(['success' => false, 'message' => 'Notification not found'], 404);
+        }
+        jsonOut(['success' => true, 'message' => 'Notification deleted']);
+        break;
+
+    case 'preferences_get':
+        requireAuth();
+        $userId = $_SESSION['user_id'];
+        $stmt = $db->prepare('SELECT * FROM notification_preferences WHERE user_id = ?');
+        $stmt->execute([$userId]);
+        $rows = $stmt->fetchAll();
+        if (empty($rows)) {
+            jsonOut(['success' => true, 'data' => $defaultPreferences, 'is_default' => true]);
+        }
+        $prefs = [];
+        foreach ($rows as $row) {
+            $prefs[$row['event_type']] = [
+                'in_app' => (bool) $row['in_app'],
+                'email'  => (bool) $row['email'],
+                'push'   => (bool) $row['push'],
+                'sms'    => (bool) $row['sms'],
+            ];
+        }
+        jsonOut(['success' => true, 'data' => $prefs, 'is_default' => false]);
+        break;
+
+    case 'preferences_save':
+        requireAuth();
+        validateCsrf();
+        $userId = $_SESSION['user_id'];
+        $preferences = $_POST['preferences'] ?? [];
+        if (is_string($preferences)) {
+            $preferences = json_decode($preferences, true) ?? [];
+        }
+        $validTypes = array_keys($defaultPreferences);
+        $stmt = $db->prepare(
+            'INSERT INTO notification_preferences (user_id, event_type, in_app, email, push, sms)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE in_app = VALUES(in_app), email = VALUES(email),
+                                     push = VALUES(push), sms = VALUES(sms)'
+        );
+        foreach ($validTypes as $type) {
+            if (isset($preferences[$type])) {
+                $pref   = $preferences[$type];
+                $inApp  = isset($pref['in_app']) ? (int) (bool) $pref['in_app'] : 1;
+                $email  = isset($pref['email'])  ? (int) (bool) $pref['email']  : 1;
+                $push   = isset($pref['push'])   ? (int) (bool) $pref['push']   : 0;
+                $sms    = isset($pref['sms'])    ? (int) (bool) $pref['sms']    : 0;
+                $stmt->execute([$userId, $type, $inApp, $email, $push, $sms]);
+            }
+        }
+        jsonOut(['success' => true, 'message' => 'Preferences saved']);
         break;
 
     default:
