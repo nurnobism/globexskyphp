@@ -1,102 +1,48 @@
-# Apache configuration for GlobexSky
-# Namecheap Shared Hosting (Apache + PHP)
+# =============================================================
+# GlobexSky — Production Apache Configuration
+# Namecheap Shared Hosting (cPanel + Apache)
+# =============================================================
 
+# Disable directory listing (security)
 Options -Indexes
 ServerSignature Off
 
-# PHP settings
+# ── PHP Settings ─────────────────────────────────────────────
 <IfModule mod_php.c>
     php_value upload_max_filesize 10M
     php_value post_max_size 10M
     php_value max_execution_time 60
     php_value memory_limit 256M
     php_flag display_errors Off
+    php_flag log_errors On
+    php_value error_log /home/bidybxoc/logs/php_error.log
 </IfModule>
 
-# URL Rewriting
+# ── URL Rewriting & Redirects ─────────────────────────────────
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
 
-    # Redirect www to non-www (optional — uncomment if needed)
-    # RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
-    # RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
+    # ── Force non-www (globexsky.com, not www.globexsky.com) ──
+    RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+    RewriteRule ^ https://%1%{REQUEST_URI} [R=301,L]
 
-    # Force HTTPS (uncomment on live server)
-    # RewriteCond %{HTTPS} off
-    # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+    # ── Force HTTPS ───────────────────────────────────────────
+    RewriteCond %{HTTPS} off
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
 
-    # Route all non-file, non-directory requests to index.php
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^(.*)$ index.php?_url=/$1 [QSA,L]
-</IfModule>
+    # ── Block access to sensitive directories ─────────────────
+    RewriteRule ^\.git(/|$) - [F,L]
+    RewriteRule ^deploy(/|$) - [F,L]
+    RewriteRule ^database(/|$) - [F,L]
+    RewriteRule ^config(/|$) - [F,L]
+    RewriteRule ^includes(/|$) - [F,L]
+    RewriteRule ^tests(/|$) - [F,L]
+    RewriteRule ^logs(/|$) - [F,L]
+    RewriteRule ^cache(/|$) - [F,L]
+    RewriteRule ^storage(/|$) - [F,L]
 
-# Security headers
-<IfModule mod_headers.c>
-    Header always set X-Content-Type-Options "nosniff"
-    Header always set X-Frame-Options "SAMEORIGIN"
-    Header always set X-XSS-Protection "1; mode=block"
-    Header always set Referrer-Policy "strict-origin-when-cross-origin"
-</IfModule>
-
-# Block access to sensitive files
-<FilesMatch "\.(env|log|sql|sh|json|lock|md|gitignore)$">
-    Order allow,deny
-    Deny from all
-</FilesMatch>
-
-# Block access to hidden files
-<FilesMatch "^\.">
-    Order allow,deny
-    Deny from all
-</FilesMatch>
-
-# Protect config directory
-<DirectoryMatch "config">
-    Order allow,deny
-    Deny from all
-</DirectoryMatch>
-
-# GZIP compression
-<IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
-</IfModule>
-
-# Browser caching
-<IfModule mod_expires.c>
-    ExpiresActive On
-    ExpiresByType text/css "access plus 1 month"
-    ExpiresByType application/javascript "access plus 1 month"
-    ExpiresByType image/jpeg "access plus 6 months"
-    ExpiresByType image/png "access plus 6 months"
-    ExpiresByType image/webp "access plus 6 months"
-</IfModule>
-
-# ============================================================
-# Phase 11 — Security Hardening (appended)
-# ============================================================
-
-# Protect includes/ directory from direct browser access
-<IfModule mod_rewrite.c>
-    RewriteRule ^includes/ - [F,L]
-</IfModule>
-
-# Block access to additional sensitive file types not covered above
-<FilesMatch "\.(git|gitignore|gitattributes|bak|orig|swp|dist|yml|yaml|conf|ini)$">
-    Order allow,deny
-    Deny from all
-</FilesMatch>
-
-# Prevent hotlinking of images from external sites
-<IfModule mod_rewrite.c>
-    RewriteCond %{HTTP_REFERER} !^$
-    RewriteCond %{HTTP_REFERER} !^https?://(www\.)?%{HTTP_HOST} [NC]
-    RewriteRule \.(jpe?g|png|gif|webp|svg|ico)$ - [F,NC,L]
-</IfModule>
-
-# Block common exploit patterns in query strings
-<IfModule mod_rewrite.c>
+    # ── Block common exploit patterns in query strings ─────────
     RewriteCond %{QUERY_STRING} (eval\(|base64_decode|python|perl|wget|curl) [NC]
     RewriteRule .* - [F,L]
     RewriteCond %{QUERY_STRING} (<|%3C).*script.*(>|%3E) [NC]
@@ -104,18 +50,125 @@ ServerSignature Off
     RewriteCond %{QUERY_STRING} GLOBALS(=|\[|\%[0-9A-Z]{0,2}) [OR]
     RewriteCond %{QUERY_STRING} _REQUEST(=|\[|\%[0-9A-Z]{0,2})
     RewriteRule .* - [F,L]
+
+    # ── Prevent hotlinking of images ──────────────────────────
+    RewriteCond %{HTTP_REFERER} !^$
+    RewriteCond %{HTTP_REFERER} !^https?://(www\.)?globexsky\.com [NC]
+    RewriteRule \.(jpe?g|png|gif|webp|svg|ico)$ - [F,NC,L]
+
+    # ── Route all non-file, non-directory requests to index.php ─
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php?_url=/$1 [QSA,L]
 </IfModule>
 
-# Restrict HTTP methods — only allow GET, POST, HEAD
-<LimitExcept GET POST HEAD>
+# ── Security Headers ─────────────────────────────────────────
+<IfModule mod_headers.c>
+    # Prevent MIME type sniffing
+    Header always set X-Content-Type-Options "nosniff"
+
+    # Prevent clickjacking
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    # XSS protection (legacy browsers)
+    Header always set X-XSS-Protection "1; mode=block"
+
+    # Control referrer information
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # HSTS — tell browsers to always use HTTPS (1 year)
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+    # Restrict browser features
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+
+    # Remove server information headers
+    Header always unset X-Powered-By
+    Header always unset Server
+
+    # Content Security Policy
+    # Note: 'unsafe-inline' is included for Bootstrap and legacy inline styles/scripts.
+    # For stronger XSS protection, implement nonce-based CSP in PHP headers instead.
+    # See includes/middleware.php for the PHP-level CSP nonce implementation.
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://js.stripe.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: https:; connect-src 'self' https://api.stripe.com wss:; frame-src https://js.stripe.com https://hooks.stripe.com;"
+</IfModule>
+
+# ── Protect Sensitive Files ───────────────────────────────────
+# Block access to environment, config, and credential files
+<FilesMatch "\.(env|env\.example|env\.template)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Block access to source/dev files
+<FilesMatch "\.(sql|sh|log|bak|orig|swp|dist|gitignore|gitattributes|yml|yaml|conf|ini|lock|md)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Block access to hidden files (dot files)
+<FilesMatch "^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Restrict HTTP methods — only allow GET, POST, HEAD, OPTIONS and REST verbs
+<LimitExcept GET POST HEAD OPTIONS PUT PATCH DELETE>
     Order allow,deny
     Deny from all
 </LimitExcept>
 
-# Security headers via Apache (backup for PHP headers)
-<IfModule mod_headers.c>
-    Header always set X-Frame-Options "DENY"
-    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
-    Header always unset X-Powered-By
-    Header always unset Server
+# ── GZIP Compression ─────────────────────────────────────────
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml text/javascript
+    AddOutputFilterByType DEFLATE application/javascript application/json application/xml
+    AddOutputFilterByType DEFLATE application/x-font-ttf application/x-font-opentype
+    AddOutputFilterByType DEFLATE image/svg+xml
+    # Don't compress already-compressed formats
+    SetEnvIfNoCase Request_URI \.(?:gif|jpe?g|png|webp|ico|zip|gz|bz2)$ no-gzip dont-vary
 </IfModule>
+
+# ── Browser Caching ───────────────────────────────────────────
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/jpeg "access plus 6 months"
+    ExpiresByType image/png "access plus 6 months"
+    ExpiresByType image/webp "access plus 6 months"
+    ExpiresByType image/gif "access plus 6 months"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType image/x-icon "access plus 1 year"
+    ExpiresByType application/x-font-ttf "access plus 1 year"
+    ExpiresByType application/x-font-woff "access plus 1 year"
+    ExpiresByType application/font-woff2 "access plus 1 year"
+    ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
+
+# ── Cache-Control for Static Assets ──────────────────────────
+<IfModule mod_headers.c>
+    <FilesMatch "\.(css|js|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf|svg)$">
+        Header set Cache-Control "public, max-age=2592000"
+    </FilesMatch>
+</IfModule>
+
+# ── Custom Error Pages ────────────────────────────────────────
+ErrorDocument 400 /pages/errors/400.php
+ErrorDocument 403 /pages/errors/403.php
+ErrorDocument 404 /pages/errors/404.php
+ErrorDocument 500 /pages/errors/500.php

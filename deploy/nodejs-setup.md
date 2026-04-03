@@ -5,14 +5,30 @@ PeerJS/WebRTC signalling. It must run as a persistent process alongside the PHP 
 
 ---
 
-## Prerequisites
+## Namecheap Shared Hosting Limitations
 
-- Namecheap hosting plan with **Node.js App** support (Shared Hosting → cPanel → Setup Node.js App)
-- PHP app already deployed at `public_html/` (or a subdirectory)
+| Feature | Shared Hosting | VPS/Cloud |
+|---|---|---|
+| Node.js App support | ✅ via cPanel Setup Node.js App | ✅ Full control |
+| Persistent process | ⚠️ Managed by cPanel only | ✅ PM2 / systemd |
+| Custom ports | ❌ No (only via ProxyPass) | ✅ Any port |
+| WebSocket support | ⚠️ Depends on plan | ✅ Full |
+| PM2 process manager | ❌ Not available | ✅ Full |
+
+> **Recommendation:** For a production B2B platform with many concurrent users, use a
+> separate VPS (e.g., DigitalOcean Droplet, Linode, AWS EC2) for the Node.js server.
+> See **Option B** below.
 
 ---
 
-## 1. Set Up the Node.js App in cPanel
+## Option A: Namecheap cPanel Node.js App (Shared Hosting)
+
+### Prerequisites
+
+- Namecheap hosting plan with **Node.js App** support
+- PHP app deployed at `~/globexsky.com/`
+
+### 1. Set Up the Node.js App in cPanel
 
 1. Log in to cPanel → **Software** → **Setup Node.js App**
 2. Click **Create Application**
@@ -22,8 +38,8 @@ PeerJS/WebRTC signalling. It must run as a persistent process alongside the PHP 
 |---|---|
 | Node.js version | 18.x or 20.x (LTS recommended) |
 | Application mode | **Production** |
-| Application root | `public_html/nodejs` |
-| Application URL | `yourdomain.com/nodejs` (or leave blank if using a sub-path) |
+| Application root | `globexsky.com/nodejs` |
+| Application URL | `globexsky.com` (sub-path handled by ProxyPass) |
 | Application startup file | `server.js` |
 
 4. Click **Create**
@@ -141,3 +157,112 @@ ProxyPassReverse /peerjs/ http://127.0.0.1:9000/peerjs/
 | CORS errors in browser | Set `CORS_ORIGIN` to exact `https://yourdomain.com` |
 | DB connection fails | Verify DB_HOST=localhost and credentials match cPanel MySQL |
 | Socket.io not connecting | Check `.htaccess` ProxyPass rules; confirm mod_proxy is enabled |
+
+---
+
+## Option B: External VPS with PM2 (Recommended for Production)
+
+If Namecheap shared hosting does not support Node.js apps or WebSockets are unreliable,
+deploy the Node.js server on a separate VPS.
+
+### 1. Install Node.js on VPS
+
+```bash
+# Ubuntu/Debian
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+node --version  # Should be 20.x
+```
+
+### 2. Install PM2 Process Manager
+
+```bash
+sudo npm install -g pm2
+```
+
+### 3. Copy nodejs/ to VPS
+
+```bash
+# From your local machine:
+scp -r nodejs/ user@your-vps-ip:~/globexsky/
+scp .env user@your-vps-ip:~/globexsky/
+```
+
+### 4. Start with PM2
+
+```bash
+cd ~/globexsky/nodejs
+npm install --production
+pm2 start server.js --name globexsky-realtime
+pm2 save
+pm2 startup   # Auto-start on VPS reboot
+```
+
+### 5. PM2 Management Commands
+
+```bash
+pm2 list                    # List all processes
+pm2 logs globexsky-realtime # View logs
+pm2 restart globexsky-realtime  # Restart
+pm2 stop globexsky-realtime     # Stop
+pm2 delete globexsky-realtime   # Remove
+```
+
+### 6. Configure PHP to Use External VPS Node.js
+
+Update your `.env` on the PHP server:
+```env
+NODE_SERVER_URL=https://realtime.globexsky.com
+CORS_ORIGIN=https://globexsky.com
+```
+
+Update `nodejs/.env` on the VPS:
+```env
+NODE_ENV=production
+PORT=3001
+JWT_SECRET=<same_as_php_env>
+INTERNAL_API_KEY=<same_as_php_env>
+CORS_ORIGIN=https://globexsky.com
+DB_HOST=localhost
+DB_NAME=bidybxoc_globexsky
+DB_USER=bidybxoc_globexsky
+DB_PASS=<your_db_password>
+```
+
+### 7. Nginx Proxy Configuration (VPS)
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name realtime.globexsky.com;
+
+    ssl_certificate /etc/letsencrypt/live/realtime.globexsky.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/realtime.globexsky.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+---
+
+## Environment Variables Reference
+
+| Variable | Description | Example |
+|---|---|---|
+| `NODE_ENV` | Environment mode | `production` |
+| `PORT` | Server port | `3001` |
+| `JWT_SECRET` | JWT signing secret (must match PHP .env) | `openssl rand -hex 32` |
+| `INTERNAL_API_KEY` | PHP→Node internal API key (must match PHP .env) | `openssl rand -hex 32` |
+| `CORS_ORIGIN` | Allowed CORS origin | `https://globexsky.com` |
+| `DB_HOST` | MySQL host | `localhost` |
+| `DB_NAME` | MySQL database name | `bidybxoc_globexsky` |
+| `DB_USER` | MySQL username | `bidybxoc_globexsky` |
+| `DB_PASS` | MySQL password | *(your password)* |
