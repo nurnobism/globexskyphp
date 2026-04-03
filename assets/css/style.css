@@ -1,11 +1,166 @@
 /* GlobexSky Custom Styles */
 
 :root {
-    --gs-primary: #0d6efd;
-    --gs-gradient: linear-gradient(135deg, #0d6efd, #6610f2);
+    --gs-primary: #2B6CB0;
+    --gs-primary-dark: #2c5282;
+    --gs-gradient: linear-gradient(135deg, #2B6CB0, #6610f2);
+    --gs-separator-color: #f6a623;
+    --gs-menu-text: #333333;
+    --gs-search-border: #2B6CB0;
 }
 
 body { font-family: 'Segoe UI', system-ui, sans-serif; }
+
+/* =============================================
+   Alibaba-Style Navbar (gs-header)
+   ============================================= */
+
+/* Sticky header wrapper */
+.gs-header {
+    position: sticky;
+    top: 0;
+    z-index: 1030;
+    box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+
+/* ── Top bar ── */
+.gs-topbar { background: #fff; }
+
+/* Logo */
+.gs-logo:hover { opacity: .9; }
+.gs-logo .bi-globe2 { font-size: 1.6rem; }
+.gs-logo span { font-size: 1.2rem; color: var(--gs-primary); }
+
+/* Search form */
+.gs-search-form { width: 100%; }
+.gs-search-inner {
+    border: 2px solid var(--gs-search-border);
+    border-radius: 4px;
+    overflow: hidden;
+    background: #fff;
+}
+.gs-search-icons { border-right: 1px solid #e0e0e0; background: #f8f9fa; }
+.gs-search-icon-btn {
+    color: #555;
+    font-size: .95rem;
+    padding: 2px 4px;
+    text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    line-height: 1;
+    transition: color .15s;
+}
+.gs-search-icon-btn:hover:not(:disabled) { color: var(--gs-primary); }
+.gs-search-icon-btn:disabled { opacity: .45; cursor: default; }
+.gs-search-divider { width: 1px; height: 16px; background: #ddd; display: inline-block; vertical-align: middle; }
+.gs-search-input {
+    border: none !important;
+    box-shadow: none !important;
+    font-size: .9rem;
+    padding: .45rem .75rem;
+    flex: 1;
+    min-width: 0;
+}
+.gs-search-btn {
+    border-radius: 0 !important;
+    background: var(--gs-primary) !important;
+    border-color: var(--gs-primary) !important;
+    padding: .45rem 1rem;
+    font-size: 1rem;
+    transition: background .15s;
+}
+.gs-search-btn:hover { background: var(--gs-primary-dark) !important; border-color: var(--gs-primary-dark) !important; }
+
+/* Utility buttons (lang / currency) */
+.gs-util-btn {
+    font-size: .82rem;
+    color: var(--gs-menu-text) !important;
+    padding: .2rem .4rem;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+.gs-util-btn:hover { background: #f0f4f8; }
+
+/* Icon-only action buttons (bell, chat, mail, cart) */
+.gs-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    color: var(--gs-menu-text);
+    text-decoration: none;
+    padding: .35rem .45rem;
+    border-radius: 4px;
+    transition: background .15s, color .15s;
+}
+.gs-icon-btn:hover { background: #f0f4f8; color: var(--gs-primary); }
+
+/* User dropdown toggle */
+.gs-user-btn {
+    font-size: .85rem;
+    color: var(--gs-menu-text);
+    padding: .3rem .5rem;
+    border-radius: 4px;
+}
+.gs-user-btn:hover { background: #f0f4f8; }
+
+/* Orange separator between row 1 and row 2 */
+.gs-separator {
+    height: 3px;
+    background: linear-gradient(90deg, var(--gs-separator-color) 0%, #f9d423 100%);
+}
+
+/* ── Category menu bar (Row 2) ── */
+.gs-catbar { background: #fff; }
+.gs-catbar-list {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    flex-wrap: nowrap;
+    padding: .25rem 0;
+}
+.gs-catbar-list::-webkit-scrollbar { display: none; }
+
+.gs-cat-link {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: .875rem;
+    font-weight: 500;
+    color: var(--gs-menu-text);
+    text-decoration: none;
+    padding: .45rem .65rem;
+    border-radius: 4px;
+    white-space: nowrap;
+    transition: background .15s, color .15s;
+}
+.gs-cat-link:hover { background: #eef3fa; color: var(--gs-primary); }
+.gs-cat-link .bi { font-size: .95rem; color: var(--gs-primary); }
+
+.gs-cat-link--highlight {
+    color: var(--gs-primary);
+    border: 1px solid var(--gs-primary);
+}
+.gs-cat-link--highlight:hover { background: var(--gs-primary); color: #fff; }
+.gs-cat-link--highlight .bi { color: inherit; }
+
+/* ── Mobile nav ── */
+.gs-mobile-cat-link {
+    display: block;
+    font-size: .9rem;
+    color: var(--gs-menu-text);
+    text-decoration: none;
+    padding: .5rem .25rem;
+    border-bottom: 1px solid #f0f0f0;
+    transition: color .15s;
+}
+.gs-mobile-cat-link:last-child { border-bottom: none; }
+.gs-mobile-cat-link:hover { color: var(--gs-primary); }
+
+/* Login / Register buttons */
+.btn-outline-primary { border-color: var(--gs-primary) !important; color: var(--gs-primary) !important; }
+.btn-outline-primary:hover { background: var(--gs-primary) !important; color: #fff !important; }
+.btn-primary { background: var(--gs-primary) !important; border-color: var(--gs-primary) !important; color: #fff !important; }
+.btn-primary:hover { background: var(--gs-primary-dark) !important; border-color: var(--gs-primary-dark) !important; }
 
 .product-card { transition: transform .2s, box-shadow .2s; }
 .product-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,.12) !important; }
@@ -21,9 +176,9 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; }
 
 .text-white-75 { color: rgba(255,255,255,.75) !important; }
 
-/* Sticky sidebar */
+/* Sticky sidebar — offset accounts for two-row header height (top bar ~70px + separator 3px + category bar ~47px) */
 @media (min-width: 992px) {
-    .sticky-sidebar { position: sticky; top: 80px; }
+    .sticky-sidebar { position: sticky; top: 120px; }
 }
 
 /* Timeline */
