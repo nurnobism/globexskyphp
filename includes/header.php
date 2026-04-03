@@ -31,6 +31,12 @@ if (isLoggedIn()) {
 } else {
     $cartCount = array_sum(array_column($_SESSION['cart'] ?? [], 'quantity'));
 }
+
+// Language / currency helpers
+$availLangs  = function_exists('getAvailableLanguages') ? getAvailableLanguages() : [];
+$curLang     = function_exists('getLocale') ? getLocale() : 'en';
+$curCurrency = function_exists('getSelectedCurrency') ? getSelectedCurrency() : 'USD';
+$activeCurrencies = function_exists('getActiveCurrencies') ? getActiveCurrencies() : [];
 ?>
 <!DOCTYPE html>
 <html lang="<?= function_exists('getLocale') ? e(getLocale()) : 'en' ?>" <?= (function_exists('isRTL') && isRTL()) ? 'dir="rtl"' : '' ?>>
@@ -56,98 +62,143 @@ if (isLoggedIn()) {
 </head>
 <body>
 
-<!-- Top Bar -->
-<div class="topbar bg-primary text-white py-1 small">
-    <div class="container d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-telephone-fill"></i> +1 (800) GLOBEX-SKY</span>
-        <div class="d-flex gap-3 align-items-center">
-            <a href="<?= APP_URL ?>/pages/help.php" class="text-white text-decoration-none">Help</a>
+<!-- ========================================================
+     NAVBAR — Alibaba-style two-row sticky header
+     Row 1: Logo | Search | Lang/Currency | Auth | Cart
+     Row 2: Category mega-menu
+     ======================================================== -->
+<header class="gs-header sticky-top">
 
-            <?php /* Language Switcher */ if (function_exists('getAvailableLanguages')): ?>
-            <?php $availLangs = getAvailableLanguages(); $curLang = function_exists('getLocale') ? getLocale() : 'en'; ?>
-            <div class="dropdown">
-                <a href="#" class="text-white text-decoration-none dropdown-toggle small" data-bs-toggle="dropdown">
-                    <?= e($availLangs[$curLang]['flag'] ?? '🌐') ?> <?= e(strtoupper($curLang)) ?>
-                </a>
-                <ul class="dropdown-menu dropdown-menu-end" style="max-height:300px;overflow-y:auto">
-                    <?php foreach ($availLangs as $code => $info): ?>
-                    <li>
-                        <a class="dropdown-item <?= $code === $curLang ? 'active' : '' ?>"
-                           href="?lang=<?= e($code) ?>">
-                            <?= e($info['flag']) ?> <?= e($info['native']) ?>
+    <!-- ── Row 1: Top bar ── -->
+    <div class="gs-topbar bg-white border-bottom py-2">
+        <div class="container-fluid px-3">
+            <div class="row align-items-center g-2">
+
+                <!-- Logo -->
+                <div class="col-auto">
+                    <a href="<?= APP_URL ?>/" class="gs-logo text-decoration-none d-flex align-items-center gap-2">
+                        <i class="bi bi-globe2 text-primary fs-3"></i>
+                        <span class="fw-bold text-primary fs-5 lh-1"><?= e(APP_NAME) ?></span>
+                    </a>
+                </div>
+
+                <!-- Search bar -->
+                <div class="col">
+                    <form action="<?= APP_URL ?>/pages/product/index.php" method="GET" class="gs-search-form">
+                        <div class="gs-search-inner d-flex align-items-center">
+                            <!-- Decorative search-tool icons (left side inside input) -->
+                            <div class="gs-search-icons d-none d-md-flex align-items-center gap-1 px-2">
+                                <a href="<?= APP_URL ?>/pages/ai/search.php" class="gs-search-icon-btn" title="AI Search">
+                                    <i class="bi bi-robot"></i>
+                                </a>
+                                <span class="gs-search-divider"></span>
+                                <a href="<?= APP_URL ?>/pages/barcode-scanner/index.php" class="gs-search-icon-btn" title="Barcode Scan">
+                                    <i class="bi bi-upc-scan"></i>
+                                </a>
+                                <span class="gs-search-divider"></span>
+                                <a href="#" class="gs-search-icon-btn" title="Image Search" onclick="return false;">
+                                    <i class="bi bi-camera"></i>
+                                </a>
+                                <span class="gs-search-divider"></span>
+                                <a href="#" class="gs-search-icon-btn" title="Voice Search" onclick="return false;">
+                                    <i class="bi bi-mic"></i>
+                                </a>
+                                <span class="gs-search-divider"></span>
+                            </div>
+                            <input type="text" name="q" class="gs-search-input form-control border-0 shadow-none"
+                                   placeholder="Search products, suppliers, categories..."
+                                   value="<?= e(get('q', '')) ?>">
+                            <button type="submit" class="gs-search-btn btn btn-primary px-3">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Right-side controls -->
+                <div class="col-auto d-flex align-items-center gap-2">
+
+                    <!-- Language selector (hidden on mobile, shown in hamburger menu) -->
+                    <div class="dropdown d-none d-lg-block">
+                        <a href="#" class="gs-util-btn dropdown-toggle text-decoration-none text-dark small" data-bs-toggle="dropdown">
+                            <i class="bi bi-globe"></i>
+                            <?php if (!empty($availLangs) && isset($availLangs[$curLang])): ?>
+                                <?= e($availLangs[$curLang]['flag'] ?? '🌐') ?> <?= e(strtoupper($curLang)) ?>
+                            <?php else: ?>
+                                🌐 EN
+                            <?php endif; ?>
                         </a>
-                    </li>
-                    <?php endforeach; ?>
-                </ul>
-            </div>
-            <?php endif; ?>
+                        <ul class="dropdown-menu dropdown-menu-end" style="max-height:300px;overflow-y:auto;min-width:160px">
+                            <?php if (!empty($availLangs)): ?>
+                                <?php foreach ($availLangs as $code => $info): ?>
+                                <li>
+                                    <a class="dropdown-item <?= $code === $curLang ? 'active' : '' ?>"
+                                       href="?lang=<?= e($code) ?>">
+                                        <?= e($info['flag'] ?? '') ?> <?= e($info['native'] ?? $code) ?>
+                                    </a>
+                                </li>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <?php foreach (['en' => ['flag'=>'🇬🇧','native'=>'English'], 'bn' => ['flag'=>'🇧🇩','native'=>'বাংলা'], 'es' => ['flag'=>'🇪🇸','native'=>'Español'], 'fr' => ['flag'=>'🇫🇷','native'=>'Français'], 'ar' => ['flag'=>'🇸🇦','native'=>'العربية'], 'zh' => ['flag'=>'🇨🇳','native'=>'中文']] as $code => $info): ?>
+                                <li>
+                                    <a class="dropdown-item <?= $code === $curLang ? 'active' : '' ?>"
+                                       href="?lang=<?= e($code) ?>">
+                                        <?= $info['flag'] ?> <?= e($info['native']) ?>
+                                    </a>
+                                </li>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </ul>
+                    </div>
 
-            <?php /* Currency Switcher */ if (function_exists('getActiveCurrencies')): ?>
-            <?php $curCurrency = function_exists('getSelectedCurrency') ? getSelectedCurrency() : 'USD'; ?>
-            <div class="dropdown">
-                <a href="#" class="text-white text-decoration-none dropdown-toggle small" data-bs-toggle="dropdown">
-                    <?= e($curCurrency) ?>
-                </a>
-                <ul class="dropdown-menu dropdown-menu-end" style="max-height:300px;overflow-y:auto">
-                    <?php foreach (getActiveCurrencies() as $curr): ?>
-                    <li>
-                        <a class="dropdown-item <?= $curr['code'] === $curCurrency ? 'active' : '' ?>"
-                           href="?currency=<?= e($curr['code']) ?>"
-                           onclick="document.cookie='currency=<?= e($curr['code']) ?>;path=/;max-age=31536000';this.closest('.dropdown').querySelector('.dropdown-toggle').textContent=' <?= e($curr['code']) ?>';return true;">
-                            <?= e($curr['symbol']) ?> <?= e($curr['code']) ?> — <?= e($curr['name']) ?>
+                    <!-- Currency selector (hidden on mobile) -->
+                    <div class="dropdown d-none d-lg-block">
+                        <a href="#" class="gs-util-btn dropdown-toggle text-decoration-none text-dark small" data-bs-toggle="dropdown">
+                            <i class="bi bi-currency-dollar"></i>
+                            <?= e($curCurrency) ?>
                         </a>
-                    </li>
-                    <?php endforeach; ?>
-                </ul>
-            </div>
-            <?php endif; ?>
+                        <ul class="dropdown-menu dropdown-menu-end" style="max-height:300px;overflow-y:auto;min-width:180px">
+                            <?php if (!empty($activeCurrencies)): ?>
+                                <?php foreach ($activeCurrencies as $curr): ?>
+                                <li>
+                                    <a class="dropdown-item <?= $curr['code'] === $curCurrency ? 'active' : '' ?>"
+                                       href="?currency=<?= e($curr['code']) ?>"
+                                       onclick="document.cookie='currency=<?= e($curr['code']) ?>;path=/;max-age=31536000';return true;">
+                                        <?= e($curr['symbol']) ?> <?= e($curr['code']) ?> — <?= e($curr['name']) ?>
+                                    </a>
+                                </li>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <?php foreach (['USD'=>['symbol'=>'$','name'=>'US Dollar'],'EUR'=>['symbol'=>'€','name'=>'Euro'],'GBP'=>['symbol'=>'£','name'=>'Pound'],'BDT'=>['symbol'=>'৳','name'=>'Taka'],'CNY'=>['symbol'=>'¥','name'=>'Yuan']] as $code => $curr): ?>
+                                <li>
+                                    <a class="dropdown-item <?= $code === $curCurrency ? 'active' : '' ?>"
+                                       href="?currency=<?= e($code) ?>"
+                                       onclick="document.cookie='currency=<?= e($code) ?>;path=/;max-age=31536000';return true;">
+                                        <?= e($curr['symbol']) ?> <?= e($code) ?> — <?= e($curr['name']) ?>
+                                    </a>
+                                </li>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </ul>
+                    </div>
 
-            <!-- PWA Install Button -->
-            <button id="pwa-install-btn" class="btn btn-outline-light btn-sm" style="display:none" onclick="pwaInstall()">
-                <i class="bi bi-download me-1"></i>Install App
-            </button>
-            <?php if (isLoggedIn() && $currentUser): ?>
-                <?php
-                $email       = $currentUser['email'] ?? '';
-                $displayName = $currentUser['first_name']
-                    ?? (!empty($email) ? explode('@', $email)[0] : 'User');
-                $userRole    = $currentUser['role'] ?? ($_SESSION['user_role'] ?? '');
-                ?>
-                <?php if (in_array($userRole, ['admin', 'super_admin'])): ?>
-                    <a href="<?= APP_URL ?>/pages/admin/index.php" class="text-warning text-decoration-none fw-semibold">
-                        <i class="bi bi-shield-fill"></i> Admin Panel
-                    </a>
-                <?php elseif ($userRole === 'supplier'): ?>
-                    <a href="<?= APP_URL ?>/pages/supplier/index.php" class="text-white text-decoration-none">
-                        <i class="bi bi-building"></i> Supplier Dashboard
-                    </a>
-                <?php elseif ($userRole === 'carrier'): ?>
-                    <a href="<?= APP_URL ?>/pages/shipment/carrier/" class="text-white text-decoration-none">
-                        <i class="bi bi-truck"></i> Carrier Dashboard
-                    </a>
-                <?php endif; ?>
-                <div class="dropdown">
-                    <a href="#" class="text-white text-decoration-none dropdown-toggle" data-bs-toggle="dropdown">
-                        <?php if (!empty($currentUser['avatar'])): ?>
-                            <img src="<?= e($currentUser['avatar']) ?>" alt="avatar"
-                                 style="width:24px;height:24px;border-radius:50%;object-fit:cover;">
-                        <?php else: ?>
-                            <i class="bi bi-person-circle"></i>
-                        <?php endif; ?>
-                        <?= e($displayName) ?>
-                        <span class="badge bg-<?= in_array($userRole,['admin','super_admin'])?'danger':($userRole==='supplier'?'primary':($userRole==='carrier'?'success':'secondary')) ?> ms-1 small">
-                            <?= e(ucfirst(str_replace('_',' ', $userRole))) ?>
-                        </span>
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/account/profile.php"><i class="bi bi-person me-2"></i>My Profile</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/order/index.php"><i class="bi bi-bag me-2"></i>My Orders</a></li>
+                    <!-- PWA Install Button -->
+                    <button id="pwa-install-btn" class="btn btn-outline-secondary btn-sm d-none d-lg-inline-flex align-items-center gap-1" style="display:none!important" onclick="pwaInstall()">
+                        <i class="bi bi-download"></i><span class="d-none d-xl-inline">Install App</span>
+                    </button>
+
+                    <!-- Auth / User area -->
+                    <?php if (isLoggedIn() && $currentUser): ?>
                         <?php
-                        // KYC status badge in dropdown
+                        $email       = $currentUser['email'] ?? '';
+                        $displayName = $currentUser['first_name']
+                            ?? (!empty($email) ? explode('@', $email)[0] : 'User');
+                        $userRole    = $currentUser['role'] ?? ($_SESSION['user_role'] ?? '');
+                        $kycBadgeClass = 'secondary';
+                        $kycLabel      = 'KYC';
                         if (function_exists('getKycStatus')) {
                             $kycStatusDropdown = getKycStatus((int)$_SESSION['user_id']);
                         } else {
-                            // Lightweight inline check
                             try {
                                 $stmt = getDB()->prepare('SELECT kyc_status FROM users WHERE id = ?');
                                 $stmt->execute([$_SESSION['user_id']]);
@@ -174,198 +225,287 @@ if (isLoggedIn()) {
                             default        => 'KYC'
                         };
                         ?>
-                        <li>
-                            <a class="dropdown-item d-flex align-items-center gap-2" href="<?= APP_URL ?>/pages/account/kyc.php">
-                                <i class="bi bi-shield-check"></i>
-                                KYC Verification
-                                <span class="badge bg-<?= $kycBadgeClass ?> ms-auto"><?= e($kycLabel) ?></span>
+
+                        <!-- Notifications bell (logged-in only) -->
+                        <div class="dropdown" id="notificationDropdown">
+                            <a href="#" class="gs-icon-btn position-relative" data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Notifications">
+                                <i class="bi bi-bell fs-5"></i>
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger notification-badge" <?= $notifCount > 0 ? '' : 'style="display:none"' ?>>
+                                    <?= $notifCount > 99 ? '99+' : $notifCount ?>
+                                </span>
                             </a>
-                        </li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <form method="POST" action="/api/auth.php?action=logout" class="d-inline">
-                                <?= csrfField() ?>
-                                <button type="submit" class="dropdown-item text-danger">
-                                    <i class="bi bi-box-arrow-right me-2"></i>Logout
-                                </button>
-                            </form>
-                        </li>
-                    </ul>
-                </div>
-            <?php else: ?>
-                <a href="<?= APP_URL ?>/pages/auth/login.php" class="text-white text-decoration-none">Login</a>
-                <a href="<?= APP_URL ?>/pages/auth/register.php" class="text-white text-decoration-none">Register</a>
-            <?php endif; ?>
-        </div>
-    </div>
-</div>
+                            <div class="dropdown-menu dropdown-menu-end shadow" style="width:320px;max-height:400px;overflow-y:auto">
+                                <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                                    <strong>Notifications</strong>
+                                    <a href="#" onclick="GlobexNotifications.markAllRead();return false;" class="small text-decoration-none">Mark all read</a>
+                                </div>
+                                <div id="notificationList">
+                                    <div class="text-center py-3 text-muted"><div class="spinner-border spinner-border-sm"></div></div>
+                                </div>
+                                <div class="border-top text-center py-2">
+                                    <a href="<?= APP_URL ?>/pages/notifications/index.php" class="small text-decoration-none">View All Notifications</a>
+                                </div>
+                            </div>
+                        </div>
 
-<!-- Main Navbar -->
-<nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
-    <div class="container">
-        <a class="navbar-brand fw-bold text-primary fs-4" href="<?= APP_URL ?>/">
-            <i class="bi bi-globe2"></i> <?= e(APP_NAME) ?>
-        </a>
+                        <!-- Chat icon -->
+                        <a href="<?= APP_URL ?>/pages/messages/index.php" class="gs-icon-btn position-relative" title="Messages">
+                            <i class="bi bi-chat-dots fs-5"></i>
+                            <?php if ($chatUnread > 0): ?>
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
+                                    <?= $chatUnread > 99 ? '99+' : $chatUnread ?>
+                                </span>
+                            <?php endif; ?>
+                        </a>
 
-        <!-- Search -->
-        <form class="d-none d-lg-flex flex-grow-1 mx-4" action="<?= APP_URL ?>/pages/product/index.php" method="GET">
-            <div class="input-group">
-                <input type="text" class="form-control" name="q"
-                       placeholder="Search products, suppliers..."
-                       value="<?= e(get('q', '')) ?>">
-                <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i></button>
-            </div>
-        </form>
+                        <!-- Webmail icon -->
+                        <a href="<?= APP_URL ?>/pages/webmail/inbox.php" class="gs-icon-btn" title="Webmail">
+                            <i class="bi bi-envelope fs-5"></i>
+                        </a>
 
-        <!-- Notifications, Messages, Cart & toggler -->
-        <div class="d-flex align-items-center gap-2">
-            <?php if (isLoggedIn()): ?>
-            <!-- Notification Bell -->
-            <div class="dropdown" id="notificationDropdown">
-                <a href="#" class="btn btn-outline-secondary position-relative" data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Notifications">
-                    <i class="bi bi-bell"></i>
-                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger notification-badge" <?= $notifCount > 0 ? '' : 'style="display:none"' ?>>
-                        <?= $notifCount > 99 ? '99+' : $notifCount ?>
-                    </span>
-                </a>
-                <div class="dropdown-menu dropdown-menu-end shadow" style="width:320px;max-height:400px;overflow-y:auto">
-                    <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
-                        <strong>Notifications</strong>
-                        <a href="#" onclick="GlobexNotifications.markAllRead();return false;" class="small text-decoration-none">Mark all read</a>
-                    </div>
-                    <div id="notificationList">
-                        <div class="text-center py-3 text-muted"><div class="spinner-border spinner-border-sm"></div></div>
-                    </div>
-                    <div class="border-top text-center py-2">
-                        <a href="<?= APP_URL ?>/pages/notifications/index.php" class="small text-decoration-none">View All Notifications</a>
-                    </div>
-                </div>
-            </div>
+                        <!-- User dropdown -->
+                        <div class="dropdown">
+                            <a href="#" class="gs-user-btn dropdown-toggle text-decoration-none d-flex align-items-center gap-1" data-bs-toggle="dropdown">
+                                <?php if (!empty($currentUser['avatar'])): ?>
+                                    <img src="<?= e($currentUser['avatar']) ?>" alt="avatar"
+                                         class="rounded-circle" style="width:28px;height:28px;object-fit:cover;">
+                                <?php else: ?>
+                                    <i class="bi bi-person-circle fs-5"></i>
+                                <?php endif; ?>
+                                <span class="d-none d-xl-inline small fw-semibold text-dark"><?= e($displayName) ?></span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <?php if (in_array($userRole, ['admin', 'super_admin'])): ?>
+                                <li><a class="dropdown-item fw-semibold text-danger" href="<?= APP_URL ?>/pages/admin/index.php"><i class="bi bi-shield-fill me-2"></i>Admin Panel</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <?php elseif ($userRole === 'supplier'): ?>
+                                <li><a class="dropdown-item fw-semibold" href="<?= APP_URL ?>/pages/supplier/index.php"><i class="bi bi-building me-2"></i>Supplier Dashboard</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <?php elseif ($userRole === 'carrier'): ?>
+                                <li><a class="dropdown-item fw-semibold" href="<?= APP_URL ?>/pages/shipment/carrier/"><i class="bi bi-truck me-2"></i>Carrier Dashboard</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <?php endif; ?>
+                                <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/account/profile.php"><i class="bi bi-person me-2"></i>My Profile</a></li>
+                                <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/order/index.php"><i class="bi bi-bag me-2"></i>My Orders</a></li>
+                                <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/rfq/index.php"><i class="bi bi-file-text me-2"></i>My RFQs</a></li>
+                                <li>
+                                    <a class="dropdown-item d-flex align-items-center gap-2" href="<?= APP_URL ?>/pages/account/kyc.php">
+                                        <i class="bi bi-shield-check"></i>KYC Verification
+                                        <span class="badge bg-<?= $kycBadgeClass ?> ms-auto"><?= e($kycLabel) ?></span>
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/payment/index.php"><i class="bi bi-credit-card me-2"></i>Payments</a></li>
+                                <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/support/index.php"><i class="bi bi-life-preserver me-2"></i>Support</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <form method="POST" action="/api/auth.php?action=logout" class="d-inline">
+                                        <?= csrfField() ?>
+                                        <button type="submit" class="dropdown-item text-danger">
+                                            <i class="bi bi-box-arrow-right me-2"></i>Logout
+                                        </button>
+                                    </form>
+                                </li>
+                            </ul>
+                        </div>
 
-            <!-- Chat Icon -->
-            <a href="<?= APP_URL ?>/pages/messages/index.php" class="btn btn-outline-secondary position-relative" title="Messages">
-                <i class="bi bi-chat-dots"></i>
-                <?php if ($chatUnread > 0): ?>
-                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
-                        <?= $chatUnread > 99 ? '99+' : $chatUnread ?>
-                    </span>
-                <?php endif; ?>
-            </a>
+                    <?php else: ?>
+                        <!-- Guest: Login + Register -->
+                        <a href="<?= APP_URL ?>/pages/auth/login.php" class="btn btn-outline-primary btn-sm d-none d-md-inline-flex align-items-center gap-1">
+                            <i class="bi bi-box-arrow-in-right"></i> Login
+                        </a>
+                        <a href="<?= APP_URL ?>/pages/auth/register.php" class="btn btn-primary btn-sm d-none d-md-inline-flex align-items-center gap-1">
+                            <i class="bi bi-person-plus"></i> Register
+                        </a>
+                    <?php endif; ?>
 
-            <!-- Webmail Icon -->
-            <a href="<?= APP_URL ?>/pages/webmail/inbox.php" class="btn btn-outline-secondary" title="Webmail">
-                <i class="bi bi-envelope"></i>
-            </a>
-            <?php endif; ?>
-
-            <a href="<?= APP_URL ?>/pages/cart/index.php" class="btn btn-outline-primary position-relative">
-                <i class="bi bi-cart3"></i>
-                <?php if ($cartCount > 0): ?>
-                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                        <?= $cartCount ?>
-                    </span>
-                <?php endif; ?>
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-        </div>
-
-        <div class="collapse navbar-collapse" id="mainNav">
-            <ul class="navbar-nav ms-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="<?= APP_URL ?>/pages/product/index.php">Products</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="<?= APP_URL ?>/pages/supplier/index.php">Suppliers</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="<?= APP_URL ?>/pages/rfq/create.php">Get Quote</a>
-                </li>
-
-                <!-- Services Dropdown -->
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
-                        <i class="bi bi-grid"></i> Services
-                    </a>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/sourcing/index.php"><i class="bi bi-search me-2"></i>Sourcing</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/shipment/index.php"><i class="bi bi-truck me-2"></i>Parcel Service</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/shipment/carry/register.php"><i class="bi bi-airplane me-2"></i>Carry Service</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/order/track.php"><i class="bi bi-search me-2"></i>Track Shipment</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/logistics/index.php"><i class="bi bi-geo-alt me-2"></i>Logistics</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/inspection/request.php"><i class="bi bi-clipboard-check me-2"></i>Inspection</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/escrow/index.php"><i class="bi bi-shield-lock me-2"></i>Escrow</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/samples/index.php"><i class="bi bi-box-seam me-2"></i>Samples</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/dropshipping/index.php"><i class="bi bi-shop me-2"></i>Dropshipping</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/customization/index.php"><i class="bi bi-palette me-2"></i>Customization</a></li>
-                    </ul>
-                </li>
-
-                <!-- Trade & Events -->
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
-                        <i class="bi bi-calendar-event"></i> Trade
-                    </a>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/trade-shows/index.php"><i class="bi bi-building me-2"></i>Trade Shows</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/livestream/index.php"><i class="bi bi-broadcast me-2"></i>Live Streams</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/vr-showroom/index.php"><i class="bi bi-headset-vr me-2"></i>VR Showroom</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/meetings/index.php"><i class="bi bi-camera-video me-2"></i>Meetings</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/flash-sales/index.php"><i class="bi bi-lightning me-2"></i>Flash Sales</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/campaigns/index.php"><i class="bi bi-megaphone me-2"></i>Campaigns</a></li>
-                    </ul>
-                </li>
-
-                <!-- AI & Tools -->
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
-                        <i class="bi bi-robot"></i> AI & Tools
-                    </a>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/ai/index.php"><i class="bi bi-robot me-2"></i>AI Hub</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/ai/chatbot.php"><i class="bi bi-chat-dots me-2"></i>AI Chatbot</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/ai/search.php"><i class="bi bi-search-heart me-2"></i>AI Search</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/barcode-scanner/index.php"><i class="bi bi-upc-scan me-2"></i>Barcode Scanner</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/insights/index.php"><i class="bi bi-graph-up me-2"></i>Insights</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/api-platform/index.php"><i class="bi bi-plug me-2"></i>API Platform</a></li>
-                    </ul>
-                </li>
-
-                <?php if (isLoggedIn()): ?>
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
-                        <i class="bi bi-person-circle"></i> Account
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/account/profile.php"><i class="bi bi-person me-2"></i>Profile</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/order/index.php"><i class="bi bi-bag me-2"></i>My Orders</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/rfq/index.php"><i class="bi bi-file-text me-2"></i>My RFQs</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/notifications/index.php"><i class="bi bi-bell me-2"></i>Notifications</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/messages/index.php"><i class="bi bi-chat-dots me-2"></i>Chat Messages</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/webmail/inbox.php"><i class="bi bi-envelope me-2"></i>Webmail</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/communication/index.php"><i class="bi bi-chat-left-text me-2"></i>Communication</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/payment/index.php"><i class="bi bi-credit-card me-2"></i>Payments</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/loyalty/index.php"><i class="bi bi-trophy me-2"></i>Loyalty Rewards</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/teams/index.php"><i class="bi bi-people me-2"></i>Teams</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/support/index.php"><i class="bi bi-life-preserver me-2"></i>Support</a></li>
-                        <?php if (isAdmin()): ?>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/admin/dashboard.php"><i class="bi bi-speedometer2 me-2"></i>Admin Panel</a></li>
+                    <!-- Cart -->
+                    <a href="<?= APP_URL ?>/pages/cart/index.php" class="gs-icon-btn position-relative" title="Cart">
+                        <i class="bi bi-cart3 fs-5"></i>
+                        <?php if ($cartCount > 0): ?>
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                <?= $cartCount > 99 ? '99+' : $cartCount ?>
+                            </span>
                         <?php endif; ?>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item text-danger" href="<?= APP_URL ?>/api/auth.php?action=logout"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
-                    </ul>
+                    </a>
+
+                    <!-- Mobile hamburger -->
+                    <button class="navbar-toggler border-0 d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#gs-mobile-nav" aria-expanded="false" aria-label="Toggle navigation">
+                        <i class="bi bi-list fs-4"></i>
+                    </button>
+                </div><!-- /col-auto right controls -->
+            </div><!-- /row -->
+        </div><!-- /container-fluid -->
+    </div><!-- /gs-topbar -->
+
+    <!-- Orange separator line -->
+    <div class="gs-separator"></div>
+
+    <!-- ── Row 2: Category menu (desktop) ── -->
+    <nav class="gs-catbar bg-white border-bottom d-none d-lg-block" aria-label="Category navigation">
+        <div class="container-fluid px-3">
+            <ul class="gs-catbar-list list-unstyled d-flex align-items-center mb-0 gap-1">
+                <li>
+                    <a href="<?= APP_URL ?>/pages/sourcing/index.php" class="gs-cat-link">
+                        <i class="bi bi-factory"></i> Sourcing
+                    </a>
                 </li>
-                <?php endif; ?>
+                <li>
+                    <a href="<?= APP_URL ?>/pages/shipment/index.php" class="gs-cat-link">
+                        <i class="bi bi-ship"></i> Shipment
+                    </a>
+                </li>
+                <li>
+                    <a href="<?= APP_URL ?>/pages/shipment/carry/register.php" class="gs-cat-link">
+                        <i class="bi bi-truck"></i> Carry Service
+                    </a>
+                </li>
+                <li>
+                    <a href="<?= APP_URL ?>/pages/supplier/index.php" class="gs-cat-link">
+                        <i class="bi bi-building"></i> Suppliers
+                    </a>
+                </li>
+                <li>
+                    <a href="<?= APP_URL ?>/pages/livestream/index.php" class="gs-cat-link">
+                        <i class="bi bi-broadcast"></i> Live Streams
+                    </a>
+                </li>
+                <li>
+                    <a href="<?= APP_URL ?>/pages/trade-shows/index.php" class="gs-cat-link">
+                        <i class="bi bi-ticket-perforated"></i> Trade Shows
+                    </a>
+                </li>
+                <li>
+                    <a href="<?= APP_URL ?>/pages/vr-showroom/index.php" class="gs-cat-link">
+                        <i class="bi bi-display"></i> VR Showroom
+                    </a>
+                </li>
+                <li>
+                    <a href="<?= APP_URL ?>/pages/inspection/request.php" class="gs-cat-link">
+                        <i class="bi bi-clipboard-check"></i> Inspection
+                    </a>
+                </li>
+                <li>
+                    <a href="<?= APP_URL ?>/pages/api-platform/index.php" class="gs-cat-link">
+                        <i class="bi bi-plug"></i> API Platform
+                    </a>
+                </li>
+                <li class="ms-auto">
+                    <a href="<?= APP_URL ?>/pages/rfq/create.php" class="gs-cat-link gs-cat-link--highlight">
+                        <i class="bi bi-file-earmark-plus"></i> Get Quote
+                    </a>
+                </li>
             </ul>
         </div>
-    </div>
-</nav>
+    </nav>
+
+    <!-- ── Mobile collapsible nav ── -->
+    <div class="collapse bg-white border-bottom" id="gs-mobile-nav">
+        <div class="container-fluid px-3 py-2">
+
+            <!-- Mobile search (full width) -->
+            <form action="<?= APP_URL ?>/pages/product/index.php" method="GET" class="mb-3">
+                <div class="input-group">
+                    <input type="text" name="q" class="form-control" placeholder="Search products, suppliers..."
+                           value="<?= e(get('q', '')) ?>">
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i></button>
+                </div>
+            </form>
+
+            <!-- Mobile auth (guest only) -->
+            <?php if (!isLoggedIn()): ?>
+            <div class="d-flex gap-2 mb-3">
+                <a href="<?= APP_URL ?>/pages/auth/login.php" class="btn btn-outline-primary flex-fill">
+                    <i class="bi bi-box-arrow-in-right me-1"></i>Login
+                </a>
+                <a href="<?= APP_URL ?>/pages/auth/register.php" class="btn btn-primary flex-fill">
+                    <i class="bi bi-person-plus me-1"></i>Register
+                </a>
+            </div>
+            <?php endif; ?>
+
+            <!-- Mobile category links -->
+            <nav aria-label="Mobile category navigation">
+                <ul class="list-unstyled mb-2">
+                    <li><a href="<?= APP_URL ?>/pages/sourcing/index.php" class="gs-mobile-cat-link"><i class="bi bi-factory me-2"></i>Sourcing</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/shipment/index.php" class="gs-mobile-cat-link"><i class="bi bi-ship me-2"></i>Shipment</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/shipment/carry/register.php" class="gs-mobile-cat-link"><i class="bi bi-truck me-2"></i>Carry Service</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/supplier/index.php" class="gs-mobile-cat-link"><i class="bi bi-building me-2"></i>Suppliers</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/livestream/index.php" class="gs-mobile-cat-link"><i class="bi bi-broadcast me-2"></i>Live Streams</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/trade-shows/index.php" class="gs-mobile-cat-link"><i class="bi bi-ticket-perforated me-2"></i>Trade Shows</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/vr-showroom/index.php" class="gs-mobile-cat-link"><i class="bi bi-display me-2"></i>VR Showroom</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/inspection/request.php" class="gs-mobile-cat-link"><i class="bi bi-clipboard-check me-2"></i>Inspection</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/api-platform/index.php" class="gs-mobile-cat-link"><i class="bi bi-plug me-2"></i>API Platform</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/rfq/create.php" class="gs-mobile-cat-link fw-semibold text-primary"><i class="bi bi-file-earmark-plus me-2"></i>Get Quote</a></li>
+                </ul>
+            </nav>
+
+            <!-- Mobile language & currency -->
+            <div class="d-flex gap-2 flex-wrap mb-2">
+                <div class="dropdown">
+                    <a href="#" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="bi bi-globe me-1"></i>
+                        <?php if (!empty($availLangs) && isset($availLangs[$curLang])): ?>
+                            <?= e($availLangs[$curLang]['flag'] ?? '🌐') ?> <?= e(strtoupper($curLang)) ?>
+                        <?php else: ?>
+                            🌐 EN
+                        <?php endif; ?>
+                    </a>
+                    <ul class="dropdown-menu" style="max-height:250px;overflow-y:auto">
+                        <?php if (!empty($availLangs)): ?>
+                            <?php foreach ($availLangs as $code => $info): ?>
+                            <li><a class="dropdown-item <?= $code === $curLang ? 'active' : '' ?>" href="?lang=<?= e($code) ?>"><?= e($info['flag'] ?? '') ?> <?= e($info['native'] ?? $code) ?></a></li>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <?php foreach (['en'=>['flag'=>'🇬🇧','native'=>'English'],'bn'=>['flag'=>'🇧🇩','native'=>'বাংলা'],'es'=>['flag'=>'🇪🇸','native'=>'Español'],'fr'=>['flag'=>'🇫🇷','native'=>'Français'],'ar'=>['flag'=>'🇸🇦','native'=>'العربية'],'zh'=>['flag'=>'🇨🇳','native'=>'中文']] as $code => $info): ?>
+                            <li><a class="dropdown-item <?= $code === $curLang ? 'active' : '' ?>" href="?lang=<?= e($code) ?>"><?= $info['flag'] ?> <?= e($info['native']) ?></a></li>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </ul>
+                </div>
+                <div class="dropdown">
+                    <a href="#" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="bi bi-currency-dollar me-1"></i><?= e($curCurrency) ?>
+                    </a>
+                    <ul class="dropdown-menu" style="max-height:250px;overflow-y:auto">
+                        <?php if (!empty($activeCurrencies)): ?>
+                            <?php foreach ($activeCurrencies as $curr): ?>
+                            <li><a class="dropdown-item <?= $curr['code'] === $curCurrency ? 'active' : '' ?>" href="?currency=<?= e($curr['code']) ?>" onclick="document.cookie='currency=<?= e($curr['code']) ?>;path=/;max-age=31536000';return true;"><?= e($curr['symbol']) ?> <?= e($curr['code']) ?></a></li>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <?php foreach (['USD'=>['symbol'=>'$'],'EUR'=>['symbol'=>'€'],'GBP'=>['symbol'=>'£'],'BDT'=>['symbol'=>'৳'],'CNY'=>['symbol'=>'¥']] as $code => $curr): ?>
+                            <li><a class="dropdown-item <?= $code === $curCurrency ? 'active' : '' ?>" href="?currency=<?= e($code) ?>" onclick="document.cookie='currency=<?= e($code) ?>;path=/;max-age=31536000';return true;"><?= e($curr['symbol']) ?> <?= e($code) ?></a></li>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Mobile extra account links (logged-in) -->
+            <?php if (isLoggedIn() && $currentUser): ?>
+            <ul class="list-unstyled mb-0 border-top pt-2">
+                <li><a href="<?= APP_URL ?>/pages/account/profile.php" class="gs-mobile-cat-link"><i class="bi bi-person me-2"></i>My Profile</a></li>
+                <li><a href="<?= APP_URL ?>/pages/order/index.php" class="gs-mobile-cat-link"><i class="bi bi-bag me-2"></i>My Orders</a></li>
+                <li><a href="<?= APP_URL ?>/pages/notifications/index.php" class="gs-mobile-cat-link"><i class="bi bi-bell me-2"></i>Notifications</a></li>
+                <li><a href="<?= APP_URL ?>/pages/messages/index.php" class="gs-mobile-cat-link"><i class="bi bi-chat-dots me-2"></i>Messages</a></li>
+                <?php if (function_exists('isAdmin') && isAdmin()): ?>
+                <li><a href="<?= APP_URL ?>/pages/admin/dashboard.php" class="gs-mobile-cat-link text-danger"><i class="bi bi-speedometer2 me-2"></i>Admin Panel</a></li>
+                <?php endif; ?>
+                <li>
+                    <form method="POST" action="/api/auth.php?action=logout" class="d-inline">
+                        <?= csrfField() ?>
+                        <button type="submit" class="gs-mobile-cat-link w-100 text-start text-danger border-0 bg-transparent p-0">
+                            <i class="bi bi-box-arrow-right me-2"></i>Logout
+                        </button>
+                    </form>
+                </li>
+            </ul>
+            <?php endif; ?>
+
+        </div>
+    </div><!-- /gs-mobile-nav -->
+
+</header>
 
 <!-- Flash Messages -->
 <?php foreach (getFlashMessages() as $flash): ?>
