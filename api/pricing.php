@@ -96,6 +96,99 @@ switch ($action) {
         $stmt = $db->query("SELECT ph.*, u.first_name, u.last_name FROM pricing_history ph LEFT JOIN users u ON ph.changed_by = u.id ORDER BY ph.changed_at DESC LIMIT 100");
         jsonResponse(['success' => true, 'history' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
 
+    case 'get_commission_rates':
+        requireAdmin();
+        $tiers = [];
+        try {
+            $stmt  = $db->query('SELECT * FROM commission_tiers WHERE is_active = 1 ORDER BY min_monthly_sales ASC');
+            $tiers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) { /* table may not exist yet */ }
+        jsonResponse(['success' => true, 'tiers' => $tiers]);
+
+    case 'update_commission_rates':
+        requireAdmin();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'POST required'], 405);
+        verifyCsrf();
+        $input = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+        foreach ((array)($input['tiers'] ?? []) as $tier) {
+            $id   = (int)($tier['id'] ?? 0);
+            $rate = (float)($tier['rate'] ?? 0);
+            if ($id > 0 && $rate > 0) {
+                $db->prepare('UPDATE commission_tiers SET rate = ? WHERE id = ?')->execute([$rate, $id]);
+            }
+        }
+        jsonResponse(['success' => true, 'message' => 'Commission rates updated']);
+
+    case 'get_category_rates':
+        requireAdmin();
+        $rates = [];
+        try {
+            $stmt  = $db->query('SELECT ccr.*, c.name AS category_name FROM category_commission_rates ccr LEFT JOIN categories c ON c.id = ccr.category_id WHERE ccr.is_active = 1');
+            $rates = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) { /* ignore */ }
+        jsonResponse(['success' => true, 'rates' => $rates]);
+
+    case 'update_category_rate':
+        requireAdmin();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'POST required'], 405);
+        verifyCsrf();
+        $categoryId = (int)($_POST['category_id'] ?? 0);
+        $rate       = (float)($_POST['rate'] ?? 0);
+        if ($categoryId <= 0) jsonResponse(['error' => 'category_id required'], 422);
+        try {
+            $check = $db->prepare('SELECT id FROM category_commission_rates WHERE category_id = ?');
+            $check->execute([$categoryId]);
+            if ($check->fetch()) {
+                $db->prepare('UPDATE category_commission_rates SET rate = ?, updated_at = NOW() WHERE category_id = ?')->execute([$rate, $categoryId]);
+            } else {
+                $db->prepare('INSERT INTO category_commission_rates (category_id, rate) VALUES (?, ?)')->execute([$categoryId, $rate]);
+            }
+        } catch (PDOException $e) {
+            jsonResponse(['error' => 'DB error: ' . $e->getMessage()], 500);
+        }
+        jsonResponse(['success' => true, 'message' => 'Category rate updated']);
+
+    case 'get_plans':
+        $plans = [];
+        try {
+            $stmt  = $db->query('SELECT * FROM supplier_plans WHERE is_active = 1 ORDER BY sort_order ASC');
+            $plans = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($plans as &$p) {
+                $p['features_decoded'] = json_decode($p['features'] ?? '{}', true) ?: [];
+                $p['limits_decoded']   = json_decode($p['limits'] ?? '{}', true) ?: [];
+            }
+            unset($p);
+        } catch (PDOException $e) { /* ignore */ }
+        jsonResponse(['success' => true, 'plans' => $plans]);
+
+    case 'update_plan':
+        requireAdmin();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'POST required'], 405);
+        verifyCsrf();
+        $id       = (int)($_POST['plan_id'] ?? 0);
+        $price    = (float)($_POST['price'] ?? 0);
+        $isActive = (int)($_POST['is_active'] ?? 1);
+        $discount = (float)($_POST['commission_discount'] ?? 0);
+        if ($id <= 0) jsonResponse(['error' => 'plan_id required'], 422);
+        try {
+            $db->prepare('UPDATE supplier_plans SET price = ?, commission_discount = ?, is_active = ?, updated_at = NOW() WHERE id = ?')
+               ->execute([$price, $discount, $isActive, $id]);
+        } catch (PDOException $e) {
+            jsonResponse(['error' => 'DB error: ' . $e->getMessage()], 500);
+        }
+        jsonResponse(['success' => true, 'message' => 'Plan updated']);
+
+    case 'get_pricing_dashboard':
+        requireAdmin();
+        $data = [];
+        try {
+            $r = $db->query('SELECT COALESCE(SUM(commission_amount),0) FROM commission_logs'); $data['total_commission'] = (float)$r->fetchColumn();
+            $r = $db->query('SELECT COALESCE(SUM(total),0) FROM orders WHERE status NOT IN ("cancelled","refunded")'); $data['total_revenue'] = (float)$r->fetchColumn();
+            $r = $db->query('SELECT COUNT(*) FROM plan_subscriptions WHERE status = "active"'); $data['active_subscriptions'] = (int)$r->fetchColumn();
+            $r = $db->query('SELECT COALESCE(SUM(amount),0) FROM payout_requests WHERE status = "pending"'); $data['pending_payouts'] = (float)$r->fetchColumn();
+        } catch (PDOException $e) { /* ignore */ }
+        jsonResponse(['success' => true, 'data' => $data]);
+
     default:
         jsonResponse(['error' => 'Invalid action'], 400);
 }
