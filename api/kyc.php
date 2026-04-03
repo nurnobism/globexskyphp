@@ -67,13 +67,23 @@ try {
             $filename  = 'kyc_' . $userId . '_' . $level . '_' . $docType . '_' . time() . '.' . $ext;
             $filePath  = $uploadDir . $filename;
 
-            if (!move_uploaded_file($file['tmp_name'], $filePath)) {
+            // Prevent directory traversal: ensure resolved path stays within upload dir
+            $realUploadDir = realpath($uploadDir);
+            $realFilePath  = $realUploadDir . DIRECTORY_SEPARATOR . $filename;
+            if ($realUploadDir === false || strpos($realFilePath, $realUploadDir . DIRECTORY_SEPARATOR) !== 0) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Invalid file path']);
+                exit;
+            }
+
+            if (!move_uploaded_file($file['tmp_name'], $realFilePath)) {
+                error_log('KYC upload failed: could not move file to ' . $realFilePath);
                 http_response_code(500);
                 echo json_encode(['error' => 'Failed to save file']);
                 exit;
             }
 
-            $id = submitKYCDocument($userId, $level, $docType, $filePath);
+            $id = submitKYCDocument($userId, $level, $docType, $realFilePath);
             header('Location: /pages/supplier/kyc.php?submitted=1');
             exit;
 

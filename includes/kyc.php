@@ -135,7 +135,10 @@ function upgradeKYCLevelIfEligible(int $userId, int $level): void {
     $approvedCount = (int)$stmt->fetchColumn();
 
     if ($approvedCount >= count($required)) {
-        $col = "l{$level}_verified_at";
+        // Whitelist column names to prevent SQL injection
+        $colMap = [1 => 'l1_verified_at', 2 => 'l2_verified_at', 3 => 'l3_verified_at', 4 => 'l4_verified_at'];
+        if (!isset($colMap[$level])) return;
+        $col = $colMap[$level];
         // Upsert kyc_levels
         $db->prepare(
             "INSERT INTO kyc_levels (user_id, current_level, $col)
