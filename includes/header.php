@@ -66,11 +66,15 @@ $fallbackCurrencies = [
     <title><?= e($pageTitle) ?> — <?= e(APP_NAME) ?></title>
 
     <!-- Bootstrap 5 CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+          integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous"
+          onerror="this.onerror=null;this.integrity='sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65';this.href='https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css'">
     <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css"
+          integrity="sha384-tViUnnbplMdV4Zrok7OsNikEFskRB/lL6aT8U6H6Q3j58Px+N4tnFvpjB0yBcRwI" crossorigin="anonymous"
+          onerror="this.onerror=null;this.integrity='sha384-tViUnnbplMdV4Zrok7OsNikEFskRB/lL6aT8U6H6Q3j58Px+N4tnFvpjB0yBcRwI';this.href='https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.css'">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="<?= APP_URL ?>/assets/css/style.css">
+    <link rel="stylesheet" href="<?= rtrim(APP_URL, '/') ?>/assets/css/style.css">
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0d6efd">
@@ -310,7 +314,7 @@ $fallbackCurrencies = [
                                 <li><a class="dropdown-item fw-semibold" href="<?= APP_URL ?>/pages/supplier/index.php"><i class="bi bi-building me-2"></i>Supplier Dashboard</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <?php elseif ($userRole === 'carrier'): ?>
-                                <li><a class="dropdown-item fw-semibold" href="<?= APP_URL ?>/pages/shipment/carrier/"><i class="bi bi-truck me-2"></i>Carrier Dashboard</a></li>
+                                <li><a class="dropdown-item fw-semibold" href="<?= APP_URL ?>/pages/shipment/carry/dashboard.php"><i class="bi bi-truck me-2"></i>Carrier Dashboard</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <?php endif; ?>
                                 <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/account/profile.php"><i class="bi bi-person me-2"></i>My Profile</a></li>
@@ -422,7 +426,7 @@ $fallbackCurrencies = [
     </nav>
 
     <!-- ── Mobile collapsible nav ── -->
-    <div class="collapse bg-white border-bottom" id="gs-mobile-nav">
+    <div class="collapse bg-white border-bottom" id="gs-mobile-nav" style="display:none">
         <div class="container-fluid px-3 py-2">
 
             <!-- Mobile search (full width) -->
