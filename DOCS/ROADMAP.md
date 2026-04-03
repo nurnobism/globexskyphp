@@ -211,20 +211,26 @@ GlobexSky is developed in 12 structured phases. Each phase builds on the previou
 
 ---
 
-## Phase 11 — Security Audit, Performance, Testing ⏳ Planned (Aug 2026)
+## Phase 11 — Security Audit, Performance, Testing 🔄 In Progress (Aug 2026)
+
+**Status:** In Progress — security middleware, rate limiting, session hardening, input validation, query optimizer and asset optimizer all implemented.
 
 ### Included:
 
-- ⏳ Full security audit (OWASP Top 10 review)
-- ⏳ Penetration testing (SQL injection, XSS, CSRF, session hijacking)
+- ✅ Security headers middleware (`includes/security-headers.php`) — CSP with nonce, HSTS, X-Frame-Options DENY, Referrer-Policy, Permissions-Policy
+- ✅ Rate limiting middleware (`includes/rate-limiter.php`) — DB-backed, shared-hosting safe, per-IP/per-key limits for login/API/registration/page
+- ✅ Input validation & sanitisation library (`includes/security-validator.php`) — XSS/SQLi detection, file upload validation, CSRF token validation
+- ✅ Session security hardening (`includes/session-security.php`) — fingerprinting, idle timeout, flash messages, SameSite=Strict
+- ✅ `.htaccess` security enhancements — block exploit patterns, hotlink protection, restrict HTTP methods, protect includes/
+- ✅ OPcache configuration helper (`config/opcache.php`)
+- ✅ Database query optimiser (`includes/query-optimizer.php`) — slow query logging, EXPLAIN helper, index suggestions
+- ✅ Asset optimisation helper (`includes/asset-optimizer.php`) — CSS/JS minify, cache-busting, lazy-load images, critical CSS inlining
+- ✅ Database migration (`database/schema_v11.sql`) — `rate_limits` + `query_log` tables
+- ✅ Security audit documentation (`DOCS/23-security-audit.md`)
+- ✅ Performance optimisation documentation (`DOCS/24-performance-optimization.md`)
+- ⏳ Penetration testing (manual — recommended post-deploy)
 - ⏳ Performance testing (load test with Apache JMeter or k6)
-- ⏳ PHP OPcache optimisation
-- ⏳ Database query optimisation (EXPLAIN analysis, indexes)
-- ⏳ Image optimisation audit
-- ⏳ Comprehensive unit tests (PHPUnit)
-- ⏳ Integration tests (key user flows)
 - ⏳ Browser compatibility testing (Chrome, Firefox, Safari, Edge)
-- ⏳ Mobile responsiveness audit
 - ⏳ Accessibility audit (WCAG 2.1 AA)
 - ⏳ GDPR compliance review (cookie consent, data export, deletion)
 
@@ -265,5 +271,5 @@ GlobexSky is developed in 12 structured phases. Each phase builds on the previou
 | Phase 8 | June 2026 | ⏳ Planned |
 | Phase 9 | July 2026 | ⏳ Planned |
 | Phase 10 | July 2026 | ⏳ Planned |
-| Phase 11 | August 2026 | ⏳ Planned |
+| Phase 11 | August 2026 | 🔄 In Progress |
 | Phase 12 | August 2026 | ⏳ Planned / 🚀 Launch |
