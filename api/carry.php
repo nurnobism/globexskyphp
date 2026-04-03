@@ -122,9 +122,11 @@ switch ($action) {
         try {
             $carrierCheck = $db->prepare("SELECT id FROM carriers WHERE user_id=? AND status='active'");
             $carrierCheck->execute([$userId]);
-            if (!$carrierCheck->fetch()) jsonResponse(['error' => 'Active carrier profile required'], 403);
-            $stmt = $db->prepare("INSERT INTO carrier_trips (user_id, departure_city, departure_country, arrival_city, arrival_country, travel_date, available_capacity_kg, price_per_kg, transport_mode, notes, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,'active',NOW())");
-            $stmt->execute([$userId, $departureCity, $departureCountry, $arrivalCity, $arrivalCountry, $travelDate, $capacityKg, $pricePerKg, $transportMode, $notes]);
+            $carrierRow = $carrierCheck->fetch(PDO::FETCH_ASSOC);
+            if (!$carrierRow) jsonResponse(['error' => 'Active carrier profile required'], 403);
+            $carrierId = $carrierRow['id'];
+            $stmt = $db->prepare("INSERT INTO carrier_trips (carrier_id, departure_city, departure_country, arrival_city, arrival_country, travel_date, available_capacity_kg, price_per_kg, transport_mode, notes, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,'active',NOW())");
+            $stmt->execute([$carrierId, $departureCity, $departureCountry, $arrivalCity, $arrivalCountry, $travelDate, $capacityKg, $pricePerKg, $transportMode, $notes]);
             jsonResponse(['success' => true, 'trip_id' => $db->lastInsertId()]);
         } catch (Exception $e) {
             jsonResponse(['error' => 'Database error'], 500);
@@ -149,7 +151,7 @@ switch ($action) {
         $specialHandling = trim($_POST['special_handling'] ?? '');
         if (!$title || !$fromCity || !$toCity) jsonResponse(['error' => 'Required fields missing'], 422);
         try {
-            $stmt = $db->prepare("INSERT INTO carry_requests (user_id, title, description, category, weight_kg, from_city, from_country, to_city, to_country, preferred_date_from, preferred_date_to, budget, special_handling, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'open',NOW())");
+            $stmt = $db->prepare("INSERT INTO carry_requests (sender_id, title, description, category, weight_kg, from_city, from_country, to_city, to_country, preferred_date_from, preferred_date_to, budget, special_handling, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'open',NOW())");
             $stmt->execute([$userId, $title, $description, $category, $weightKg, $fromCity, $fromCountry, $toCity, $toCountry, $preferredFrom ?: null, $preferredTo ?: null, $budget ?: null, $specialHandling]);
             jsonResponse(['success' => true, 'request_id' => $db->lastInsertId()]);
         } catch (Exception $e) {
@@ -158,7 +160,7 @@ switch ($action) {
 
     case 'browse_requests':
         try {
-            $stmt = $db->prepare("SELECT cr.*, u.full_name AS sender_name FROM carry_requests cr JOIN users u ON cr.user_id = u.id WHERE cr.status='open' ORDER BY cr.created_at DESC LIMIT 50");
+            $stmt = $db->prepare("SELECT cr.*, u.full_name AS sender_name FROM carry_requests cr JOIN users u ON cr.sender_id = u.id WHERE cr.status='open' ORDER BY cr.created_at DESC LIMIT 50");
             $stmt->execute();
             jsonResponse(['success' => true, 'requests' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
         } catch (Exception $e) {
@@ -178,16 +180,19 @@ switch ($action) {
             $carrier = $carrierStmt->fetch(PDO::FETCH_ASSOC);
             if (!$carrier) jsonResponse(['error' => 'Active carrier profile required'], 403);
             $carrierId = $carrier['id'];
-            $tripStmt = $db->prepare("SELECT id FROM carrier_trips WHERE user_id=? AND status='active' AND travel_date >= CURDATE() LIMIT 1");
-            $tripStmt->execute([$userId]);
+            $tripStmt = $db->prepare("SELECT id FROM carrier_trips WHERE carrier_id=? AND status='active' AND travel_date >= CURDATE() LIMIT 1");
+            $tripStmt->execute([$carrierId]);
             $trip = $tripStmt->fetch(PDO::FETCH_ASSOC);
             if (!$trip) jsonResponse(['error' => 'No active trip found'], 404);
-            $reqStmt = $db->prepare("SELECT id, user_id FROM carry_requests WHERE id=? AND status='open'");
+            $reqStmt = $db->prepare("SELECT id, sender_id FROM carry_requests WHERE id=? AND status='open'");
             $reqStmt->execute([$requestId]);
             $req = $reqStmt->fetch(PDO::FETCH_ASSOC);
             if (!$req) jsonResponse(['error' => 'Request not found or already matched'], 404);
-            $matchStmt = $db->prepare("INSERT INTO carry_matches (request_id, trip_id, carrier_id, sender_id, status, created_at) VALUES (?,?,?,?,'pending',NOW())");
-            $matchStmt->execute([$requestId, $trip['id'], $carrierId, $req['user_id']]);
+            $agreedPrice = (float)($req['budget'] ?? 0);
+            $commission  = round($agreedPrice * 0.10, 2);
+            $carrierEarn = round($agreedPrice - $commission, 2);
+            $matchStmt = $db->prepare("INSERT INTO carry_matches (request_id, trip_id, carrier_id, sender_id, agreed_price, platform_commission, carrier_earning, status, created_at) VALUES (?,?,?,?,?,?,?,'pending',NOW())");
+            $matchStmt->execute([$requestId, $trip['id'], $carrierId, $req['sender_id'], $agreedPrice, $commission, $carrierEarn]);
             $matchId = $db->lastInsertId();
             $updStmt = $db->prepare("UPDATE carry_requests SET status='matched' WHERE id=?");
             $updStmt->execute([$requestId]);
@@ -229,22 +234,24 @@ switch ($action) {
             $carrierId = $carrier ? $carrier['id'] : null;
             $tripCount = 0;
             if ($carrierId) {
-                $tripStmt = $db->prepare("SELECT COUNT(*) FROM carrier_trips WHERE user_id=? AND status='active'");
-                $tripStmt->execute([$userId]);
+                $tripStmt = $db->prepare("SELECT COUNT(*) FROM carrier_trips WHERE carrier_id=? AND status='active'");
+                $tripStmt->execute([$carrierId]);
                 $tripCount = (int)$tripStmt->fetchColumn();
             }
-            $reqStmt = $db->prepare("SELECT COUNT(*) FROM carry_requests WHERE user_id=? AND status='open'");
+            $reqStmt = $db->prepare("SELECT COUNT(*) FROM carry_requests WHERE sender_id=? AND status='open'");
             $reqStmt->execute([$userId]);
             $activeRequests = (int)$reqStmt->fetchColumn();
-            $earnStmt = $db->prepare("SELECT COALESCE(SUM(earning),0) AS total_earnings, COALESCE(SUM(CASE WHEN paid=0 THEN earning END),0) AS pending_payout FROM carrier_earnings WHERE user_id=?");
-            $earnStmt->execute([$userId]);
+            $earnStmt = $db->prepare("SELECT COALESCE(SUM(CASE WHEN type='delivery_earning' THEN amount ELSE 0 END),0) AS total_earnings, COALESCE(SUM(CASE WHEN type='payout' THEN ABS(amount) ELSE 0 END),0) AS total_withdrawn FROM carrier_earning_log WHERE carrier_id=?");
+            $earnStmt->execute([$carrierId ?? 0]);
             $earnings = $earnStmt->fetch(PDO::FETCH_ASSOC);
+            $totalEarnings  = (float)($earnings['total_earnings'] ?? 0);
+            $totalWithdrawn = (float)($earnings['total_withdrawn'] ?? 0);
             jsonResponse([
                 'success'         => true,
                 'trip_count'      => $tripCount,
                 'active_requests' => $activeRequests,
-                'total_earnings'  => (float)($earnings['total_earnings'] ?? 0),
-                'pending_payout'  => (float)($earnings['pending_payout'] ?? 0),
+                'total_earnings'  => $totalEarnings,
+                'pending_payout'  => max(0.0, $totalEarnings - $totalWithdrawn),
             ]);
         } catch (Exception $e) {
             jsonResponse(['error' => 'Database error'], 500);

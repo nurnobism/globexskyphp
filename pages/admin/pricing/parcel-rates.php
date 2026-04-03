@@ -57,20 +57,20 @@ include __DIR__ . '/../../../includes/header.php';
                     <td>$<?= number_format((float)($r['base_rate'] ?? 0), 2) ?></td>
                     <td>$<?= number_format((float)($r['rate_per_kg'] ?? 0), 2) ?>/kg</td>
                     <td>
-                        <small><?= number_format((float)($r['standard_multiplier'] ?? 1.0), 2) ?>x</small><br>
-                        <small class="text-muted"><?= (int)($r['standard_days'] ?? 0) ?> days</small>
+                        <small><?= number_format((float)($r['method_multiplier_standard'] ?? 1.0), 2) ?>x</small><br>
+                        <small class="text-muted"><?= e($r['estimated_days_standard'] ?? '') ?></small>
                     </td>
                     <td>
-                        <small><?= number_format((float)($r['express_multiplier'] ?? 1.6), 2) ?>x</small><br>
-                        <small class="text-muted"><?= (int)($r['express_days'] ?? 0) ?> days</small>
+                        <small><?= number_format((float)($r['method_multiplier_express'] ?? 1.6), 2) ?>x</small><br>
+                        <small class="text-muted"><?= e($r['estimated_days_express'] ?? '') ?></small>
                     </td>
                     <td>
-                        <small><?= number_format((float)($r['priority_multiplier'] ?? 2.2), 2) ?>x</small><br>
-                        <small class="text-muted"><?= (int)($r['priority_days'] ?? 0) ?> days</small>
+                        <small><?= number_format((float)($r['method_multiplier_priority'] ?? 2.2), 2) ?>x</small><br>
+                        <small class="text-muted"><?= e($r['estimated_days_priority'] ?? '') ?></small>
                     </td>
                     <td>
-                        <small><?= number_format((float)($r['economy_multiplier'] ?? 0.8), 2) ?>x</small><br>
-                        <small class="text-muted"><?= (int)($r['economy_days'] ?? 0) ?> days</small>
+                        <small><?= number_format((float)($r['method_multiplier_economy'] ?? 0.8), 2) ?>x</small><br>
+                        <small class="text-muted"><?= e($r['estimated_days_economy'] ?? '') ?></small>
                     </td>
                     <td><?= number_format((float)($r['insurance_rate'] ?? 0), 2) ?>%</td>
                     <td>
@@ -126,35 +126,35 @@ include __DIR__ . '/../../../includes/header.php';
                         <div class="col-12"><hr class="my-1"><h6 class="text-muted">Method Multipliers &amp; Estimated Days</h6></div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Standard Multiplier</label>
-                            <input type="number" name="standard_multiplier" id="standardMultiplier" class="form-control" min="0" step="0.01" value="1.00">
+                            <input type="number" name="method_multiplier_standard" id="standardMultiplier" class="form-control" min="0" step="0.01" value="1.00">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Standard Days</label>
-                            <input type="number" name="standard_days" id="standardDays" class="form-control" min="0" step="1" value="7">
+                            <label class="form-label fw-semibold">Standard Est. Days</label>
+                            <input type="text" name="estimated_days_standard" id="standardDays" class="form-control" placeholder="e.g. 5-10" value="5-10" maxlength="20">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Express Multiplier</label>
-                            <input type="number" name="express_multiplier" id="expressMultiplier" class="form-control" min="0" step="0.01" value="1.60">
+                            <input type="number" name="method_multiplier_express" id="expressMultiplier" class="form-control" min="0" step="0.01" value="2.00">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Express Days</label>
-                            <input type="number" name="express_days" id="expressDays" class="form-control" min="0" step="1" value="3">
+                            <label class="form-label fw-semibold">Express Est. Days</label>
+                            <input type="text" name="estimated_days_express" id="expressDays" class="form-control" placeholder="e.g. 2-5" value="2-5" maxlength="20">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Priority Multiplier</label>
-                            <input type="number" name="priority_multiplier" id="priorityMultiplier" class="form-control" min="0" step="0.01" value="2.20">
+                            <input type="number" name="method_multiplier_priority" id="priorityMultiplier" class="form-control" min="0" step="0.01" value="3.00">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Priority Days</label>
-                            <input type="number" name="priority_days" id="priorityDays" class="form-control" min="0" step="1" value="1">
+                            <label class="form-label fw-semibold">Priority Est. Days</label>
+                            <input type="text" name="estimated_days_priority" id="priorityDays" class="form-control" placeholder="e.g. 1-3" value="1-3" maxlength="20">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Economy Multiplier</label>
-                            <input type="number" name="economy_multiplier" id="economyMultiplier" class="form-control" min="0" step="0.01" value="0.80">
+                            <input type="number" name="method_multiplier_economy" id="economyMultiplier" class="form-control" min="0" step="0.01" value="0.70">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Economy Days</label>
-                            <input type="number" name="economy_days" id="economyDays" class="form-control" min="0" step="1" value="14">
+                            <label class="form-label fw-semibold">Economy Est. Days</label>
+                            <input type="text" name="estimated_days_economy" id="economyDays" class="form-control" placeholder="e.g. 10-20" value="10-20" maxlength="20">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Insurance Rate (%)</label>
@@ -178,14 +178,14 @@ function openAddModal() {
     document.getElementById('rateId').value = '';
     document.getElementById('rateForm').reset();
     document.getElementById('standardMultiplier').value = '1.00';
-    document.getElementById('standardDays').value = '7';
-    document.getElementById('expressMultiplier').value = '1.60';
-    document.getElementById('expressDays').value = '3';
-    document.getElementById('priorityMultiplier').value = '2.20';
-    document.getElementById('priorityDays').value = '1';
-    document.getElementById('economyMultiplier').value = '0.80';
-    document.getElementById('economyDays').value = '14';
-    document.getElementById('insuranceRate').value = '1.50';
+    document.getElementById('standardDays').value = '5-10';
+    document.getElementById('expressMultiplier').value = '2.00';
+    document.getElementById('expressDays').value = '2-5';
+    document.getElementById('priorityMultiplier').value = '3.00';
+    document.getElementById('priorityDays').value = '1-3';
+    document.getElementById('economyMultiplier').value = '0.70';
+    document.getElementById('economyDays').value = '10-20';
+    document.getElementById('insuranceRate').value = '2.00';
 }
 
 function openEditModal(rate) {
@@ -196,15 +196,15 @@ function openEditModal(rate) {
     document.getElementById('destinationCountry').value = rate.destination_country || '';
     document.getElementById('baseRate').value = rate.base_rate || '';
     document.getElementById('ratePerKg').value = rate.rate_per_kg || '';
-    document.getElementById('standardMultiplier').value = rate.standard_multiplier || '1.00';
-    document.getElementById('standardDays').value = rate.standard_days || '7';
-    document.getElementById('expressMultiplier').value = rate.express_multiplier || '1.60';
-    document.getElementById('expressDays').value = rate.express_days || '3';
-    document.getElementById('priorityMultiplier').value = rate.priority_multiplier || '2.20';
-    document.getElementById('priorityDays').value = rate.priority_days || '1';
-    document.getElementById('economyMultiplier').value = rate.economy_multiplier || '0.80';
-    document.getElementById('economyDays').value = rate.economy_days || '14';
-    document.getElementById('insuranceRate').value = rate.insurance_rate || '1.50';
+    document.getElementById('standardMultiplier').value = rate.method_multiplier_standard || '1.00';
+    document.getElementById('standardDays').value = rate.estimated_days_standard || '5-10';
+    document.getElementById('expressMultiplier').value = rate.method_multiplier_express || '2.00';
+    document.getElementById('expressDays').value = rate.estimated_days_express || '2-5';
+    document.getElementById('priorityMultiplier').value = rate.method_multiplier_priority || '3.00';
+    document.getElementById('priorityDays').value = rate.estimated_days_priority || '1-3';
+    document.getElementById('economyMultiplier').value = rate.method_multiplier_economy || '0.70';
+    document.getElementById('economyDays').value = rate.estimated_days_economy || '10-20';
+    document.getElementById('insuranceRate').value = rate.insurance_rate || '2.00';
     var modal = new bootstrap.Modal(document.getElementById('rateModal'));
     modal.show();
 }
