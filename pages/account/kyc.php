@@ -221,9 +221,8 @@ include __DIR__ . '/../../includes/header.php';
                     <h5 class="mb-0 fw-bold"><i class="bi bi-building text-primary me-2"></i>Step 1: Business Information</h5>
                 </div>
                 <div class="card-body p-4">
-                    <form method="POST" action="/api/kyc.php?action=submit" id="step1Form">
-                        <?= csrfField() ?>
-                        <input type="hidden" name="_redirect" value="/pages/account/kyc.php?step=2">
+                    <div id="step1Error" class="alert alert-danger d-none mb-3"></div>
+                    <form id="step1Form">
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold">Business Name <span class="text-danger">*</span></label>
@@ -236,7 +235,7 @@ include __DIR__ . '/../../includes/header.php';
                             <div class="col-12">
                                 <label class="form-label fw-semibold">Business Type <span class="text-danger">*</span></label>
                                 <div class="row g-2 mt-1">
-                                    <?php $types = ['sole_proprietorship' => 'Sole Proprietorship', 'partnership' => 'Partnership', 'llc' => 'LLC', 'corporation' => 'Corporation', 'nonprofit' => 'Non-Profit', 'other' => 'Other']; ?>
+                                    <?php $types = ['individual' => 'Individual / Sole Trader', 'company' => 'Registered Company']; ?>
                                     <?php foreach ($types as $val => $lbl): ?>
                                     <div class="col-md-4 col-6">
                                         <div class="form-check form-check-card p-0">
@@ -283,7 +282,7 @@ include __DIR__ . '/../../includes/header.php';
                             </div>
                         </div>
                         <div class="mt-4 d-flex justify-content-end">
-                            <button type="submit" class="btn btn-primary px-4">
+                            <button type="submit" class="btn btn-primary px-4" id="step1Btn">
                                 Next: Upload Documents <i class="bi bi-arrow-right ms-1"></i>
                             </button>
                         </div>
@@ -307,11 +306,12 @@ include __DIR__ . '/../../includes/header.php';
                         <label class="form-label fw-semibold">Document Type</label>
                         <select id="docType" class="form-select" style="max-width:320px">
                             <option value="">Select document type...</option>
-                            <option value="business_registration">Business Registration Certificate</option>
+                            <option value="national_id">National ID</option>
+                            <option value="passport">Passport</option>
+                            <option value="business_license">Business Licence</option>
                             <option value="tax_certificate">Tax Certificate</option>
-                            <option value="identity_document">Identity Document (Passport/ID)</option>
-                            <option value="proof_of_address">Proof of Address</option>
                             <option value="bank_statement">Bank Statement</option>
+                            <option value="utility_bill">Utility Bill</option>
                             <option value="other">Other</option>
                         </select>
                     </div>
@@ -439,13 +439,9 @@ include __DIR__ . '/../../includes/header.php';
                             <i class="bi bi-arrow-left me-1"></i> Back
                         </a>
                         <?php if (!empty($reviewDocs)): ?>
-                        <form method="POST" action="/api/kyc.php?action=finalize">
-                            <?= csrfField() ?>
-                            <input type="hidden" name="submission_id" value="<?= (int) $submission['id'] ?>">
-                            <button type="submit" class="btn btn-success px-4">
-                                <i class="bi bi-send-check me-1"></i> Submit for Review
-                            </button>
-                        </form>
+                        <a href="/pages/account/kyc.php" class="btn btn-success px-4">
+                            <i class="bi bi-send-check me-1"></i> Confirm &amp; Finish
+                        </a>
                         <?php endif; ?>
                     </div>
                     <?php endif; ?>
@@ -461,8 +457,44 @@ include __DIR__ . '/../../includes/header.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const fileInput = document.getElementById('fileInput');
+    const fileInput   = document.getElementById('fileInput');
+    const csrfToken   = document.querySelector('meta[name="csrf-token"]') ? document.querySelector('meta[name="csrf-token"]').content : '';
     const submissionId = <?= (int) $submissionId ?>;
+
+    // Step 1: AJAX submit
+    const step1Form = document.getElementById('step1Form');
+    if (step1Form) {
+        step1Form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const btn     = document.getElementById('step1Btn');
+            const errBox  = document.getElementById('step1Error');
+            btn.disabled  = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+            errBox.classList.add('d-none');
+
+            const formData = new FormData(step1Form);
+            formData.append('_csrf_token', '<?= e(csrfToken()) ?>');
+
+            fetch('/api/kyc.php?action=submit', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.href = '/pages/account/kyc.php?step=2';
+                    } else {
+                        errBox.textContent = data.error || 'Submission failed. Please try again.';
+                        errBox.classList.remove('d-none');
+                        btn.disabled  = false;
+                        btn.innerHTML = 'Next: Upload Documents <i class="bi bi-arrow-right ms-1"></i>';
+                    }
+                })
+                .catch(() => {
+                    errBox.textContent = 'Network error. Please try again.';
+                    errBox.classList.remove('d-none');
+                    btn.disabled  = false;
+                    btn.innerHTML = 'Next: Upload Documents <i class="bi bi-arrow-right ms-1"></i>';
+                });
+        });
+    }
 
     if (fileInput) {
         fileInput.addEventListener('change', function () {
@@ -507,7 +539,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('document_type', docType);
+        formData.append('doc_type', docType);
         formData.append('submission_id', submissionId);
         formData.append('_csrf_token', '<?= e(csrfToken()) ?>');
 
@@ -521,7 +553,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 updateUploadResult(itemId, 'success', 'Uploaded successfully');
                 setTimeout(() => location.reload(), 1200);
             } else {
-                updateUploadResult(itemId, 'error', data.message || 'Upload failed.');
+                updateUploadResult(itemId, 'error', data.message || data.error || 'Upload failed.');
             }
         })
         .catch(() => updateUploadResult(itemId, 'error', 'Network error. Please try again.'));
