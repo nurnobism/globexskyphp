@@ -37,6 +37,25 @@ $availLangs  = function_exists('getAvailableLanguages') ? getAvailableLanguages(
 $curLang     = function_exists('getLocale') ? getLocale() : 'en';
 $curCurrency = function_exists('getSelectedCurrency') ? getSelectedCurrency() : 'USD';
 $activeCurrencies = function_exists('getActiveCurrencies') ? getActiveCurrencies() : [];
+
+// Fallback language list (used when i18n module is not available)
+$fallbackLangs = [
+    'en' => ['flag' => '🇬🇧', 'native' => 'English'],
+    'bn' => ['flag' => '🇧🇩', 'native' => 'বাংলা'],
+    'es' => ['flag' => '🇪🇸', 'native' => 'Español'],
+    'fr' => ['flag' => '🇫🇷', 'native' => 'Français'],
+    'ar' => ['flag' => '🇸🇦', 'native' => 'العربية'],
+    'zh' => ['flag' => '🇨🇳', 'native' => '中文'],
+];
+
+// Fallback currency list (used when currency module is not available)
+$fallbackCurrencies = [
+    'USD' => ['symbol' => '$',  'name' => 'US Dollar'],
+    'EUR' => ['symbol' => '€',  'name' => 'Euro'],
+    'GBP' => ['symbol' => '£',  'name' => 'Pound'],
+    'BDT' => ['symbol' => '৳', 'name' => 'Taka'],
+    'CNY' => ['symbol' => '¥',  'name' => 'Yuan'],
+];
 ?>
 <!DOCTYPE html>
 <html lang="<?= function_exists('getLocale') ? e(getLocale()) : 'en' ?>" <?= (function_exists('isRTL') && isRTL()) ? 'dir="rtl"' : '' ?>>
@@ -96,13 +115,13 @@ $activeCurrencies = function_exists('getActiveCurrencies') ? getActiveCurrencies
                                     <i class="bi bi-upc-scan"></i>
                                 </a>
                                 <span class="gs-search-divider"></span>
-                                <a href="#" class="gs-search-icon-btn" title="Image Search" onclick="return false;">
-                                    <i class="bi bi-camera"></i>
-                                </a>
+                                <button type="button" class="gs-search-icon-btn" title="Image Search (coming soon)" aria-label="Image Search (coming soon)" disabled aria-disabled="true" tabindex="-1">
+                                    <i class="bi bi-camera" aria-hidden="true"></i>
+                                </button>
                                 <span class="gs-search-divider"></span>
-                                <a href="#" class="gs-search-icon-btn" title="Voice Search" onclick="return false;">
-                                    <i class="bi bi-mic"></i>
-                                </a>
+                                <button type="button" class="gs-search-icon-btn" title="Voice Search (coming soon)" aria-label="Voice Search (coming soon)" disabled aria-disabled="true" tabindex="-1">
+                                    <i class="bi bi-mic" aria-hidden="true"></i>
+                                </button>
                                 <span class="gs-search-divider"></span>
                             </div>
                             <input type="text" name="q" class="gs-search-input form-control border-0 shadow-none"
@@ -139,7 +158,7 @@ $activeCurrencies = function_exists('getActiveCurrencies') ? getActiveCurrencies
                                 </li>
                                 <?php endforeach; ?>
                             <?php else: ?>
-                                <?php foreach (['en' => ['flag'=>'🇬🇧','native'=>'English'], 'bn' => ['flag'=>'🇧🇩','native'=>'বাংলা'], 'es' => ['flag'=>'🇪🇸','native'=>'Español'], 'fr' => ['flag'=>'🇫🇷','native'=>'Français'], 'ar' => ['flag'=>'🇸🇦','native'=>'العربية'], 'zh' => ['flag'=>'🇨🇳','native'=>'中文']] as $code => $info): ?>
+                                <?php foreach ($fallbackLangs as $code => $info): ?>
                                 <li>
                                     <a class="dropdown-item <?= $code === $curLang ? 'active' : '' ?>"
                                        href="?lang=<?= e($code) ?>">
@@ -169,7 +188,7 @@ $activeCurrencies = function_exists('getActiveCurrencies') ? getActiveCurrencies
                                 </li>
                                 <?php endforeach; ?>
                             <?php else: ?>
-                                <?php foreach (['USD'=>['symbol'=>'$','name'=>'US Dollar'],'EUR'=>['symbol'=>'€','name'=>'Euro'],'GBP'=>['symbol'=>'£','name'=>'Pound'],'BDT'=>['symbol'=>'৳','name'=>'Taka'],'CNY'=>['symbol'=>'¥','name'=>'Yuan']] as $code => $curr): ?>
+                                <?php foreach ($fallbackCurrencies as $code => $curr): ?>
                                 <li>
                                     <a class="dropdown-item <?= $code === $curCurrency ? 'active' : '' ?>"
                                        href="?currency=<?= e($code) ?>"
@@ -183,7 +202,7 @@ $activeCurrencies = function_exists('getActiveCurrencies') ? getActiveCurrencies
                     </div>
 
                     <!-- PWA Install Button -->
-                    <button id="pwa-install-btn" class="btn btn-outline-secondary btn-sm d-none d-lg-inline-flex align-items-center gap-1" style="display:none!important" onclick="pwaInstall()">
+                    <button id="pwa-install-btn" class="btn btn-outline-secondary btn-sm d-none d-lg-inline-flex align-items-center gap-1" onclick="pwaInstall()">
                         <i class="bi bi-download"></i><span class="d-none d-xl-inline">Install App</span>
                     </button>
 
@@ -457,7 +476,7 @@ $activeCurrencies = function_exists('getActiveCurrencies') ? getActiveCurrencies
                             <li><a class="dropdown-item <?= $code === $curLang ? 'active' : '' ?>" href="?lang=<?= e($code) ?>"><?= e($info['flag'] ?? '') ?> <?= e($info['native'] ?? $code) ?></a></li>
                             <?php endforeach; ?>
                         <?php else: ?>
-                            <?php foreach (['en'=>['flag'=>'🇬🇧','native'=>'English'],'bn'=>['flag'=>'🇧🇩','native'=>'বাংলা'],'es'=>['flag'=>'🇪🇸','native'=>'Español'],'fr'=>['flag'=>'🇫🇷','native'=>'Français'],'ar'=>['flag'=>'🇸🇦','native'=>'العربية'],'zh'=>['flag'=>'🇨🇳','native'=>'中文']] as $code => $info): ?>
+                            <?php foreach ($fallbackLangs as $code => $info): ?>
                             <li><a class="dropdown-item <?= $code === $curLang ? 'active' : '' ?>" href="?lang=<?= e($code) ?>"><?= $info['flag'] ?> <?= e($info['native']) ?></a></li>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -473,7 +492,7 @@ $activeCurrencies = function_exists('getActiveCurrencies') ? getActiveCurrencies
                             <li><a class="dropdown-item <?= $curr['code'] === $curCurrency ? 'active' : '' ?>" href="?currency=<?= e($curr['code']) ?>" onclick="document.cookie='currency=<?= e($curr['code']) ?>;path=/;max-age=31536000';return true;"><?= e($curr['symbol']) ?> <?= e($curr['code']) ?></a></li>
                             <?php endforeach; ?>
                         <?php else: ?>
-                            <?php foreach (['USD'=>['symbol'=>'$'],'EUR'=>['symbol'=>'€'],'GBP'=>['symbol'=>'£'],'BDT'=>['symbol'=>'৳'],'CNY'=>['symbol'=>'¥']] as $code => $curr): ?>
+                            <?php foreach ($fallbackCurrencies as $code => $curr): ?>
                             <li><a class="dropdown-item <?= $code === $curCurrency ? 'active' : '' ?>" href="?currency=<?= e($code) ?>" onclick="document.cookie='currency=<?= e($code) ?>;path=/;max-age=31536000';return true;"><?= e($curr['symbol']) ?> <?= e($code) ?></a></li>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -488,7 +507,7 @@ $activeCurrencies = function_exists('getActiveCurrencies') ? getActiveCurrencies
                 <li><a href="<?= APP_URL ?>/pages/order/index.php" class="gs-mobile-cat-link"><i class="bi bi-bag me-2"></i>My Orders</a></li>
                 <li><a href="<?= APP_URL ?>/pages/notifications/index.php" class="gs-mobile-cat-link"><i class="bi bi-bell me-2"></i>Notifications</a></li>
                 <li><a href="<?= APP_URL ?>/pages/messages/index.php" class="gs-mobile-cat-link"><i class="bi bi-chat-dots me-2"></i>Messages</a></li>
-                <?php if (function_exists('isAdmin') && isAdmin()): ?>
+                <?php if (in_array($currentUser['role'] ?? ($_SESSION['user_role'] ?? ''), ['admin', 'super_admin'])): ?>
                 <li><a href="<?= APP_URL ?>/pages/admin/dashboard.php" class="gs-mobile-cat-link text-danger"><i class="bi bi-speedometer2 me-2"></i>Admin Panel</a></li>
                 <?php endif; ?>
                 <li>
