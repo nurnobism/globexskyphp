@@ -261,9 +261,9 @@ function logKycAudit(int $submissionId, string $action, int $performedBy, array 
              VALUES (?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
-            $submissionId ?: null,
+            $submissionId > 0 ? $submissionId : null,
             $action,
-            $performedBy ?: null,
+            $performedBy > 0 ? $performedBy : null,
             $_SERVER['REMOTE_ADDR']     ?? null,
             $_SERVER['HTTP_USER_AGENT'] ?? null,
             $details ? json_encode($details) : null,
@@ -294,7 +294,7 @@ function logAdminAudit(
             $adminId,
             $action,
             $targetType ?: null,
-            $targetId   ?: null,
+            $targetId > 0 ? $targetId : null,
             $details ? json_encode($details) : null,
             $_SERVER['REMOTE_ADDR']     ?? null,
             $_SERVER['HTTP_USER_AGENT'] ?? null,
