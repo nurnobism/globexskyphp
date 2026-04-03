@@ -293,7 +293,308 @@ switch ($action) {
         echo json_encode(['success' => true, 'message' => 'Sync queued — products will update shortly']);
         break;
 
+    // ── Phase 6 Enhanced Endpoints ─────────────────────────────
+
+    case 'catalog':
+        // Browse dropship-ready products with filters & pagination
+        require_once __DIR__ . '/../includes/dropshipping.php';
+        $filters = [
+            'q'         => trim(get('q', '')),
+            'category'  => get('category', ''),
+            'min_price' => get('min_price', ''),
+            'max_price' => get('max_price', ''),
+            'sort'      => get('sort', 'newest'),
+        ];
+        $page    = max(1, (int)get('page', 1));
+        $perPage = min(100, max(1, (int)get('per_page', 20)));
+        $result  = getDropshipCatalog($filters, $page, $perPage);
+        echo json_encode(['success' => true, 'data' => $result['products'], 'total' => $result['total'], 'pages' => $result['pages']]);
+        break;
+
+    case 'update':
+        // Update an imported product (markup, title, description, status)
+        if ($method !== 'POST') { http_response_code(405); echo json_encode(['error' => 'POST required']); break; }
+        requireAuth();
+        if (!verifyCsrf()) { http_response_code(403); echo json_encode(['error' => 'Invalid CSRF token']); break; }
+
+        $dpId = (int)post('product_id');
+        if (!$dpId) { http_response_code(400); echo json_encode(['error' => 'product_id required']); break; }
+
+        $sets = []; $params = [];
+        if (post('markup_type') !== null) {
+            $sets[] = 'markup_type = ?'; $params[] = in_array(post('markup_type'), ['percentage','fixed']) ? post('markup_type') : 'percentage';
+        }
+        if (post('markup_value') !== null) {
+            $mv = max(0.01, (float)post('markup_value'));
+            $sets[] = 'markup_value = ?'; $params[] = $mv;
+        }
+        if (post('custom_title') !== null) {
+            $sets[] = 'custom_title = ?'; $params[] = trim(post('custom_title'));
+        }
+        if (post('custom_description') !== null) {
+            $sets[] = 'custom_description = ?'; $params[] = trim(post('custom_description'));
+        }
+        if (post('is_active') !== null) {
+            $sets[] = 'is_active = ?'; $params[] = (int)post('is_active');
+        }
+        if (empty($sets)) { echo json_encode(['success' => false, 'error' => 'No fields to update']); break; }
+
+        // Recalculate selling price if markup changed
+        if (post('markup_value') !== null || post('markup_type') !== null) {
+            require_once __DIR__ . '/../includes/dropshipping.php';
+            try {
+                $origStmt = $db->prepare('SELECT original_price, markup_type, markup_value FROM dropship_products WHERE id = ? AND dropshipper_id = ?');
+                $origStmt->execute([$dpId, $_SESSION['user_id']]);
+                $orig = $origStmt->fetch();
+                if ($orig) {
+                    $mt = post('markup_type') ?? $orig['markup_type'];
+                    $mv = post('markup_value') !== null ? max(0.01, (float)post('markup_value')) : (float)$orig['markup_value'];
+                    $calc = calculateMarkup((float)$orig['original_price'], $mt, $mv);
+                    $sets[] = 'selling_price = ?'; $params[] = $calc['selling_price'];
+                }
+            } catch (PDOException $e) { /* ignore */ }
+        }
+
+        $sets[] = 'updated_at = NOW()';
+        $params[] = $dpId;
+        $params[] = (int)$_SESSION['user_id'];
+        try {
+            $db->prepare('UPDATE dropship_products SET ' . implode(', ', $sets) . ' WHERE id = ? AND dropshipper_id = ?')
+               ->execute($params);
+            echo json_encode(['success' => true, 'message' => 'Product updated']);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'error' => 'Update failed']);
+        }
+        break;
+
+    case 'delete':
+        // Remove imported product
+        if ($method !== 'POST') { http_response_code(405); echo json_encode(['error' => 'POST required']); break; }
+        requireAuth();
+        if (!verifyCsrf()) { http_response_code(403); echo json_encode(['error' => 'Invalid CSRF token']); break; }
+
+        $dpId = (int)post('product_id');
+        if (!$dpId) { http_response_code(400); echo json_encode(['error' => 'product_id required']); break; }
+
+        try {
+            $stmt = $db->prepare('DELETE FROM dropship_products WHERE id = ? AND dropshipper_id = ?');
+            $stmt->execute([$dpId, (int)$_SESSION['user_id']]);
+            echo json_encode(['success' => $stmt->rowCount() > 0]);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'error' => 'Delete failed']);
+        }
+        break;
+
+    case 'sync':
+        // Sync single product with supplier
+        if ($method !== 'POST') { http_response_code(405); echo json_encode(['error' => 'POST required']); break; }
+        requireAuth();
+        if (!verifyCsrf()) { http_response_code(403); echo json_encode(['error' => 'Invalid CSRF token']); break; }
+        require_once __DIR__ . '/../includes/dropshipping.php';
+
+        $dpId = (int)post('product_id');
+        if (!$dpId) { http_response_code(400); echo json_encode(['error' => 'product_id required']); break; }
+
+        $result = syncProduct($dpId);
+        echo json_encode(['success' => $result['updated'], 'changes' => $result['changes'] ?? [], 'error' => $result['error'] ?? null]);
+        break;
+
+    case 'sync_all':
+        // Bulk sync all products
+        if ($method !== 'POST') { http_response_code(405); echo json_encode(['error' => 'POST required']); break; }
+        requireAuth();
+        if (!verifyCsrf()) { http_response_code(403); echo json_encode(['error' => 'Invalid CSRF token']); break; }
+        require_once __DIR__ . '/../includes/dropshipping.php';
+
+        $result = syncAllProducts((int)$_SESSION['user_id']);
+        echo json_encode(['success' => true, 'synced' => $result['synced'], 'errors' => $result['errors'], 'total' => $result['total']]);
+        break;
+
+    case 'my_products':
+        // Get dropshipper's imported products
+        requireAuth();
+        require_once __DIR__ . '/../includes/dropshipping.php';
+        $page    = max(1, (int)get('page', 1));
+        $perPage = min(100, max(1, (int)get('per_page', 20)));
+        $offset  = ($page - 1) * $perPage;
+
+        try {
+            $countStmt = $db->prepare('SELECT COUNT(*) FROM dropship_products WHERE dropshipper_id = ?');
+            $countStmt->execute([$_SESSION['user_id']]);
+            $total = (int)$countStmt->fetchColumn();
+
+            $stmt = $db->prepare('SELECT dp.*, p.name AS original_name, p.images, p.cost_price AS current_supplier_price,
+                p.status AS product_status, s.company_name AS supplier_name
+                FROM dropship_products dp
+                JOIN products p ON p.id = dp.original_product_id
+                LEFT JOIN suppliers s ON s.user_id = dp.supplier_id
+                WHERE dp.dropshipper_id = ?
+                ORDER BY dp.import_date DESC LIMIT ? OFFSET ?');
+            $stmt->execute([$_SESSION['user_id'], $perPage, $offset]);
+            echo json_encode(['success' => true, 'data' => $stmt->fetchAll(), 'total' => $total]);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'error' => 'Failed to fetch products']);
+        }
+        break;
+
+    case 'order_detail':
+        // Get single order detail
+        requireAuth();
+        $orderId = (int)get('id');
+        if (!$orderId) { http_response_code(400); echo json_encode(['error' => 'id required']); break; }
+
+        try {
+            $stmt = $db->prepare('SELECT do.*, o.order_number, u.first_name, u.last_name, u.email
+                FROM dropship_orders do
+                LEFT JOIN orders o ON o.id = do.order_id
+                LEFT JOIN users u ON u.id = do.customer_id
+                WHERE do.id = ? AND do.dropshipper_id = ?');
+            $stmt->execute([$orderId, (int)$_SESSION['user_id']]);
+            $order = $stmt->fetch();
+            echo json_encode($order ? ['success' => true, 'data' => $order] : ['success' => false, 'error' => 'Order not found']);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'error' => 'Database error']);
+        }
+        break;
+
+    case 'earnings':
+        // Get earnings breakdown
+        requireAuth();
+        require_once __DIR__ . '/../includes/dropshipping.php';
+        $period = in_array(get('period', '30days'), ['7days','30days','90days','all']) ? get('period', '30days') : '30days';
+        $result = getDropshipperEarnings((int)$_SESSION['user_id'], $period);
+        echo json_encode(['success' => true, 'data' => $result]);
+        break;
+
+    case 'analytics':
+        // Get store analytics
+        requireAuth();
+        $days = min(90, max(7, (int)get('days', 30)));
+        try {
+            $stmt = $db->prepare('SELECT * FROM dropship_analytics
+                WHERE dropshipper_id = ? AND date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+                ORDER BY date DESC');
+            $stmt->execute([$_SESSION['user_id'], $days]);
+            echo json_encode(['success' => true, 'data' => $stmt->fetchAll()]);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => true, 'data' => []]);
+        }
+        break;
+
+    case 'store':
+        // Get/update store settings
+        requireAuth();
+        if ($method === 'POST') {
+            if (!verifyCsrf()) { http_response_code(403); echo json_encode(['error' => 'Invalid CSRF token']); break; }
+            require_once __DIR__ . '/../includes/dropshipping.php';
+            $storeName = trim(post('store_name', ''));
+            if (empty($storeName)) { echo json_encode(['success' => false, 'error' => 'store_name required']); break; }
+
+            try {
+                $existing = $db->prepare('SELECT id FROM dropship_stores WHERE user_id = ?');
+                $existing->execute([$_SESSION['user_id']]);
+                $ex = $existing->fetch();
+
+                if ($ex) {
+                    $db->prepare('UPDATE dropship_stores SET store_name = ?, store_description = ?,
+                        theme_color = ?, updated_at = NOW() WHERE id = ?')
+                       ->execute([$storeName, trim(post('store_description', '')), trim(post('theme_color', '#0d6efd')), $ex['id']]);
+                } else {
+                    $slug = generateStoreSlug($storeName, $db);
+                    $db->prepare('INSERT INTO dropship_stores (user_id, store_name, store_slug, store_description, theme_color) VALUES (?,?,?,?,?)')
+                       ->execute([$_SESSION['user_id'], $storeName, $slug, trim(post('store_description', '')), trim(post('theme_color', '#0d6efd'))]);
+                }
+                echo json_encode(['success' => true, 'message' => 'Store settings saved']);
+            } catch (PDOException $e) {
+                echo json_encode(['success' => false, 'error' => 'Failed to save store settings']);
+            }
+        } else {
+            try {
+                $stmt = $db->prepare('SELECT * FROM dropship_stores WHERE user_id = ? LIMIT 1');
+                $stmt->execute([$_SESSION['user_id']]);
+                $store = $stmt->fetch();
+                echo json_encode(['success' => true, 'data' => $store ?: null]);
+            } catch (PDOException $e) {
+                echo json_encode(['success' => true, 'data' => null]);
+            }
+        }
+        break;
+
+    case 'create_store':
+        // Create dropship store
+        if ($method !== 'POST') { http_response_code(405); echo json_encode(['error' => 'POST required']); break; }
+        requireAuth();
+        if (!verifyCsrf()) { http_response_code(403); echo json_encode(['error' => 'Invalid CSRF token']); break; }
+        require_once __DIR__ . '/../includes/dropshipping.php';
+
+        $storeName = trim(post('store_name', ''));
+        if (empty($storeName)) { echo json_encode(['success' => false, 'error' => 'store_name required']); break; }
+
+        $store = getOrCreateDropshipStore((int)$_SESSION['user_id'], $storeName);
+        echo json_encode($store ? ['success' => true, 'store' => $store] : ['success' => false, 'error' => 'Failed to create store']);
+        break;
+
+    case 'apply':
+        // Apply to a supplier (if auto-approve off)
+        if ($method !== 'POST') { http_response_code(405); echo json_encode(['error' => 'POST required']); break; }
+        requireAuth();
+        if (!verifyCsrf()) { http_response_code(403); echo json_encode(['error' => 'Invalid CSRF token']); break; }
+
+        $supplierId = (int)post('supplier_id');
+        $message    = trim(post('message', ''));
+        if (!$supplierId) { http_response_code(400); echo json_encode(['error' => 'supplier_id required']); break; }
+
+        require_once __DIR__ . '/../includes/dropshipping.php';
+        $store = getOrCreateDropshipStore((int)$_SESSION['user_id']);
+        if (!$store) { echo json_encode(['success' => false, 'error' => 'Create a store first']); break; }
+
+        try {
+            $db->prepare('INSERT IGNORE INTO dropship_applications (dropshipper_id, supplier_id, store_id, message) VALUES (?,?,?,?)')
+               ->execute([$_SESSION['user_id'], $supplierId, $store['id'], $message]);
+            echo json_encode(['success' => true, 'message' => 'Application submitted']);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'error' => 'Application failed or already exists']);
+        }
+        break;
+
+    case 'applications':
+        // Get application status
+        requireAuth();
+        try {
+            $stmt = $db->prepare('SELECT da.*, s.company_name AS supplier_name
+                FROM dropship_applications da
+                LEFT JOIN suppliers s ON s.user_id = da.supplier_id
+                WHERE da.dropshipper_id = ?
+                ORDER BY da.created_at DESC');
+            $stmt->execute([$_SESSION['user_id']]);
+            echo json_encode(['success' => true, 'data' => $stmt->fetchAll()]);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => true, 'data' => []]);
+        }
+        break;
+
+    case 'request_payout':
+        // Request payout from available dropship earnings
+        if ($method !== 'POST') { http_response_code(405); echo json_encode(['error' => 'POST required']); break; }
+        requireAuth();
+        if (!verifyCsrf()) { http_response_code(403); echo json_encode(['error' => 'Invalid CSRF token']); break; }
+        require_once __DIR__ . '/../includes/dropship-payment.php';
+
+        $balance = getDropshipperBalance((int)$_SESSION['user_id']);
+        if ($balance < 50) {
+            echo json_encode(['success' => false, 'error' => 'Minimum payout is $50. Current balance: $' . number_format($balance, 2)]);
+            break;
+        }
+        $result = requestDropshipPayout((int)$_SESSION['user_id'], $balance);
+        echo json_encode($result);
+        break;
+
     default:
         http_response_code(404);
-        echo json_encode(['error' => 'Unknown action']);
+        echo json_encode(['error' => 'Unknown action', 'available' => [
+            'list','catalog','import','update','delete','sync','sync_all',
+            'my_products','orders','order_detail','earnings','analytics',
+            'store','create_store','apply','applications','request_payout',
+            'route','markup_rules','save_prefs','sync_trigger'
+        ]]);
 }

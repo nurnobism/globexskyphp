@@ -330,6 +330,65 @@ foreach ($phase5Js as $f) {
     assertFile("$root/$f");
 }
 
+// ── Phase 6 Dropshipping Engine ──────────────────────────────
+echo "\nPhase 6 Dropshipping Engine:\n";
+$phase6Includes = [
+    'includes/dropshipping.php',
+    'includes/dropship-payment.php',
+];
+foreach ($phase6Includes as $f) {
+    assertFile("$root/$f");
+}
+
+echo "\nPhase 6 database:\n";
+assertFile("$root/database/schema_v4.sql");
+
+echo "\nPhase 6 dropshipping pages:\n";
+$phase6Pages = [
+    'pages/dropshipping/index.php',
+    'pages/dropshipping/products.php',
+    'pages/dropshipping/import.php',
+    'pages/dropshipping/my-products.php',
+    'pages/dropshipping/orders.php',
+    'pages/dropshipping/store.php',
+    'pages/dropshipping/store-preview.php',
+    'pages/dropshipping/earnings.php',
+    'pages/dropshipping/supplier-settings.php',
+    'pages/dropshipping/supplier-dropshippers.php',
+    'pages/dropshipping/supplier-orders.php',
+];
+foreach ($phase6Pages as $f) {
+    assertFile("$root/$f");
+}
+
+echo "\nPhase 6 admin pages:\n";
+$phase6AdminPages = [
+    'pages/admin/dropshipping.php',
+    'pages/admin/dropship-orders.php',
+];
+foreach ($phase6AdminPages as $f) {
+    assertFile("$root/$f");
+}
+
+echo "\nPhase 6 APIs:\n";
+$phase6Apis = [
+    'api/dropshipping.php',
+    'api/dropship-external.php',
+];
+foreach ($phase6Apis as $f) {
+    assertFile("$root/$f");
+}
+
+echo "\nPhase 6 cron:\n";
+assertFile("$root/cron/sync-dropship-products.php");
+
+echo "\nPhase 6 syntax:\n";
+$phase6All = array_merge($phase6Includes, $phase6Pages, $phase6AdminPages, $phase6Apis, ['cron/sync-dropship-products.php']);
+foreach ($phase6All as $f) {
+    assertSyntax("$root/$f");
+}
+
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
