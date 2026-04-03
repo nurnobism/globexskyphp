@@ -268,21 +268,21 @@ switch ($action) {
             break;
         }
 
-        $documentId      = (int)($_POST['document_id'] ?? 0);
-        $docAction       = $_POST['action'] ?? '';
-        $rejectionReason = trim($_POST['rejection_reason'] ?? '');
+        $documentId         = (int)($_POST['document_id'] ?? 0);
+        $verificationStatus = $_POST['action'] ?? '';
+        $rejectionReason    = trim($_POST['rejection_reason'] ?? '');
 
         if ($documentId <= 0) {
             http_response_code(400);
             echo json_encode(['success' => false, 'error' => 'Invalid document ID']);
             break;
         }
-        if (!in_array($docAction, ['verified', 'rejected'], true)) {
+        if (!in_array($verificationStatus, ['verified', 'rejected'], true)) {
             http_response_code(400);
             echo json_encode(['success' => false, 'error' => 'Action must be "verified" or "rejected"']);
             break;
         }
-        if ($docAction === 'rejected' && $rejectionReason === '') {
+        if ($verificationStatus === 'rejected' && $rejectionReason === '') {
             http_response_code(400);
             echo json_encode(['success' => false, 'error' => 'Rejection reason is required']);
             break;
@@ -307,13 +307,13 @@ switch ($action) {
                  WHERE id = ?'
             );
             $stmt->execute([
-                $docAction,
+                $verificationStatus,
                 $adminId,
-                $docAction === 'rejected' ? $rejectionReason : null,
+                $verificationStatus === 'rejected' ? $rejectionReason : null,
                 $documentId,
             ]);
 
-            $auditAction = $docAction === 'verified' ? 'document_verified' : 'document_rejected';
+            $auditAction = $verificationStatus === 'verified' ? 'document_verified' : 'document_rejected';
             logKycAudit($document['kyc_submission_id'], $auditAction, $adminId, [
                 'document_id'      => $documentId,
                 'document_type'    => $document['document_type'],
