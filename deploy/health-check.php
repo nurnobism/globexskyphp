@@ -226,8 +226,9 @@ foreach ($uploadDirs as $dir) {
 // ═══════════════════════════════════════════════════════════════
 if (file_exists($envFile)) {
     $perms = fileperms($envFile) & 0777;
-    // Should be 640 (rw-r-----) or stricter
-    $permsOk = $perms <= 0640;
+    // File should not be world-readable/writable or group-writable
+    // 0022 mask = group-write + other-write+read+execute
+    $permsOk = ($perms & 0137) === 0; // no group-write, no any-other bits
     addCheck(
         '.env file permissions <= 640',
         $permsOk,

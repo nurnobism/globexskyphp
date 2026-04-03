@@ -104,8 +104,9 @@ step "Step 3/10 — MySQL connection check"
 if [ -z "$DB_NAME" ] || echo "$DB_NAME" | grep -qi "fill_in"; then
     warn "DB_NAME not set in .env — skipping MySQL connection check"
 else
-    # Write temporary MySQL config to avoid password in process listing
-    MYSQL_CNF=$(mktemp /tmp/globexsky_mysql_XXXXXX.cnf)
+    # Write temporary MySQL config in home dir with strict permissions (not /tmp)
+    MYSQL_CNF="$HOME/.globexsky_mysql_$$.cnf"
+    touch "$MYSQL_CNF"
     chmod 600 "$MYSQL_CNF"
     cat > "$MYSQL_CNF" <<CFG
 [client]

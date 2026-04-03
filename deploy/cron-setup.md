@@ -181,20 +181,25 @@ Creates a compressed MySQL dump and stores it in `~/backups/`.
 
 **Cron expression:** `0 4 * * *`
 
-**Command:**
+**Command (using `~/.my.cnf` for credentials — recommended):**
 ```
-mkdir -p /home/bidybxoc/backups && mysqldump -h localhost -u bidybxoc_globexsky -pGlobexSky@BDTech101 bidybxoc_globexsky | gzip > /home/bidybxoc/backups/db_$(date +\%Y\%m\%d).sql.gz && find /home/bidybxoc/backups -name "db_*.sql.gz" -mtime +30 -delete >> /home/bidybxoc/logs/cron-backup.log 2>&1
+mkdir -p /home/bidybxoc/backups && mysqldump bidybxoc_globexsky | gzip > /home/bidybxoc/backups/db_$(date +\%Y\%m\%d).sql.gz && find /home/bidybxoc/backups -name "db_*.sql.gz" -mtime +30 -delete >> /home/bidybxoc/logs/cron-backup.log 2>&1
 ```
 
-> **Security Note:** The database password appears in the cron command. Alternatively,
-> create a `~/.my.cnf` file with `chmod 600`:
-> ```ini
-> [client]
-> host=localhost
-> user=bidybxoc_globexsky
-> password=GlobexSky@BDTech101
-> ```
-> Then use: `mysqldump bidybxoc_globexsky | gzip > /home/bidybxoc/backups/db_$(date +\%Y\%m\%d).sql.gz`
+**Setup `~/.my.cnf` first** (run once in cPanel Terminal):
+```bash
+cat > ~/.my.cnf << 'EOF'
+[client]
+host=localhost
+user=bidybxoc_globexsky
+password=YOUR_DB_PASSWORD
+EOF
+chmod 600 ~/.my.cnf
+```
+
+> **Security Note:** Using `~/.my.cnf` keeps credentials out of cron commands and
+> process listings. The `chmod 600` ensures only your account can read this file.
+> Never put plaintext passwords in cron commands.
 
 ---
 

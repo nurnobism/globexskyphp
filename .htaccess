@@ -86,7 +86,10 @@ ServerSignature Off
     Header always unset X-Powered-By
     Header always unset Server
 
-    # Content Security Policy — adjust 'self' origins as needed
+    # Content Security Policy
+    # Note: 'unsafe-inline' is included for Bootstrap and legacy inline styles/scripts.
+    # For stronger XSS protection, implement nonce-based CSP in PHP headers instead.
+    # See includes/middleware.php for the PHP-level CSP nonce implementation.
     Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://js.stripe.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: https:; connect-src 'self' https://api.stripe.com wss:; frame-src https://js.stripe.com https://hooks.stripe.com;"
 </IfModule>
 
@@ -124,8 +127,8 @@ ServerSignature Off
     </IfModule>
 </FilesMatch>
 
-# ── Restrict HTTP Methods ─────────────────────────────────────
-<LimitExcept GET POST HEAD OPTIONS>
+# Restrict HTTP methods — only allow GET, POST, HEAD, OPTIONS and REST verbs
+<LimitExcept GET POST HEAD OPTIONS PUT PATCH DELETE>
     Order allow,deny
     Deny from all
 </LimitExcept>
