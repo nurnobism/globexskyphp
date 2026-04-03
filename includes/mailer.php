@@ -16,6 +16,14 @@ if (file_exists($_phpmailerAutoload)) {
     require_once $_phpmailerAutoload;
 }
 
+// Load mail config constants if not already defined (e.g. in standalone usage)
+if (!defined('MAIL_HOST')) {
+    $mailConfigPath = __DIR__ . '/../config/mail.php';
+    if (file_exists($mailConfigPath)) {
+        require_once $mailConfigPath;
+    }
+}
+
 // Load email templates
 require_once __DIR__ . '/../templates/emails/base.php';
 require_once __DIR__ . '/../templates/emails/welcome.php';

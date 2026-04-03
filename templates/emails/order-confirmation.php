@@ -29,7 +29,8 @@ function emailOrderConfirmation(array $orderData): string
     $placedAt    = $orderData['placed_at'] ?? ($orderData['created_at'] ?? date('Y-m-d H:i:s'));
     $total       = (float) ($orderData['total'] ?? $orderData['total_amount'] ?? 0);
     $shippingAddr = $e((string) ($orderData['shipping_address'] ?? '—'));
-    $formattedDate = date('F j, Y g:i A', strtotime($placedAt));
+    $placedAtTs    = strtotime($placedAt);
+    $formattedDate = $placedAtTs !== false ? date('F j, Y g:i A', $placedAtTs) : $e($placedAt);
     $formattedTotal = '$' . number_format($total, 2);
 
     // Build items rows

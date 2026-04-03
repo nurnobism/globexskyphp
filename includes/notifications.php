@@ -229,13 +229,14 @@ function formatTimeAgo(string $datetime): string
         return '';
     }
 
-    $now  = time();
     $then = strtotime($datetime);
     if ($then === false) {
         return $datetime;
     }
 
+    $now  = time();
     $diff = $now - $then;
+    $currentYear = date('Y');
 
     if ($diff < 60) {
         return 'just now';
@@ -258,7 +259,7 @@ function formatTimeAgo(string $datetime): string
 
     // Older than 7 days: show date
     $year = date('Y', $then);
-    if ($year === date('Y')) {
+    if ($year === $currentYear) {
         return date('M j', $then);           // "Jan 5"
     }
     return date('M j, Y', $then);            // "Jan 5, 2023"
