@@ -1,282 +1,209 @@
 <?php
+/**
+ * pages/ai/index.php — AI Dashboard (Phase 8)
+ */
 require_once __DIR__ . '/../../includes/middleware.php';
 requireLogin();
 
 $db     = getDB();
 $userId = (int)$_SESSION['user_id'];
 
-// Quick stats
+// Stats
+$stats = ['conversations' => 0, 'recommendations' => 0, 'fraud_alerts' => 0, 'content_generated' => 0, 'search_enhancements' => 0, 'tokens_today' => 0, 'cost_today' => 0.0];
 try {
-    $stmt = $db->query("SELECT COUNT(*) FROM admin_logs WHERE action='ai_search'");
-    $aiQueries = (int)$stmt->fetchColumn();
+    $stats['conversations']      = (int)$db->prepare("SELECT COUNT(*) FROM ai_conversations WHERE user_id = ?")->execute([$userId]) ? (int)$db->query("SELECT COUNT(*) FROM ai_conversations WHERE user_id = $userId")->fetchColumn() : 0;
+    $stats['recommendations']    = (int)$db->query("SELECT COUNT(*) FROM ai_recommendations WHERE user_id = $userId")->fetchColumn();
+    $stats['content_generated']  = (int)$db->query("SELECT COUNT(*) FROM ai_content_generations WHERE user_id = $userId")->fetchColumn();
+    $stats['search_enhancements']= (int)$db->query("SELECT COUNT(*) FROM ai_search_logs WHERE user_id = $userId")->fetchColumn();
+    $row = $db->query("SELECT COALESCE(SUM(total_tokens),0) AS tk, COALESCE(SUM(cost_usd),0) AS cost FROM ai_usage WHERE user_id = $userId AND DATE(created_at) = CURDATE()")->fetch(PDO::FETCH_ASSOC);
+    $stats['tokens_today'] = (int)($row['tk'] ?? 0);
+    $stats['cost_today']   = (float)($row['cost'] ?? 0);
+} catch (PDOException $e) {}
 
-    $chatConvos = 0;
-    try {
-        $c = $db->query("SELECT COUNT(DISTINCT conversation_id) FROM ai_chat_history");
-        $chatConvos = (int)$c->fetchColumn();
-    } catch (PDOException $e) {}
+// Recent activity
+$recentActivity = [];
+try {
+    $recentActivity = $db->query("SELECT feature, status, total_tokens, cost_usd, created_at FROM ai_usage WHERE user_id = $userId ORDER BY created_at DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {}
 
-    $fraudAlerts = 0;
-    try {
-        $f = $db->query("SELECT COUNT(*) FROM fraud_flags WHERE risk_level IN ('high','critical') AND status='open'");
-        $fraudAlerts = (int)$f->fetchColumn();
-    } catch (PDOException $e) {}
+// Usage chart data (last 30 days)
+$chartLabels = [];
+$chartData   = [];
+try {
+    $stmt = $db->query("SELECT DATE(created_at) AS d, SUM(total_tokens) AS t FROM ai_usage WHERE user_id = $userId AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) GROUP BY DATE(created_at) ORDER BY d ASC");
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $chartLabels[] = $r['d'];
+        $chartData[]   = (int)$r['t'];
+    }
+} catch (PDOException $e) {}
 
-    $recsServed = 0;
-    try {
-        $r = $db->query("SELECT COUNT(*) FROM admin_logs WHERE action='ai_recommendations'");
-        $recsServed = (int)$r->fetchColumn();
-    } catch (PDOException $e) {}
-} catch (PDOException $e) {
-    $aiQueries = $chatConvos = $fraudAlerts = $recsServed = 0;
-}
-
-$isAdmin   = isAdmin();
-$pageTitle = 'AI Hub';
-include __DIR__ . '/../../includes/header.php';
+require_once __DIR__ . '/../../includes/header.php';
 ?>
+<div class="container-fluid py-4">
+    <div class="d-flex align-items-center mb-4">
+        <i class="bi bi-robot fs-2 text-primary me-3"></i>
+        <div>
+            <h1 class="h3 mb-0">AI Dashboard</h1>
+            <p class="text-muted mb-0">DeepSeek-powered intelligence for your marketplace</p>
+        </div>
+        <div class="ms-auto">
+            <span id="ai-status-badge" class="badge bg-secondary">Checking...</span>
+        </div>
+    </div>
 
-<style>
-    :root { --bs-primary: #FF6B35; }
-    .ai-hero        { background: linear-gradient(135deg, #1B2A4A 0%, #2d4070 50%, #FF6B35 100%); }
-    .feature-card   { border: none; border-radius: 16px; transition: transform .25s, box-shadow .25s; }
-    .feature-card:hover { transform: translateY(-6px); box-shadow: 0 12px 32px rgba(0,0,0,.15); }
-    .stat-card      { border-radius: 16px; border: none; }
-    .stat-icon      { width: 56px; height: 56px; border-radius: 14px; display:flex; align-items:center; justify-content:center; font-size:1.6rem; }
-    .badge-ai       { background: linear-gradient(135deg,#FF6B35,#ff8f65); color:#fff; font-size:.7rem; padding:.25em .55em; border-radius:8px; }
-</style>
-
-<!-- Hero Banner -->
-<div class="ai-hero text-white py-5">
-    <div class="container py-3">
-        <div class="row align-items-center">
-            <div class="col-lg-7">
-                <span class="badge-ai mb-3 d-inline-block">Powered by DeepSeek AI</span>
-                <h1 class="display-5 fw-bold mb-3">AI Hub</h1>
-                <p class="lead text-white-75 mb-4">
-                    Supercharge your GlobexSky experience with intelligent search, personalised recommendations,
-                    real-time fraud protection, and deep business analytics — all powered by AI.
-                </p>
-                <a href="<?= APP_URL ?>/pages/ai/search.php" class="btn btn-warning btn-lg fw-bold me-2 px-4">
-                    <i class="bi bi-search me-1"></i> Try AI Search
-                </a>
-                <a href="<?= APP_URL ?>/pages/ai/chatbot.php" class="btn btn-outline-light btn-lg px-4">
-                    <i class="bi bi-chat-dots me-1"></i> Open Chatbot
-                </a>
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-2">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-chat-dots text-primary fs-3"></i>
+                    <div class="h4 mt-2 mb-0"><?= number_format($stats['conversations']) ?></div>
+                    <small class="text-muted">Conversations</small>
+                </div>
             </div>
-            <div class="col-lg-5 d-none d-lg-flex justify-content-center">
-                <div class="text-center" style="font-size:9rem;opacity:.25;">
-                    <i class="bi bi-cpu-fill"></i>
+        </div>
+        <div class="col-6 col-lg-2">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-stars text-warning fs-3"></i>
+                    <div class="h4 mt-2 mb-0"><?= number_format($stats['recommendations']) ?></div>
+                    <small class="text-muted">Recommendations</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-2">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-shield-exclamation text-danger fs-3"></i>
+                    <div class="h4 mt-2 mb-0"><?= number_format($stats['fraud_alerts']) ?></div>
+                    <small class="text-muted">Fraud Alerts</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-2">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-file-earmark-text text-success fs-3"></i>
+                    <div class="h4 mt-2 mb-0"><?= number_format($stats['content_generated']) ?></div>
+                    <small class="text-muted">Content Generated</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-2">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-search text-info fs-3"></i>
+                    <div class="h4 mt-2 mb-0"><?= number_format($stats['search_enhancements']) ?></div>
+                    <small class="text-muted">AI Searches</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-2">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-lightning-charge text-purple fs-3"></i>
+                    <div class="h4 mt-2 mb-0"><?= number_format($stats['tokens_today']) ?></div>
+                    <small class="text-muted">Tokens Today</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row g-3 mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Quick Actions</h5>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="/pages/ai/chatbot.php" class="btn btn-primary"><i class="bi bi-chat-dots me-2"></i>Start AI Chat</a>
+                        <a href="/pages/ai/content-generator.php" class="btn btn-success"><i class="bi bi-file-earmark-plus me-2"></i>Generate Content</a>
+                        <a href="/pages/ai/analytics.php" class="btn btn-info text-white"><i class="bi bi-graph-up me-2"></i>Analyze Sales</a>
+                        <a href="/pages/ai/recommendations.php" class="btn btn-warning"><i class="bi bi-stars me-2"></i>View Recommendations</a>
+                        <a href="/pages/ai/search.php" class="btn btn-secondary"><i class="bi bi-search me-2"></i>AI Search</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Token Usage Chart -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent border-0 pt-3">
+                    <h5 class="mb-0">Token Usage — Last 30 Days</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="usageChart" height="80"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent border-0 pt-3">
+                    <h5 class="mb-0">Recent AI Activity</h5>
+                </div>
+                <div class="card-body p-0">
+                    <?php if (empty($recentActivity)): ?>
+                        <div class="text-center py-4 text-muted"><i class="bi bi-robot fs-2 d-block mb-2"></i>No AI activity yet</div>
+                    <?php else: ?>
+                    <ul class="list-group list-group-flush">
+                        <?php foreach ($recentActivity as $act): ?>
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-3 py-2">
+                            <div>
+                                <span class="badge bg-light text-dark me-2"><?= e($act['feature']) ?></span>
+                                <small class="text-muted"><?= date('M j, g:i a', strtotime($act['created_at'])) ?></small>
+                            </div>
+                            <small class="text-muted"><?= number_format((int)$act['total_tokens']) ?> tok</small>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<div class="container py-5">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Token usage chart
+const ctx = document.getElementById('usageChart').getContext('2d');
+new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: <?= json_encode($chartLabels) ?>,
+        datasets: [{
+            label: 'Tokens Used',
+            data: <?= json_encode($chartData) ?>,
+            borderColor: '#0d6efd',
+            backgroundColor: 'rgba(13,110,253,0.08)',
+            fill: true,
+            tension: 0.4,
+        }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } } }
+});
 
-    <!-- Stats Row -->
-    <div class="row g-3 mb-5">
-        <?php
-        $statCards = [
-            ['Total AI Queries',          $aiQueries,   'search',       'rgba(255,107,53,.15)',  '#FF6B35'],
-            ['Chatbot Conversations',      $chatConvos,  'chat-dots-fill','rgba(27,42,74,.1)',    '#1B2A4A'],
-            ['High-Risk Fraud Alerts',     $fraudAlerts, 'shield-exclamation','rgba(220,53,69,.1)','#dc3545'],
-            ['Recommendations Served',     $recsServed,  'stars',        'rgba(255,193,7,.15)',   '#ffc107'],
-        ];
-        foreach ($statCards as [$label, $value, $icon, $bg, $color]):
-        ?>
-        <div class="col-sm-6 col-lg-3">
-            <div class="card stat-card shadow-sm h-100">
-                <div class="card-body d-flex align-items-center gap-3 p-4">
-                    <div class="stat-icon" style="background:<?= $bg ?>; color:<?= $color ?>;">
-                        <i class="bi bi-<?= $icon ?>"></i>
-                    </div>
-                    <div>
-                        <div class="fs-3 fw-bold lh-1"><?= number_format($value) ?></div>
-                        <div class="text-muted small"><?= e($label) ?></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <?php endforeach; ?>
-    </div>
-
-    <!-- Feature Cards -->
-    <h4 class="fw-bold mb-4"><i class="bi bi-grid-fill text-warning me-2"></i>AI Features</h4>
-    <div class="row g-4 mb-5">
-
-        <!-- Smart Search -->
-        <div class="col-md-6 col-xl-4">
-            <div class="card feature-card shadow-sm h-100">
-                <div class="card-body p-4">
-                    <div class="d-flex align-items-center gap-3 mb-3">
-                        <div class="stat-icon" style="background:rgba(255,107,53,.12);color:#FF6B35;">
-                            <i class="bi bi-search-heart-fill"></i>
-                        </div>
-                        <div>
-                            <h5 class="mb-0 fw-bold">Smart Search</h5>
-                            <small class="text-muted">Natural language · Voice · Image · Barcode</small>
-                        </div>
-                    </div>
-                    <p class="text-muted small mb-4">
-                        Search products using plain English, upload an image, scan a barcode, or speak your query.
-                        AI extracts filters automatically for instant, relevant results.
-                    </p>
-                    <a href="<?= APP_URL ?>/pages/ai/search.php" class="btn btn-primary w-100">
-                        <i class="bi bi-arrow-right-circle me-1"></i> Open Smart Search
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- AI Chatbot -->
-        <div class="col-md-6 col-xl-4">
-            <div class="card feature-card shadow-sm h-100">
-                <div class="card-body p-4">
-                    <div class="d-flex align-items-center gap-3 mb-3">
-                        <div class="stat-icon" style="background:rgba(27,42,74,.1);color:#1B2A4A;">
-                            <i class="bi bi-robot"></i>
-                        </div>
-                        <div>
-                            <h5 class="mb-0 fw-bold">GlobexBot</h5>
-                            <small class="text-muted">24/7 AI assistant</small>
-                        </div>
-                    </div>
-                    <p class="text-muted small mb-4">
-                        Ask anything about products, orders, suppliers, or trade regulations.
-                        GlobexBot remembers your conversation context and gives instant answers.
-                    </p>
-                    <a href="<?= APP_URL ?>/pages/ai/chatbot.php" class="btn btn-dark w-100">
-                        <i class="bi bi-chat-dots me-1"></i> Start Chatting
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Recommendations -->
-        <div class="col-md-6 col-xl-4">
-            <div class="card feature-card shadow-sm h-100">
-                <div class="card-body p-4">
-                    <div class="d-flex align-items-center gap-3 mb-3">
-                        <div class="stat-icon" style="background:rgba(255,193,7,.15);color:#d49e00;">
-                            <i class="bi bi-stars"></i>
-                        </div>
-                        <div>
-                            <h5 class="mb-0 fw-bold">For You</h5>
-                            <small class="text-muted">Personalised recommendations</small>
-                        </div>
-                    </div>
-                    <p class="text-muted small mb-4">
-                        AI analyses your order history and browsing patterns to surface the products
-                        most likely to match your needs.
-                    </p>
-                    <a href="<?= APP_URL ?>/pages/ai/recommendations.php" class="btn btn-warning w-100 text-dark fw-bold">
-                        <i class="bi bi-lightning-fill me-1"></i> See Recommendations
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <?php if ($isAdmin): ?>
-
-        <!-- Fraud Detection -->
-        <div class="col-md-6 col-xl-4">
-            <div class="card feature-card shadow-sm h-100">
-                <div class="card-body p-4">
-                    <div class="d-flex align-items-center gap-3 mb-3">
-                        <div class="stat-icon" style="background:rgba(220,53,69,.1);color:#dc3545;">
-                            <i class="bi bi-shield-shaded"></i>
-                        </div>
-                        <div>
-                            <h5 class="mb-0 fw-bold">Fraud Detection</h5>
-                            <small class="text-muted">Admin · Real-time risk scoring</small>
-                        </div>
-                    </div>
-                    <p class="text-muted small mb-4">
-                        AI evaluates every transaction for fraud indicators and assigns a risk score,
-                        helping you act before losses occur.
-                    </p>
-                    <a href="<?= APP_URL ?>/pages/ai/fraud-detection.php" class="btn btn-danger w-100">
-                        <i class="bi bi-shield-check me-1"></i> View Fraud Dashboard
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Business Insights -->
-        <div class="col-md-6 col-xl-4">
-            <div class="card feature-card shadow-sm h-100">
-                <div class="card-body p-4">
-                    <div class="d-flex align-items-center gap-3 mb-3">
-                        <div class="stat-icon" style="background:rgba(25,135,84,.1);color:#198754;">
-                            <i class="bi bi-lightbulb-fill"></i>
-                        </div>
-                        <div>
-                            <h5 class="mb-0 fw-bold">Business Insights</h5>
-                            <small class="text-muted">Admin · Trends & predictions</small>
-                        </div>
-                    </div>
-                    <p class="text-muted small mb-4">
-                        Get AI-generated summaries of sales trends, revenue predictions,
-                        and prioritised growth recommendations tailored to your data.
-                    </p>
-                    <a href="<?= APP_URL ?>/pages/ai/insights.php" class="btn btn-success w-100">
-                        <i class="bi bi-graph-up-arrow me-1"></i> View Insights
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- AI Analytics -->
-        <div class="col-md-6 col-xl-4">
-            <div class="card feature-card shadow-sm h-100">
-                <div class="card-body p-4">
-                    <div class="d-flex align-items-center gap-3 mb-3">
-                        <div class="stat-icon" style="background:rgba(13,110,253,.1);color:#0d6efd;">
-                            <i class="bi bi-bar-chart-fill"></i>
-                        </div>
-                        <div>
-                            <h5 class="mb-0 fw-bold">AI Analytics</h5>
-                            <small class="text-muted">Admin · Ask your data</small>
-                        </div>
-                    </div>
-                    <p class="text-muted small mb-4">
-                        Ask questions in plain English and get instant AI explanations of your charts,
-                        trends, and KPIs — no SQL needed.
-                    </p>
-                    <a href="<?= APP_URL ?>/pages/ai/analytics.php" class="btn btn-primary w-100">
-                        <i class="bi bi-chat-square-text me-1"></i> Explore Analytics
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <?php endif; ?>
-
-    </div>
-
-    <!-- Quick Tips -->
-    <div class="card border-0 rounded-4" style="background:linear-gradient(135deg,#1B2A4A,#2d4070);">
-        <div class="card-body p-4 p-lg-5 text-white">
-            <div class="row align-items-center">
-                <div class="col-lg-8">
-                    <h5 class="fw-bold mb-2"><i class="bi bi-info-circle me-2 text-warning"></i>How AI Powers GlobexSky</h5>
-                    <p class="text-white-75 mb-0">
-                        Our AI features use <strong>DeepSeek</strong> — a state-of-the-art large language model.
-                        Your data is processed securely and is never used to train external models.
-                        AI suggestions are advisory; always verify before taking business decisions.
-                    </p>
-                </div>
-                <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
-                    <a href="<?= APP_URL ?>/pages/ai/chatbot.php" class="btn btn-warning fw-bold px-4">
-                        <i class="bi bi-robot me-1"></i> Ask GlobexBot
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-</div>
-
-<?php include __DIR__ . '/../../includes/footer.php'; ?>
+// Check AI status
+fetch('/api/ai/analytics.php?action=health')
+    .then(r => r.json())
+    .then(d => {
+        const badge = document.getElementById('ai-status-badge');
+        if (d.success) {
+            const s = d.data?.status || 'unknown';
+            const colors = { healthy: 'success', degraded: 'warning', critical: 'danger', unknown: 'secondary' };
+            badge.className = 'badge bg-' + (colors[s] || 'secondary');
+            badge.textContent = 'AI ' + s.charAt(0).toUpperCase() + s.slice(1);
+        } else {
+            badge.className = 'badge bg-secondary'; badge.textContent = 'AI Available';
+        }
+    }).catch(() => {
+        const badge = document.getElementById('ai-status-badge');
+        badge.className = 'badge bg-secondary'; badge.textContent = 'AI Available';
+    });
+</script>
+<?php require_once __DIR__ . '/../../includes/footer.php'; ?>
