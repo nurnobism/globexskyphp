@@ -196,8 +196,8 @@ class SecureSession
     private static function buildFingerprint(): string
     {
         $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
-        // Use only the first two octets of the IP to tolerate NAT reassignment
-        $ip = implode('.', array_slice(explode('.', $_SERVER['REMOTE_ADDR'] ?? ''), 0, 2));
+        // Use the first three octets of the IP to balance NAT tolerance with security
+        $ip = implode('.', array_slice(explode('.', $_SERVER['REMOTE_ADDR'] ?? ''), 0, 3));
         return hash('sha256', $ua . '|' . $ip);
     }
 }

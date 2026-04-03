@@ -144,11 +144,15 @@ class QueryOptimizer
 
     /**
      * Run EXPLAIN on a SELECT query and return the result rows.
+     * Only SELECT statements are accepted; others return an empty array.
      */
     public function explain(string $sql): array
     {
+        if (!preg_match('/^\s*SELECT\b/i', $sql)) {
+            return [];
+        }
         try {
-            $stmt = $this->db->query("EXPLAIN {$sql}");
+            $stmt = $this->db->query("EXPLAIN " . $sql);
             return $stmt->fetchAll();
         } catch (PDOException) {
             return [];

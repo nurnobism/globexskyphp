@@ -85,7 +85,8 @@ function clearOpcacheIfNeeded(bool $force = false): bool
         }
     }
 
-    $sentinelMtime = is_file($sentinelFile) ? (int) file_get_contents($sentinelFile) : 0;
+    $sentinelRaw   = is_file($sentinelFile) ? file_get_contents($sentinelFile) : false;
+    $sentinelMtime = ($sentinelRaw !== false) ? (int) $sentinelRaw : 0;
 
     if ($force || $latestMtime > $sentinelMtime) {
         opcache_reset();

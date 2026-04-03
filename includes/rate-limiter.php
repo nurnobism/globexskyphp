@@ -59,21 +59,25 @@ class RateLimiter
     /**
      * Record one attempt for the key.
      */
-    public function hit(string $key): void
+    public function hit(string $key, int $decayMinutes = 15): void
     {
-        $now = date('Y-m-d H:i:s');
+        $now       = date('Y-m-d H:i:s');
+        $expiresAt = date('Y-m-d H:i:s', strtotime("+{$decayMinutes} minutes"));
 
         $stmt = $this->db->prepare(
             "INSERT INTO rate_limits (rate_key, attempts, last_attempt_at, expires_at)
-             VALUES (:key, 1, :now, :now)
+             VALUES (:key, 1, :now, :expires)
              ON DUPLICATE KEY UPDATE
                  attempts        = attempts + 1,
-                 last_attempt_at = :now2"
+                 last_attempt_at = :now2,
+                 expires_at      = :expires2"
         );
         $stmt->execute([
-            ':key'  => $key,
-            ':now'  => $now,
-            ':now2' => $now,
+            ':key'     => $key,
+            ':now'     => $now,
+            ':expires' => $expiresAt,
+            ':now2'    => $now,
+            ':expires2'=> $expiresAt,
         ]);
     }
 
