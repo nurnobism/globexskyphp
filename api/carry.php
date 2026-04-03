@@ -102,6 +102,154 @@ switch ($action) {
         $stmt->execute([$userId]);
         jsonResponse(['success' => true, 'earnings' => $stmt->fetch(PDO::FETCH_ASSOC)]);
 
+    case 'add_trip':
+        requireAuth();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'POST required'], 405);
+        verifyCsrf();
+        $userId          = $_SESSION['user_id'];
+        $departureCity   = trim($_POST['departure_city'] ?? '');
+        $departureCountry = trim($_POST['departure_country'] ?? '');
+        $arrivalCity     = trim($_POST['arrival_city'] ?? '');
+        $arrivalCountry  = trim($_POST['arrival_country'] ?? '');
+        $travelDate      = trim($_POST['travel_date'] ?? '');
+        $capacityKg      = (float)($_POST['available_capacity_kg'] ?? 0);
+        $pricePerKg      = (float)($_POST['price_per_kg'] ?? 0);
+        $transportMode   = trim($_POST['transport_mode'] ?? 'air');
+        $notes           = trim($_POST['notes'] ?? '');
+        if (!$departureCity || !$arrivalCity || !$travelDate || $capacityKg <= 0) {
+            jsonResponse(['error' => 'Required fields missing'], 422);
+        }
+        try {
+            $carrierCheck = $db->prepare("SELECT id FROM carriers WHERE user_id=? AND status='active'");
+            $carrierCheck->execute([$userId]);
+            if (!$carrierCheck->fetch()) jsonResponse(['error' => 'Active carrier profile required'], 403);
+            $stmt = $db->prepare("INSERT INTO carrier_trips (user_id, departure_city, departure_country, arrival_city, arrival_country, travel_date, available_capacity_kg, price_per_kg, transport_mode, notes, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,'active',NOW())");
+            $stmt->execute([$userId, $departureCity, $departureCountry, $arrivalCity, $arrivalCountry, $travelDate, $capacityKg, $pricePerKg, $transportMode, $notes]);
+            jsonResponse(['success' => true, 'trip_id' => $db->lastInsertId()]);
+        } catch (Exception $e) {
+            jsonResponse(['error' => 'Database error'], 500);
+        }
+
+    case 'post_request':
+        requireAuth();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'POST required'], 405);
+        verifyCsrf();
+        $userId          = $_SESSION['user_id'];
+        $title           = trim($_POST['title'] ?? '');
+        $description     = trim($_POST['description'] ?? '');
+        $category        = trim($_POST['category'] ?? '');
+        $weightKg        = (float)($_POST['weight_kg'] ?? 0);
+        $fromCity        = trim($_POST['from_city'] ?? '');
+        $fromCountry     = trim($_POST['from_country'] ?? '');
+        $toCity          = trim($_POST['to_city'] ?? '');
+        $toCountry       = trim($_POST['to_country'] ?? '');
+        $preferredFrom   = trim($_POST['preferred_date_from'] ?? '');
+        $preferredTo     = trim($_POST['preferred_date_to'] ?? '');
+        $budget          = (float)($_POST['budget'] ?? 0);
+        $specialHandling = trim($_POST['special_handling'] ?? '');
+        if (!$title || !$fromCity || !$toCity) jsonResponse(['error' => 'Required fields missing'], 422);
+        try {
+            $stmt = $db->prepare("INSERT INTO carry_requests (user_id, title, description, category, weight_kg, from_city, from_country, to_city, to_country, preferred_date_from, preferred_date_to, budget, special_handling, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'open',NOW())");
+            $stmt->execute([$userId, $title, $description, $category, $weightKg, $fromCity, $fromCountry, $toCity, $toCountry, $preferredFrom ?: null, $preferredTo ?: null, $budget ?: null, $specialHandling]);
+            jsonResponse(['success' => true, 'request_id' => $db->lastInsertId()]);
+        } catch (Exception $e) {
+            jsonResponse(['error' => 'Database error'], 500);
+        }
+
+    case 'browse_requests':
+        try {
+            $stmt = $db->prepare("SELECT cr.*, u.full_name AS sender_name FROM carry_requests cr JOIN users u ON cr.user_id = u.id WHERE cr.status='open' ORDER BY cr.created_at DESC LIMIT 50");
+            $stmt->execute();
+            jsonResponse(['success' => true, 'requests' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+        } catch (Exception $e) {
+            jsonResponse(['error' => 'Database error'], 500);
+        }
+
+    case 'accept_request':
+        requireAuth();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'POST required'], 405);
+        verifyCsrf();
+        $userId    = $_SESSION['user_id'];
+        $requestId = (int)($_POST['request_id'] ?? 0);
+        if (!$requestId) jsonResponse(['error' => 'request_id required'], 422);
+        try {
+            $carrierStmt = $db->prepare("SELECT id FROM carriers WHERE user_id=? AND status='active'");
+            $carrierStmt->execute([$userId]);
+            $carrier = $carrierStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$carrier) jsonResponse(['error' => 'Active carrier profile required'], 403);
+            $carrierId = $carrier['id'];
+            $tripStmt = $db->prepare("SELECT id FROM carrier_trips WHERE user_id=? AND status='active' AND travel_date >= CURDATE() LIMIT 1");
+            $tripStmt->execute([$userId]);
+            $trip = $tripStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$trip) jsonResponse(['error' => 'No active trip found'], 404);
+            $reqStmt = $db->prepare("SELECT id, user_id FROM carry_requests WHERE id=? AND status='open'");
+            $reqStmt->execute([$requestId]);
+            $req = $reqStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$req) jsonResponse(['error' => 'Request not found or already matched'], 404);
+            $matchStmt = $db->prepare("INSERT INTO carry_matches (request_id, trip_id, carrier_id, sender_id, status, created_at) VALUES (?,?,?,?,'pending',NOW())");
+            $matchStmt->execute([$requestId, $trip['id'], $carrierId, $req['user_id']]);
+            $matchId = $db->lastInsertId();
+            $updStmt = $db->prepare("UPDATE carry_requests SET status='matched' WHERE id=?");
+            $updStmt->execute([$requestId]);
+            jsonResponse(['success' => true, 'match_id' => $matchId]);
+        } catch (Exception $e) {
+            jsonResponse(['error' => 'Database error'], 500);
+        }
+
+    case 'update_match_status':
+        requireAuth();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'POST required'], 405);
+        verifyCsrf();
+        $userId    = $_SESSION['user_id'];
+        $matchId   = (int)($_POST['match_id'] ?? 0);
+        $newStatus = trim($_POST['new_status'] ?? '');
+        if (!$matchId || !$newStatus) jsonResponse(['error' => 'match_id and new_status required'], 422);
+        try {
+            $carrierStmt = $db->prepare("SELECT id FROM carriers WHERE user_id=? AND status='active'");
+            $carrierStmt->execute([$userId]);
+            $carrier = $carrierStmt->fetch(PDO::FETCH_ASSOC);
+            $carrierId = $carrier ? $carrier['id'] : null;
+            $checkStmt = $db->prepare("SELECT id FROM carry_matches WHERE id=? AND (carrier_id=? OR sender_id=?)");
+            $checkStmt->execute([$matchId, $carrierId ?? 0, $userId]);
+            if (!$checkStmt->fetch()) jsonResponse(['error' => 'Match not found or access denied'], 403);
+            $stmt = $db->prepare("UPDATE carry_matches SET status=? WHERE id=?");
+            $stmt->execute([$newStatus, $matchId]);
+            jsonResponse(['success' => true]);
+        } catch (Exception $e) {
+            jsonResponse(['error' => 'Database error'], 500);
+        }
+
+    case 'dashboard_stats':
+        requireAuth();
+        $userId = $_SESSION['user_id'];
+        try {
+            $carrierStmt = $db->prepare("SELECT id FROM carriers WHERE user_id=? AND status='active'");
+            $carrierStmt->execute([$userId]);
+            $carrier   = $carrierStmt->fetch(PDO::FETCH_ASSOC);
+            $carrierId = $carrier ? $carrier['id'] : null;
+            $tripCount = 0;
+            if ($carrierId) {
+                $tripStmt = $db->prepare("SELECT COUNT(*) FROM carrier_trips WHERE user_id=? AND status='active'");
+                $tripStmt->execute([$userId]);
+                $tripCount = (int)$tripStmt->fetchColumn();
+            }
+            $reqStmt = $db->prepare("SELECT COUNT(*) FROM carry_requests WHERE user_id=? AND status='open'");
+            $reqStmt->execute([$userId]);
+            $activeRequests = (int)$reqStmt->fetchColumn();
+            $earnStmt = $db->prepare("SELECT COALESCE(SUM(earning),0) AS total_earnings, COALESCE(SUM(CASE WHEN paid=0 THEN earning END),0) AS pending_payout FROM carrier_earnings WHERE user_id=?");
+            $earnStmt->execute([$userId]);
+            $earnings = $earnStmt->fetch(PDO::FETCH_ASSOC);
+            jsonResponse([
+                'success'         => true,
+                'trip_count'      => $tripCount,
+                'active_requests' => $activeRequests,
+                'total_earnings'  => (float)($earnings['total_earnings'] ?? 0),
+                'pending_payout'  => (float)($earnings['pending_payout'] ?? 0),
+            ]);
+        } catch (Exception $e) {
+            jsonResponse(['error' => 'Database error'], 500);
+        }
+
     default:
         jsonResponse(['error' => 'Invalid action'], 400);
 }

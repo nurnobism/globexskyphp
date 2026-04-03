@@ -105,6 +105,80 @@ switch ($action) {
         $stmt->execute([$userId]);
         jsonResponse(['success' => true, 'history' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
 
+    case 'cancel':
+        requireAuth();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'POST required'], 405);
+        verifyCsrf();
+        $userId     = $_SESSION['user_id'];
+        $shipmentId = (int)($_POST['shipment_id'] ?? 0);
+        if (!$shipmentId) jsonResponse(['error' => 'shipment_id required'], 422);
+        try {
+            $stmt = $db->prepare("UPDATE parcel_shipments SET status='cancelled' WHERE id=? AND user_id=? AND status IN ('pending','processing')");
+            $stmt->execute([$shipmentId, $userId]);
+            if ($stmt->rowCount() === 0) jsonResponse(['error' => 'Shipment not found or cannot be cancelled'], 404);
+            jsonResponse(['success' => true]);
+        } catch (Exception $e) {
+            jsonResponse(['error' => 'Database error'], 500);
+        }
+
+    case 'update_status':
+        requireAdmin();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'POST required'], 405);
+        verifyCsrf();
+        $shipmentId  = (int)($_POST['shipment_id'] ?? 0);
+        $newStatus   = trim($_POST['new_status'] ?? '');
+        $location    = trim($_POST['location'] ?? '');
+        $description = trim($_POST['description'] ?? '');
+        if (!$shipmentId || !$newStatus) jsonResponse(['error' => 'shipment_id and new_status required'], 422);
+        try {
+            $stmt = $db->prepare("UPDATE parcel_shipments SET status=? WHERE id=?");
+            $stmt->execute([$newStatus, $shipmentId]);
+            $stmt2 = $db->prepare("INSERT INTO parcel_tracking_events (shipment_id, status, location, description, created_at) VALUES (?,?,?,?,NOW())");
+            $stmt2->execute([$shipmentId, $newStatus, $location, $description]);
+            jsonResponse(['success' => true]);
+        } catch (Exception $e) {
+            jsonResponse(['error' => 'Database error'], 500);
+        }
+
+    case 'add_tracking_event':
+        requireAuth();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonResponse(['error' => 'POST required'], 405);
+        verifyCsrf();
+        $userId      = $_SESSION['user_id'];
+        $shipmentId  = (int)($_POST['shipment_id'] ?? 0);
+        $status      = trim($_POST['status'] ?? '');
+        $location    = trim($_POST['location'] ?? '');
+        $description = trim($_POST['description'] ?? '');
+        if (!$shipmentId || !$status) jsonResponse(['error' => 'shipment_id and status required'], 422);
+        try {
+            $adminCheck = $db->prepare("SELECT role FROM users WHERE id=?");
+            $adminCheck->execute([$userId]);
+            $userRow = $adminCheck->fetch(PDO::FETCH_ASSOC);
+            if (!$userRow || !in_array($userRow['role'] ?? '', ['admin', 'carrier'])) {
+                jsonResponse(['error' => 'Admin or carrier access required'], 403);
+            }
+            $stmt = $db->prepare("INSERT INTO parcel_tracking_events (shipment_id, status, location, description, created_at) VALUES (?,?,?,?,NOW())");
+            $stmt->execute([$shipmentId, $status, $location, $description]);
+            jsonResponse(['success' => true, 'event_id' => $db->lastInsertId()]);
+        } catch (Exception $e) {
+            jsonResponse(['error' => 'Database error'], 500);
+        }
+
+    case 'get_rates':
+        if ($_SERVER['REQUEST_METHOD'] !== 'GET') jsonResponse(['error' => 'GET required'], 405);
+        $fromCountry = trim($_GET['from_country'] ?? '');
+        $toCountry   = trim($_GET['to_country'] ?? '');
+        if (!$fromCountry || !$toCountry) jsonResponse(['error' => 'from_country and to_country required'], 422);
+        try {
+            $stmt = $db->prepare("SELECT * FROM shipping_rates WHERE origin_country=? AND destination_country=?");
+            $stmt->execute([$fromCountry, $toCountry]);
+            $rate = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$rate) jsonResponse(['error' => 'No rate found for this route'], 404);
+            jsonResponse(['success' => true, 'rate' => $rate]);
+        } catch (Exception $e) {
+            jsonResponse(['error' => 'Database error'], 500);
+        }
+
     default:
         jsonResponse(['error' => 'Invalid action'], 400);
 }
