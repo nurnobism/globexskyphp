@@ -102,7 +102,7 @@ $fallbackCurrencies = [
                 </div>
 
                 <!-- Search bar -->
-                <div class="col">
+                <div class="col d-flex justify-content-center">
                     <form action="<?= APP_URL ?>/pages/product/index.php" method="GET" class="gs-search-form">
                         <div class="gs-search-inner d-flex align-items-center">
                             <input type="text" name="q" class="gs-search-input form-control border-0 shadow-none"
@@ -110,18 +110,18 @@ $fallbackCurrencies = [
                                    value="<?= e(get('q', '')) ?>">
                             <!-- Search-tool icons (right side inside input) -->
                             <div class="gs-search-icons d-none d-md-flex align-items-center gap-1 px-2">
-                                <button type="button" class="gs-search-icon-btn" title="Voice Search (coming soon)" aria-label="Voice Search (coming soon)" disabled aria-disabled="true" tabindex="-1">
+                                <button type="button" class="gs-search-icon-btn" title="Voice Search" aria-label="Voice Search" data-bs-toggle="modal" data-bs-target="#voiceSearchModal">
                                     <i class="bi bi-mic" aria-hidden="true"></i>
                                 </button>
-                                <button type="button" class="gs-search-icon-btn" title="Image Search (coming soon)" aria-label="Image Search (coming soon)" disabled aria-disabled="true" tabindex="-1">
+                                <button type="button" class="gs-search-icon-btn" title="Image Search" aria-label="Image Search" data-bs-toggle="modal" data-bs-target="#imageSearchModal">
                                     <i class="bi bi-camera" aria-hidden="true"></i>
                                 </button>
-                                <a href="<?= APP_URL ?>/pages/barcode-scanner/index.php" class="gs-search-icon-btn" title="Barcode Scan">
-                                    <i class="bi bi-upc-scan"></i>
-                                </a>
-                                <a href="<?= APP_URL ?>/pages/ai/search.php" class="gs-search-icon-btn" title="AI Search">
-                                    <i class="bi bi-robot"></i>
-                                </a>
+                                <button type="button" class="gs-search-icon-btn" title="QR / Barcode Search" aria-label="QR / Barcode Search" data-bs-toggle="modal" data-bs-target="#qrSearchModal">
+                                    <i class="bi bi-upc-scan" aria-hidden="true"></i>
+                                </button>
+                                <button type="button" class="gs-search-icon-btn" title="AI Smart Search" aria-label="AI Smart Search" data-bs-toggle="modal" data-bs-target="#aiSearchModal">
+                                    <i class="bi bi-robot" aria-hidden="true"></i>
+                                </button>
                             </div>
                             <button type="submit" class="gs-search-btn btn btn-primary">
                                 <i class="bi bi-search"></i>
@@ -374,7 +374,7 @@ $fallbackCurrencies = [
             <ul class="gs-catbar-list list-unstyled d-flex align-items-center mb-0">
                 <li>
                     <a href="<?= APP_URL ?>/pages/sourcing/index.php" class="gs-cat-link">
-                        Sourcing
+                        <i class="bi bi-factory"></i> Sourcing
                     </a>
                 </li>
                 <li>
@@ -536,4 +536,276 @@ $fallbackCurrencies = [
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 <?php endforeach; ?>
+
+<!-- ── Voice Search Modal ── -->
+<div class="modal fade" id="voiceSearchModal" tabindex="-1" aria-labelledby="voiceSearchModalLabel" aria-modal="true" role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title" id="voiceSearchModalLabel"><i class="bi bi-mic-fill text-danger me-2"></i>Voice Search</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <p class="text-muted mb-4">Click the microphone and speak your search query</p>
+                <button id="gsStartVoiceBtn" class="btn btn-outline-danger btn-lg rounded-circle p-3 mb-3" aria-label="Start voice search">
+                    <i class="bi bi-mic fs-2"></i>
+                </button>
+                <p id="gsVoiceStatus" class="text-muted small mt-2">Press the button and start speaking</p>
+                <p id="gsVoiceResult" class="fw-semibold mt-2 d-none"></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Image Search Modal ── -->
+<div class="modal fade" id="imageSearchModal" tabindex="-1" aria-labelledby="imageSearchModalLabel" aria-modal="true" role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title" id="imageSearchModalLabel"><i class="bi bi-camera-fill text-primary me-2"></i>Search by Image</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Upload an image to find similar products</p>
+                <div id="gsImageUploadArea" class="border border-2 border-dashed rounded-3 text-center p-4 mb-3" style="cursor:pointer;border-style:dashed!important">
+                    <i class="bi bi-cloud-arrow-up fs-2 text-muted"></i>
+                    <p class="mb-0 mt-2 text-muted">Drag &amp; drop or click to upload</p>
+                </div>
+                <input type="file" id="gsImageFileInput" accept="image/*" class="d-none">
+                <p id="gsImageFileName" class="small text-success d-none"></p>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="gsImageSearchBtn" class="btn btn-primary" disabled>
+                    <i class="bi bi-search me-1"></i>Search
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── QR / Barcode Search Modal ── -->
+<div class="modal fade" id="qrSearchModal" tabindex="-1" aria-labelledby="qrSearchModalLabel" aria-modal="true" role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title" id="qrSearchModalLabel"><i class="bi bi-upc-scan text-success me-2"></i>Scan QR Code or Barcode</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Upload a barcode/QR image or enter the code manually</p>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Upload barcode / QR image</label>
+                    <input type="file" id="gsQrFileInput" class="form-control" accept="image/*" capture="environment">
+                    <div class="form-text">On mobile, this opens the camera. On desktop, select an image file.</div>
+                </div>
+                <div class="text-center text-muted my-2">— or —</div>
+                <div class="mb-3">
+                    <label for="gsQrTextInput" class="form-label fw-semibold">Enter barcode number</label>
+                    <input type="text" id="gsQrTextInput" class="form-control" placeholder="e.g. 0123456789012">
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="gsQrSearchBtn" class="btn btn-success">
+                    <i class="bi bi-search me-1"></i>Search
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── AI Smart Search Modal ── -->
+<div class="modal fade" id="aiSearchModal" tabindex="-1" aria-labelledby="aiSearchModalLabel" aria-modal="true" role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title" id="aiSearchModalLabel">🤖 AI-Powered Smart Search</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Describe what you're looking for in your own words</p>
+                <textarea id="gsAiSearchText" class="form-control" rows="4"
+                          placeholder="e.g. I need waterproof LED lights for outdoor use, minimum 50W, IP67 rated..."></textarea>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="gsAiSearchBtn" class="btn btn-primary">
+                    <i class="bi bi-stars me-1"></i>Search with AI
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    /* ── Helpers ── */
+    var gsBaseUrl = <?= json_encode(rtrim(APP_URL, '/')) ?>;
+    function getSearchInput() {
+        return document.querySelector('.gs-search-input') || document.querySelector('input[name="q"]');
+    }
+    function redirectSearch(q, extra) {
+        var params = new URLSearchParams({ q: q });
+        if (extra) { Object.keys(extra).forEach(function(k){ params.set(k, extra[k]); }); }
+        window.location.href = gsBaseUrl + '/pages/product/index.php?' + params.toString();
+    }
+
+    /* ── Voice Search ── */
+    var voiceModal = document.getElementById('voiceSearchModal');
+    if (voiceModal) {
+        var startBtn  = document.getElementById('gsStartVoiceBtn');
+        var statusEl  = document.getElementById('gsVoiceStatus');
+        var resultEl  = document.getElementById('gsVoiceResult');
+        var recognition = null;
+
+        voiceModal.addEventListener('hidden.bs.modal', function () {
+            if (recognition) { try { recognition.stop(); } catch(e){} }
+            statusEl.textContent = 'Press the button and start speaking';
+            statusEl.className = 'text-muted small mt-2';
+            resultEl.classList.add('d-none');
+            resultEl.textContent = '';
+            startBtn.classList.remove('btn-danger');
+            startBtn.classList.add('btn-outline-danger');
+        });
+
+        startBtn.addEventListener('click', function () {
+            var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                statusEl.textContent = 'Voice search is not supported in this browser. Please use Chrome or Edge.';
+                statusEl.className = 'text-danger small mt-2';
+                return;
+            }
+            recognition = new SpeechRecognition();
+            recognition.lang = navigator.language || 'en-US';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+
+            startBtn.classList.remove('btn-outline-danger');
+            startBtn.classList.add('btn-danger');
+            statusEl.textContent = 'Listening… speak now';
+            resultEl.classList.add('d-none');
+
+            recognition.onresult = function (e) {
+                var transcript = e.results[0][0].transcript;
+                var inp = getSearchInput();
+                if (inp) { inp.value = transcript; }
+                resultEl.textContent = '"' + transcript + '"';
+                resultEl.classList.remove('d-none');
+                statusEl.textContent = 'Got it! Searching…';
+                var modal = bootstrap.Modal.getInstance(voiceModal);
+                if (modal) { modal.hide(); }
+                redirectSearch(transcript);
+            };
+            recognition.onerror = function (e) {
+                statusEl.textContent = 'Error: ' + (e.error || 'unknown') + '. Try again.';
+                startBtn.classList.remove('btn-danger');
+                startBtn.classList.add('btn-outline-danger');
+            };
+            recognition.onend = function () {
+                startBtn.classList.remove('btn-danger');
+                startBtn.classList.add('btn-outline-danger');
+            };
+            recognition.start();
+        });
+    }
+
+    /* ── Image Search ── */
+    var imageModal = document.getElementById('imageSearchModal');
+    if (imageModal) {
+        var uploadArea    = document.getElementById('gsImageUploadArea');
+        var fileInput     = document.getElementById('gsImageFileInput');
+        var fileNameEl    = document.getElementById('gsImageFileName');
+        var imageSearchBtn = document.getElementById('gsImageSearchBtn');
+        var selectedFile  = null;
+
+        imageModal.addEventListener('hidden.bs.modal', function () {
+            fileInput.value = '';
+            fileNameEl.classList.add('d-none');
+            fileNameEl.textContent = '';
+            imageSearchBtn.disabled = true;
+            selectedFile = null;
+        });
+
+        uploadArea.addEventListener('click', function () { fileInput.click(); });
+        uploadArea.addEventListener('dragover', function (e) { e.preventDefault(); uploadArea.classList.add('bg-light'); });
+        uploadArea.addEventListener('dragleave', function () { uploadArea.classList.remove('bg-light'); });
+        uploadArea.addEventListener('drop', function (e) {
+            e.preventDefault();
+            uploadArea.classList.remove('bg-light');
+            var f = e.dataTransfer.files[0];
+            if (f && f.type.startsWith('image/')) { handleImageFile(f); }
+        });
+        fileInput.addEventListener('change', function () {
+            if (fileInput.files[0]) { handleImageFile(fileInput.files[0]); }
+        });
+
+        function handleImageFile(f) {
+            selectedFile = f;
+            fileNameEl.textContent = '✓ ' + f.name;
+            fileNameEl.classList.remove('d-none');
+            imageSearchBtn.disabled = false;
+        }
+
+        imageSearchBtn.addEventListener('click', function () {
+            if (!selectedFile) { return; }
+            redirectSearch(selectedFile.name.replace(/\.[^.]+$/, ''), { search_type: 'image' });
+        });
+    }
+
+    /* ── QR / Barcode Search ── */
+    var qrModal = document.getElementById('qrSearchModal');
+    if (qrModal) {
+        var qrSearchBtn = document.getElementById('gsQrSearchBtn');
+        var qrFileInput = document.getElementById('gsQrFileInput');
+        var qrTextInput = document.getElementById('gsQrTextInput');
+
+        qrModal.addEventListener('hidden.bs.modal', function () {
+            qrFileInput.value = '';
+            qrTextInput.value = '';
+        });
+
+        qrSearchBtn.addEventListener('click', function () {
+            var code = qrTextInput.value.trim();
+            if (code) {
+                var modal = bootstrap.Modal.getInstance(qrModal);
+                if (modal) { modal.hide(); }
+                redirectSearch(code, { search_type: 'barcode' });
+            } else if (qrFileInput.files[0]) {
+                var modal = bootstrap.Modal.getInstance(qrModal);
+                if (modal) { modal.hide(); }
+                redirectSearch(qrFileInput.files[0].name.replace(/\.[^.]+$/, ''), { search_type: 'barcode' });
+            } else {
+                qrTextInput.focus();
+            }
+        });
+    }
+
+    /* ── AI Smart Search ── */
+    var aiModal = document.getElementById('aiSearchModal');
+    if (aiModal) {
+        var aiSearchBtn  = document.getElementById('gsAiSearchBtn');
+        var aiSearchText = document.getElementById('gsAiSearchText');
+
+        aiModal.addEventListener('hidden.bs.modal', function () {
+            aiSearchText.value = '';
+        });
+
+        aiSearchBtn.addEventListener('click', function () {
+            var query = aiSearchText.value.trim();
+            if (!query) { aiSearchText.focus(); return; }
+            var modal = bootstrap.Modal.getInstance(aiModal);
+            if (modal) { modal.hide(); }
+            redirectSearch(query, { search_type: 'ai' });
+        });
+
+        aiSearchText.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { aiSearchBtn.click(); }
+        });
+    }
+}());
+</script>
+
 
