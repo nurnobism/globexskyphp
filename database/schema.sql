@@ -247,6 +247,8 @@ CREATE TABLE IF NOT EXISTS orders (
     currency        CHAR(3) NOT NULL DEFAULT 'USD',
     payment_status  ENUM('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending',
     payment_method  VARCHAR(100),
+    shipping_method ENUM('standard','express','priority') DEFAULT 'standard',
+    stripe_payment_intent_id VARCHAR(255) DEFAULT NULL,
     shipping_address JSON,
     billing_address JSON,
     notes           TEXT,
@@ -1157,3 +1159,68 @@ INSERT IGNORE INTO system_settings (setting_key, setting_value, setting_group) V
 ('registration_enabled', '1',                        'general'),
 ('contact_email',      'support@globexsky.com',      'general'),
 ('site_tagline',       'Global B2B Trade Platform',  'general');
+
+-- -----------------------------------------------------------
+-- PRODUCT IMAGES
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS product_images (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    product_id INT UNSIGNED NOT NULL,
+    image_url VARCHAR(500) NOT NULL,
+    is_primary TINYINT(1) DEFAULT 0,
+    sort_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    INDEX idx_product (product_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- -----------------------------------------------------------
+-- PRODUCT VARIATIONS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS product_variations (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    product_id INT UNSIGNED NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    sort_order INT DEFAULT 0,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    INDEX idx_product (product_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- -----------------------------------------------------------
+-- PRODUCT VARIATION OPTIONS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS product_variation_options (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    variation_id INT UNSIGNED NOT NULL,
+    value VARCHAR(200) NOT NULL,
+    image_url VARCHAR(500),
+    sort_order INT DEFAULT 0,
+    FOREIGN KEY (variation_id) REFERENCES product_variations(id) ON DELETE CASCADE,
+    INDEX idx_variation (variation_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- -----------------------------------------------------------
+-- PRODUCT SKUS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS product_skus (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    product_id INT UNSIGNED NOT NULL,
+    sku_code VARCHAR(100),
+    price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    stock INT NOT NULL DEFAULT 0,
+    image_url VARCHAR(500),
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    INDEX idx_product (product_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- -----------------------------------------------------------
+-- PRODUCT SKU OPTIONS
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS product_sku_options (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    sku_id INT UNSIGNED NOT NULL,
+    variation_id INT UNSIGNED NOT NULL,
+    option_id INT UNSIGNED NOT NULL,
+    FOREIGN KEY (sku_id) REFERENCES product_skus(id) ON DELETE CASCADE,
+    INDEX idx_sku (sku_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

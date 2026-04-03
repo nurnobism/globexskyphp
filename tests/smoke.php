@@ -146,6 +146,26 @@ foreach ($allPhp as $f) {
     assertSyntax("$root/$f");
 }
 
+// ── Phase 2 files ────────────────────────────────────────────
+echo "\nPhase 2 files:\n";
+$phase2Files = [
+    'config/stripe.php',
+    'api/checkout.php',
+    'api/payments.php',
+    'pages/supplier/dashboard.php',
+    'pages/supplier/products.php',
+    'pages/supplier/product-add.php',
+    'pages/supplier/product-edit.php',
+    'pages/supplier/orders.php',
+    'pages/order/confirmation.php',
+];
+foreach ($phase2Files as $f) {
+    assertFile("$root/$f");
+}
+foreach ($phase2Files as $f) {
+    if (str_ends_with($f, '.php')) assertSyntax("$root/$f");
+}
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";

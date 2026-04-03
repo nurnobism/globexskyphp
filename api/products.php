@@ -164,6 +164,72 @@ switch ($action) {
         jsonResponse(['success' => true]);
         break;
 
+    case 'list_mine':
+        if (!isLoggedIn()) jsonResponse(['error' => 'Unauthorized'], 401);
+        $suppStmt = $db->prepare('SELECT id FROM suppliers WHERE user_id = ?');
+        $suppStmt->execute([$_SESSION['user_id']]);
+        $supplier = $suppStmt->fetch();
+        if (!$supplier && !isAdmin()) jsonResponse(['error' => 'Supplier account required'], 403);
+
+        $page  = max(1, (int)get('page', 1));
+        $q     = get('q', '');
+        $pStatus = get('status', '');
+
+        $where  = ['p.supplier_id = ?'];
+        $params = [$supplier['id'] ?? 0];
+        if ($q)       { $where[] = 'p.name LIKE ?';   $params[] = "%$q%"; }
+        if ($pStatus) { $where[] = 'p.status = ?'; $params[] = $pStatus; }
+
+        $sql = 'SELECT p.*, c.name category_name FROM products p
+                LEFT JOIN categories c ON c.id = p.category_id
+                WHERE ' . implode(' AND ', $where) . ' ORDER BY p.created_at DESC';
+        jsonResponse(paginate($db, $sql, $params, $page));
+        break;
+
+    case 'upload_image':
+        if (!isLoggedIn()) jsonResponse(['error' => 'Unauthorized'], 401);
+        if (!verifyCsrf()) jsonResponse(['error' => 'Invalid CSRF token'], 403);
+        if ($method !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
+
+        $suppStmt = $db->prepare('SELECT id FROM suppliers WHERE user_id = ?');
+        $suppStmt->execute([$_SESSION['user_id']]);
+        $supplier = $suppStmt->fetch();
+        if (!$supplier && !isAdmin()) jsonResponse(['error' => 'Supplier account required'], 403);
+
+        if (empty($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
+            jsonResponse(['error' => 'Image file required'], 400);
+        }
+
+        $path = uploadFile($_FILES['image'], 'uploads/products');
+        if (!$path) jsonResponse(['error' => 'Upload failed or invalid file type'], 422);
+
+        $productId = (int)post('product_id', 0);
+        $isPrimary = (int)post('is_primary', 0);
+        if ($productId) {
+            $db->prepare('INSERT INTO product_images (product_id, image_url, is_primary) VALUES (?, ?, ?)')
+               ->execute([$productId, $path, $isPrimary]);
+        }
+
+        jsonResponse(['success' => true, 'url' => APP_URL . '/' . $path, 'path' => $path]);
+        break;
+
+    case 'toggle_status':
+        if (!isLoggedIn()) jsonResponse(['error' => 'Unauthorized'], 401);
+        if (!isAdmin())    jsonResponse(['error' => 'Forbidden'], 403);
+        if (!verifyCsrf()) jsonResponse(['error' => 'Invalid CSRF token'], 403);
+        if ($method !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
+
+        $id        = (int)post('id', 0);
+        $newStatus = post('status', '');
+        if (!$id) jsonResponse(['error' => 'Product ID required'], 400);
+        if (!in_array($newStatus, ['active', 'rejected', 'draft', 'inactive', 'archived'])) {
+            jsonResponse(['error' => 'Invalid status'], 422);
+        }
+
+        $db->prepare('UPDATE products SET status = ?, updated_at = NOW() WHERE id = ?')->execute([$newStatus, $id]);
+        jsonResponse(['success' => true, 'id' => $id, 'status' => $newStatus]);
+        break;
+
     default:
         jsonResponse(['error' => 'Unknown action'], 400);
 }

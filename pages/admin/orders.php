@@ -49,7 +49,7 @@ include __DIR__ . '/../../includes/header.php';
                     <td><span class="badge bg-<?= $sb[$o['status']]??'secondary' ?>"><?= ucfirst($o['status']) ?></span></td>
                     <td><?= formatDate($o['placed_at']) ?></td>
                     <td>
-                        <form method="POST" action="/api/admin.php?action=update_order_status" class="d-flex gap-1">
+                        <form method="POST" action="/api/orders.php?action=update_status" class="d-flex gap-1">
                             <?= csrfField() ?>
                             <input type="hidden" name="order_id" value="<?= $o['id'] ?>">
                             <select name="status" class="form-select form-select-sm" style="width:130px">
