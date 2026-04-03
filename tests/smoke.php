@@ -139,10 +139,58 @@ foreach ($phase1Files as $f) {
     assertFile("$root/$f");
 }
 
+// ── Phase 3: Commission Engine + Plans + Payouts ──────────────
+echo "\nPhase 3 includes:\n";
+$phase3Includes = [
+    'includes/commission.php',
+    'includes/plan_limits.php',
+    'includes/coupon_engine.php',
+    'includes/tax_engine.php',
+    'includes/price_engine.php',
+];
+foreach ($phase3Includes as $f) {
+    assertFile("$root/$f");
+}
+
+echo "\nPhase 3 APIs:\n";
+$phase3Apis = [
+    'api/commissions.php',
+    'api/plans.php',
+    'api/payouts.php',
+];
+foreach ($phase3Apis as $f) {
+    assertFile("$root/$f");
+}
+
+echo "\nPhase 3 supplier pages:\n";
+$phase3SupplierPages = [
+    'pages/supplier/plans.php',
+    'pages/supplier/plan-upgrade.php',
+    'pages/supplier/billing.php',
+    'pages/supplier/earnings.php',
+    'pages/supplier/payouts.php',
+];
+foreach ($phase3SupplierPages as $f) {
+    assertFile("$root/$f");
+}
+
+echo "\nPhase 3 admin finance pages:\n";
+$phase3AdminPages = [
+    'pages/admin/finance/index.php',
+    'pages/admin/finance/commissions.php',
+    'pages/admin/finance/payouts.php',
+    'pages/admin/finance/invoices.php',
+];
+foreach ($phase3AdminPages as $f) {
+    assertFile("$root/$f");
+}
+
+echo "\nPhase 3 database:\n";
+assertFile("$root/database/schema_v3.sql");
+
 // ── Phase 4 Shipment System files ───────────────────────────
 echo "\nPhase 4 Shipment System files:\n";
 $phase4Files = [
-    'database/schema_v3.sql',
     'pages/shipment/parcel/my-shipments.php',
     'pages/shipment/carry/trips.php',
     'pages/shipment/carry/requests.php',
@@ -162,9 +210,34 @@ foreach ($phase4Files as $f) {
 // ── PHP syntax checks ────────────────────────────────────────
 echo "\nPHP syntax:\n";
 $phase4PhpFiles = array_filter($phase4Files, fn($f) => str_ends_with($f, '.php'));
-$allPhp = array_merge($newPages, $newApis, array_filter($phase1Files, fn($f) => str_ends_with($f, '.php')), $phase4PhpFiles);
+$allPhp = array_merge(
+    $newPages, $newApis,
+    array_filter($phase1Files, fn($f) => str_ends_with($f, '.php')),
+    $phase3Includes, $phase3Apis, $phase3SupplierPages, $phase3AdminPages,
+    $phase4PhpFiles
+);
 foreach ($allPhp as $f) {
     assertSyntax("$root/$f");
+}
+
+// ── Phase 2 files ────────────────────────────────────────────
+echo "\nPhase 2 files:\n";
+$phase2Files = [
+    'config/stripe.php',
+    'api/checkout.php',
+    'api/payments.php',
+    'pages/supplier/dashboard.php',
+    'pages/supplier/products.php',
+    'pages/supplier/product-add.php',
+    'pages/supplier/product-edit.php',
+    'pages/supplier/orders.php',
+    'pages/order/confirmation.php',
+];
+foreach ($phase2Files as $f) {
+    assertFile("$root/$f");
+}
+foreach ($phase2Files as $f) {
+    if (str_ends_with($f, '.php')) assertSyntax("$root/$f");
 }
 
 // ── Summary ──────────────────────────────────────────────────

@@ -141,6 +141,40 @@ switch ($action) {
         jsonResponse(['success' => true]);
         break;
 
+    case 'update_status':
+        if ($method !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
+        if (!isAdmin())         jsonResponse(['error' => 'Forbidden'], 403);
+        if (!verifyCsrf())      jsonResponse(['error' => 'Invalid CSRF token'], 403);
+
+        $id        = (int)post('order_id', 0);
+        $newStatus = post('status', '');
+        if (!$id) jsonResponse(['error' => 'Order ID required'], 400);
+        if (!in_array($newStatus, ['pending','confirmed','processing','shipped','delivered','cancelled','refunded'])) {
+            jsonResponse(['error' => 'Invalid status'], 422);
+        }
+        $db->prepare('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?')->execute([$newStatus, $id]);
+        jsonResponse(['success' => true, 'order_id' => $id, 'status' => $newStatus]);
+        break;
+
+    case 'track':
+        $id     = (int)get('id', 0);
+        $number = get('order_number', '');
+        if (!$id && !$number) jsonResponse(['error' => 'Order ID or order number required'], 400);
+
+        $col  = $id ? 'o.id' : 'o.order_number';
+        $val  = $id ?: $number;
+        $stmt = $db->prepare("SELECT o.id, o.order_number, o.status FROM orders o WHERE $col = ? AND o.buyer_id = ?");
+        $stmt->execute([$val, $_SESSION['user_id']]);
+        $order = $stmt->fetch();
+        if (!$order) jsonResponse(['error' => 'Order not found'], 404);
+
+        $sStmt = $db->prepare('SELECT * FROM shipments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1');
+        $sStmt->execute([$order['id']]);
+        $shipment = $sStmt->fetch() ?: null;
+
+        jsonResponse(['data' => ['order' => $order, 'shipment' => $shipment]]);
+        break;
+
     default:
         jsonResponse(['error' => 'Unknown action'], 400);
 }

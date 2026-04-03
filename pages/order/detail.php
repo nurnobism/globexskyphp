@@ -86,12 +86,17 @@ include __DIR__ . '/../../includes/header.php';
 
             <!-- Cancel Button -->
             <?php if (in_array($order['status'], ['pending', 'confirmed'])): ?>
-            <form method="POST" action="/api/orders.php?action=cancel" onsubmit="return confirm('Cancel this order?')">
+            <form method="POST" action="/api/orders.php?action=cancel" onsubmit="return confirm('Cancel this order?')" class="d-inline">
                 <?= csrfField() ?>
                 <input type="hidden" name="order_id" value="<?= $order['id'] ?>">
                 <button type="submit" class="btn btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Cancel Order</button>
             </form>
             <?php endif; ?>
+
+            <!-- Reorder Button -->
+            <a href="/pages/cart/index.php" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-repeat me-1"></i>Reorder
+            </a>
         </div>
 
         <!-- Order Summary -->
@@ -109,7 +114,11 @@ include __DIR__ . '/../../includes/header.php';
                         <dt class="col-6 text-muted">Payment</dt>
                         <dd class="col-6"><span class="badge bg-<?= $payBadge[$order['payment_status']] ?? 'secondary' ?>"><?= ucfirst($order['payment_status']) ?></span></dd>
                         <dt class="col-6 text-muted">Method</dt>
-                        <dd class="col-6"><?= e($order['payment_method'] ?? '—') ?></dd>
+                        <dd class="col-6"><?= e(str_replace('_', ' ', ucfirst($order['payment_method'] ?? '—'))) ?></dd>
+                        <?php if (!empty($order['stripe_payment_intent_id'])): ?>
+                        <dt class="col-6 text-muted">Payment Ref</dt>
+                        <dd class="col-6 small text-break"><?= e($order['stripe_payment_intent_id']) ?></dd>
+                        <?php endif; ?>
                         <dt class="col-6 text-muted">Placed</dt>
                         <dd class="col-6"><?= formatDate($order['placed_at']) ?></dd>
                     </dl>
