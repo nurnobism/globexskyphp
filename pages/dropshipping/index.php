@@ -1,274 +1,275 @@
 <?php
 /**
- * pages/dropshipping/index.php — Dropshipping Product Catalog
+ * pages/dropshipping/index.php — Dropshipping Dashboard
  */
 require_once __DIR__ . '/../../includes/middleware.php';
+requireAuth();
+require_once __DIR__ . '/../../includes/dropshipping.php';
 
-$db       = getDB();
-$page     = max(1, (int)get('page', 1));
-$q        = trim(get('q', ''));
-$category = get('category', '');
+$db     = getDB();
+$userId = (int)$_SESSION['user_id'];
 
-$where  = ['p.status = "active"', 'p.dropship_eligible = 1'];
-$params = [];
+// Load or create store
+$store = null;
+try {
+    $storeStmt = $db->prepare('SELECT * FROM dropship_stores WHERE user_id = ? LIMIT 1');
+    $storeStmt->execute([$userId]);
+    $store = $storeStmt->fetch() ?: null;
+} catch (PDOException $e) { /* ignore */ }
 
-if ($q) {
-    $where[]  = 'p.name LIKE ?';
-    $params[] = '%' . $q . '%';
+// Stats
+$importedCount = 0; $activeCount = 0; $totalOrders = 0;
+$totalEarnings = 0.0; $pendingEarnings = 0.0;
+
+if ($store) {
+    $storeId = (int)$store['id'];
+    try {
+        $stmt = $db->prepare('SELECT COUNT(*) FROM dropship_products WHERE store_id = ?');
+        $stmt->execute([$storeId]);
+        $importedCount = (int)$stmt->fetchColumn();
+
+        $stmt = $db->prepare('SELECT COUNT(*) FROM dropship_products WHERE store_id = ? AND is_active = 1');
+        $stmt->execute([$storeId]);
+        $activeCount = (int)$stmt->fetchColumn();
+
+        $stmt = $db->prepare('SELECT COUNT(*) FROM dropship_orders WHERE store_id = ?');
+        $stmt->execute([$storeId]);
+        $totalOrders = (int)$stmt->fetchColumn();
+    } catch (PDOException $e) { /* ignore */ }
 }
-if ($category) {
-    $where[]  = 'p.category_id = ?';
-    $params[] = $category;
+
+// Earnings
+try {
+    $eStmt = $db->prepare("SELECT COALESCE(SUM(net_amount),0) FROM dropship_earnings WHERE dropshipper_id = ?");
+    $eStmt->execute([$userId]);
+    $totalEarnings = (float)$eStmt->fetchColumn();
+
+    $eStmt = $db->prepare("SELECT COALESCE(SUM(net_amount),0) FROM dropship_earnings WHERE dropshipper_id = ? AND status='pending'");
+    $eStmt->execute([$userId]);
+    $pendingEarnings = (float)$eStmt->fetchColumn();
+} catch (PDOException $e) { /* ignore */ }
+
+// Conversion rate
+$conversionRate = 0.0;
+if ($importedCount > 0 && $totalOrders > 0) {
+    $conversionRate = round($totalOrders / $importedCount * 100, 1);
 }
 
-$whereClause = implode(' AND ', $where);
-$sql = "
-    SELECT p.id, p.name, p.slug, p.images, p.unit, p.cost_price, p.price, p.short_desc,
-           s.company_name AS supplier_name,
-           c.name AS category_name, c.id AS category_id,
-           ROUND(p.cost_price * (1 + COALESCE(mr.markup_pct, 50) / 100), 2) AS suggested_retail,
-           COALESCE(mr.markup_pct, 50) AS default_markup_pct
-    FROM products p
-    LEFT JOIN suppliers s  ON s.id  = p.supplier_id
-    LEFT JOIN categories c ON c.id  = p.category_id
-    LEFT JOIN dropship_markup_rules mr ON mr.category_id = p.category_id
-    WHERE $whereClause
-    ORDER BY p.created_at DESC
-";
+// Recent orders (last 10)
+$recentOrders = [];
+try {
+    $stmt = $db->prepare('SELECT do.*, o.order_number FROM dropship_orders do
+        LEFT JOIN orders o ON o.id = do.order_id
+        WHERE do.dropshipper_id = ? ORDER BY do.created_at DESC LIMIT 10');
+    $stmt->execute([$userId]);
+    $recentOrders = $stmt->fetchAll();
+} catch (PDOException $e) { /* ignore */ }
 
-$result   = paginate($db, $sql, $params, $page);
-$products = $result['data'];
+// Earnings chart data (last 30 days)
+$chartLabels = []; $chartData = [];
+try {
+    $cStmt = $db->prepare("SELECT DATE(created_at) AS day, COALESCE(SUM(net_amount),0) AS earnings
+        FROM dropship_earnings WHERE dropshipper_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        GROUP BY DATE(created_at) ORDER BY day");
+    $cStmt->execute([$userId]);
+    foreach ($cStmt->fetchAll() as $row) {
+        $chartLabels[] = date('d M', strtotime($row['day']));
+        $chartData[]   = (float)$row['earnings'];
+    }
+} catch (PDOException $e) { /* ignore */ }
 
-$catStmt    = $db->query('SELECT id, name FROM categories WHERE is_active = 1 ORDER BY name');
-$categories = $catStmt->fetchAll();
+// Plan limits
+$planLimits = checkDropshipPlanLimits($userId);
 
-$pageTitle = 'Dropshipping Catalog';
+$pageTitle = 'Dropshipping Dashboard';
 include __DIR__ . '/../../includes/header.php';
 ?>
-
-<style>
-  :root { --ds-primary: #FF6B35; --ds-secondary: #1B2A4A; }
-  .ds-badge-margin { background: #e8f5e9; color: #2e7d32; font-size:.75rem; }
-  .product-card { transition: transform .15s, box-shadow .15s; }
-  .product-card:hover { transform: translateY(-3px); box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.12) !important; }
-  .btn-import { background: var(--ds-primary); border-color: var(--ds-primary); color: #fff; }
-  .btn-import:hover { background: #e55a24; border-color: #e55a24; color: #fff; }
-  .badge-ds { background: var(--ds-secondary); }
-  .sidebar-header { background: var(--ds-secondary); }
-</style>
-
 <div class="container-fluid py-4 px-4">
+  <!-- Hero / Header -->
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div>
+      <h4 class="fw-bold mb-0 text-primary"><i class="bi bi-shop me-2"></i>Dropshipping Dashboard</h4>
+      <small class="text-muted">Start Dropshipping with GlobexSky</small>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="<?= APP_URL ?>/pages/dropshipping/products.php" class="btn btn-primary btn-sm"><i class="bi bi-grid me-1"></i>Browse Catalog</a>
+      <a href="<?= APP_URL ?>/pages/dropshipping/my-products.php" class="btn btn-outline-primary btn-sm"><i class="bi bi-box-seam me-1"></i>My Products</a>
+      <a href="<?= APP_URL ?>/pages/dropshipping/orders.php" class="btn btn-outline-secondary btn-sm"><i class="bi bi-receipt me-1"></i>Orders</a>
+      <a href="<?= APP_URL ?>/pages/dropshipping/store.php" class="btn btn-outline-secondary btn-sm"><i class="bi bi-gear me-1"></i>Store Settings</a>
+    </div>
+  </div>
+
+  <?php if (!$store): ?>
+  <!-- Create Store CTA -->
+  <div class="alert alert-info d-flex align-items-center gap-3 mb-4">
+    <i class="bi bi-shop fs-3 text-primary"></i>
+    <div>
+      <strong>Create Your Dropshipping Store</strong><br>
+      Set up your store to start selling products without holding inventory.
+      <a href="<?= APP_URL ?>/pages/dropshipping/store.php" class="btn btn-primary btn-sm ms-3">Create Store</a>
+    </div>
+  </div>
+  <?php endif; ?>
+
+  <?php if (!$planLimits['allowed']): ?>
+  <div class="alert alert-warning mb-4">
+    <i class="bi bi-lock me-2"></i>
+    <strong>Upgrade Required:</strong> Dropshipping is available on Pro and Enterprise plans.
+    <a href="<?= APP_URL ?>/pages/supplier/plans.php" class="btn btn-warning btn-sm ms-2">Upgrade Plan</a>
+  </div>
+  <?php endif; ?>
+
+  <!-- Plan Limit Indicator -->
+  <?php if ($planLimits['allowed'] && $planLimits['max_count'] !== 'Unlimited'): ?>
+  <div class="alert alert-light border mb-4">
+    <i class="bi bi-bar-chart me-2 text-primary"></i>
+    <strong><?= $planLimits['current_count'] ?>/<?= $planLimits['max_count'] ?> products imported</strong>
+    (<?= ucfirst($planLimits['plan']) ?> Plan)
+    <?php if ($planLimits['current_count'] >= $planLimits['max_count'] * 0.8): ?>
+      <span class="text-warning ms-2"><i class="bi bi-exclamation-triangle"></i> Near limit</span>
+    <?php endif; ?>
+  </div>
+  <?php endif; ?>
+
+  <!-- Stat Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-xl-2-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="fs-3 fw-bold text-primary"><?= number_format($importedCount) ?></div>
+          <div class="small text-muted">Products Imported</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="fs-3 fw-bold text-success"><?= number_format($activeCount) ?></div>
+          <div class="small text-muted">Active Products</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="fs-3 fw-bold text-info"><?= number_format($totalOrders) ?></div>
+          <div class="small text-muted">Total Orders</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="fs-3 fw-bold text-warning"><?= formatMoney($totalEarnings) ?></div>
+          <div class="small text-muted">Total Earnings</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="fs-3 fw-bold"><?= $conversionRate ?>%</div>
+          <div class="small text-muted">Conversion Rate</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="row g-4">
-
-    <!-- Sidebar -->
-    <div class="col-lg-3 col-xl-2">
-      <div class="card border-0 shadow-sm sticky-top" style="top:80px">
-        <div class="card-header sidebar-header text-white py-3">
-          <h6 class="mb-0 fw-bold"><i class="bi bi-box-seam me-2"></i>Dropshipping</h6>
+    <!-- Earnings Chart -->
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 py-3">
+          <h6 class="fw-bold mb-0"><i class="bi bi-graph-up me-2 text-primary"></i>Earnings (Last 30 Days)</h6>
         </div>
-        <div class="card-body p-3">
-          <form method="GET" id="filterForm">
-            <div class="mb-3">
-              <input type="search" name="q" class="form-control form-control-sm"
-                     placeholder="Search products…" value="<?= e($q) ?>">
-            </div>
-            <h6 class="text-uppercase fw-semibold small text-muted mb-2">Category</h6>
-            <div class="d-flex flex-column gap-1 mb-3">
-              <a href="?" class="text-decoration-none small <?= !$category ? 'fw-bold' : 'text-muted' ?>"
-                 style="<?= !$category ? 'color:var(--ds-primary)' : '' ?>">
-                All Categories
-              </a>
-              <?php foreach ($categories as $cat): ?>
-              <a href="?category=<?= urlencode($cat['id']) ?><?= $q ? '&q=' . urlencode($q) : '' ?>"
-                 class="text-decoration-none small <?= $category == $cat['id'] ? 'fw-bold' : 'text-muted' ?>"
-                 style="<?= $category == $cat['id'] ? 'color:var(--ds-primary)' : '' ?>">
-                <?= e($cat['name']) ?>
-              </a>
+        <div class="card-body">
+          <canvas id="earningsChart" height="100"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="col-lg-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 py-3">
+          <h6 class="fw-bold mb-0"><i class="bi bi-lightning me-2 text-warning"></i>Quick Actions</h6>
+        </div>
+        <div class="card-body d-grid gap-2">
+          <a href="<?= APP_URL ?>/pages/dropshipping/products.php" class="btn btn-primary">
+            <i class="bi bi-search me-2"></i>Browse Catalog
+          </a>
+          <a href="<?= APP_URL ?>/pages/dropshipping/my-products.php" class="btn btn-outline-primary">
+            <i class="bi bi-box-seam me-2"></i>Manage Products
+          </a>
+          <a href="<?= APP_URL ?>/pages/dropshipping/orders.php" class="btn btn-outline-secondary">
+            <i class="bi bi-receipt me-2"></i>View Orders
+          </a>
+          <a href="<?= APP_URL ?>/pages/dropshipping/earnings.php" class="btn btn-outline-success">
+            <i class="bi bi-cash-coin me-2"></i>Earnings Dashboard
+          </a>
+          <a href="<?= APP_URL ?>/pages/dropshipping/store.php" class="btn btn-outline-secondary">
+            <i class="bi bi-gear me-2"></i>Store Settings
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Orders Table -->
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+          <h6 class="fw-bold mb-0"><i class="bi bi-clock-history me-2 text-primary"></i>Recent Orders</h6>
+          <a href="<?= APP_URL ?>/pages/dropshipping/orders.php" class="btn btn-sm btn-outline-primary">View All</a>
+        </div>
+        <div class="card-body p-0">
+          <?php if (empty($recentOrders)): ?>
+            <div class="text-center py-4 text-muted"><i class="bi bi-inbox fs-2"></i><p class="mt-2">No orders yet.</p></div>
+          <?php else: ?>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr><th class="ps-3">Order #</th><th>Supplier Price</th><th>Selling Price</th><th>Profit</th><th>Status</th><th>Date</th></tr>
+              </thead>
+              <tbody>
+              <?php foreach ($recentOrders as $ord):
+                $statusColor = match($ord['status']) {
+                  'delivered' => 'success', 'shipped' => 'primary', 'processing' => 'info',
+                  'routed' => 'info', 'cancelled' => 'danger', 'refunded' => 'warning', default => 'secondary'
+                };
+              ?>
+                <tr>
+                  <td class="ps-3 fw-semibold small"><?= e($ord['order_number'] ?? '#' . $ord['order_id']) ?></td>
+                  <td><?= formatMoney($ord['original_price']) ?></td>
+                  <td><?= formatMoney($ord['selling_price']) ?></td>
+                  <td class="text-success fw-semibold"><?= formatMoney($ord['dropshipper_earning']) ?></td>
+                  <td><span class="badge bg-<?= $statusColor ?>"><?= e(ucfirst($ord['status'])) ?></span></td>
+                  <td class="text-muted small"><?= date('d M Y', strtotime($ord['created_at'])) ?></td>
+                </tr>
               <?php endforeach; ?>
-            </div>
-            <button type="submit" class="btn btn-sm w-100 btn-import">
-              <i class="bi bi-search me-1"></i>Search
-            </button>
-          </form>
-          <hr>
-          <a href="/pages/dropshipping/dashboard.php" class="btn btn-sm btn-outline-secondary w-100 mb-2">
-            <i class="bi bi-speedometer2 me-1"></i>My Dashboard
-          </a>
-          <a href="/pages/dropshipping/settings.php" class="btn btn-sm btn-outline-secondary w-100">
-            <i class="bi bi-gear me-1"></i>Settings
-          </a>
-        </div>
-      </div>
-    </div>
-
-    <!-- Main Content -->
-    <div class="col-lg-9 col-xl-10">
-      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <div>
-          <h4 class="mb-0 fw-bold" style="color:var(--ds-secondary)">
-            <?= $q ? 'Results for "' . e($q) . '"' : 'Dropshipping Catalog' ?>
-          </h4>
-          <small class="text-muted"><?= number_format($result['total']) ?> products available for dropshipping</small>
-        </div>
-        <span class="badge badge-ds text-white px-3 py-2 fs-6">
-          <i class="bi bi-truck me-1"></i>No Inventory Required
-        </span>
-      </div>
-
-      <?php if (empty($products)): ?>
-        <div class="text-center py-5 text-muted">
-          <i class="bi bi-box-seam display-1"></i>
-          <h5 class="mt-3">No dropshippable products found</h5>
-          <a href="/pages/dropshipping/index.php" class="btn btn-import mt-2">View All Products</a>
-        </div>
-      <?php else: ?>
-
-      <div class="row row-cols-2 row-cols-md-3 row-cols-xl-4 g-3">
-        <?php foreach ($products as $p):
-          $images   = json_decode($p['images'] ?? '[]', true);
-          $img      = !empty($images[0]) ? e(APP_URL . '/' . $images[0]) : 'https://placehold.co/300x200/1B2A4A/white?text=' . rawurlencode($p['name']);
-          $cost     = (float)$p['cost_price'];
-          $retail   = (float)$p['suggested_retail'];
-          $margin   = $retail > 0 ? round((($retail - $cost) / $retail) * 100) : 0;
-          $markup   = (float)$p['default_markup_pct'];
-        ?>
-        <div class="col">
-          <div class="card h-100 border-0 shadow-sm product-card">
-            <div class="position-relative">
-              <img src="<?= $img ?>" class="card-img-top"
-                   style="height:160px;object-fit:cover;" alt="<?= e($p['name']) ?>">
-              <span class="position-absolute top-0 end-0 m-2 badge ds-badge-margin">
-                <?= $margin ?>% margin
-              </span>
-            </div>
-            <div class="card-body d-flex flex-column p-3">
-              <small class="text-muted mb-1"><?= e($p['category_name'] ?? '') ?></small>
-              <h6 class="card-title mb-1 lh-sm">
-                <?= e(mb_strimwidth($p['name'], 0, 55, '…')) ?>
-              </h6>
-              <p class="text-muted small mb-2">
-                <i class="bi bi-building me-1"></i><?= e(mb_strimwidth($p['supplier_name'] ?? '', 0, 35, '…')) ?>
-              </p>
-
-              <div class="row g-0 mb-3 mt-auto">
-                <div class="col-6 border-end pe-2">
-                  <div class="text-muted" style="font-size:.7rem">COST PRICE</div>
-                  <div class="fw-bold text-dark"><?= formatMoney($cost) ?></div>
-                </div>
-                <div class="col-6 ps-2">
-                  <div class="text-muted" style="font-size:.7rem">RETAIL PRICE</div>
-                  <div class="fw-bold" style="color:var(--ds-primary)"><?= formatMoney($retail) ?></div>
-                </div>
-              </div>
-
-              <!-- Markup slider -->
-              <div class="mb-3">
-                <label class="form-label small text-muted mb-1 d-flex justify-content-between">
-                  <span>Markup</span>
-                  <span id="markup-val-<?= $p['id'] ?>"><?= $markup ?>%</span>
-                </label>
-                <input type="range" class="form-range markup-slider" min="0" max="200" step="5"
-                       value="<?= $markup ?>"
-                       data-product-id="<?= $p['id'] ?>"
-                       data-cost="<?= $cost ?>"
-                       id="slider-<?= $p['id'] ?>">
-                <div class="text-end small text-muted">
-                  Sell for: <strong id="sell-price-<?= $p['id'] ?>"><?= formatMoney($retail) ?></strong>
-                </div>
-              </div>
-
-              <button class="btn btn-import btn-sm w-100 import-btn"
-                      data-product-id="<?= $p['id'] ?>"
-                      data-product-name="<?= e($p['name']) ?>">
-                <i class="bi bi-cloud-download me-1"></i>Import to Store
-              </button>
-            </div>
+              </tbody>
+            </table>
           </div>
+          <?php endif; ?>
         </div>
-        <?php endforeach; ?>
       </div>
-
-      <!-- Pagination -->
-      <?php if ($result['pages'] > 1): ?>
-      <nav class="mt-4">
-        <ul class="pagination justify-content-center">
-          <?php for ($i = 1; $i <= $result['pages']; $i++): ?>
-          <li class="page-item <?= $i === $page ? 'active' : '' ?>">
-            <a class="page-link" href="?page=<?= $i ?>&q=<?= urlencode($q) ?>&category=<?= urlencode($category) ?>">
-              <?= $i ?>
-            </a>
-          </li>
-          <?php endfor; ?>
-        </ul>
-      </nav>
-      <?php endif; ?>
-      <?php endif; ?>
     </div>
   </div>
 </div>
 
-<!-- Toast notification -->
-<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:9999">
-  <div id="importToast" class="toast align-items-center text-white border-0" role="alert">
-    <div class="d-flex">
-      <div class="toast-body" id="toastMsg">Product imported!</div>
-      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-    </div>
-  </div>
-</div>
-
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
-const CSRF = <?= json_encode($_SESSION['csrf_token'] ?? '') ?>;
-
-// Markup sliders — update displayed price live
-document.querySelectorAll('.markup-slider').forEach(slider => {
-  slider.addEventListener('input', () => {
-    const pid   = slider.dataset.productId;
-    const cost  = parseFloat(slider.dataset.cost);
-    const pct   = parseFloat(slider.value);
-    const sell  = (cost * (1 + pct / 100)).toFixed(2);
-    document.getElementById('markup-val-'  + pid).textContent = pct + '%';
-    document.getElementById('sell-price-' + pid).textContent  = '$' + sell;
-  });
+const labels = <?= json_encode($chartLabels) ?>;
+const data   = <?= json_encode($chartData) ?>;
+new Chart(document.getElementById('earningsChart'), {
+  type: 'line',
+  data: {
+    labels: labels.length ? labels : ['No data'],
+    datasets: [{ label: 'Earnings ($)', data: data.length ? data : [0],
+      borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.08)',
+      fill: true, tension: 0.3 }]
+  },
+  options: { plugins: { legend: { display: false } },
+    scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + v } } } }
 });
-
-// Import button
-document.querySelectorAll('.import-btn').forEach(btn => {
-  btn.addEventListener('click', async () => {
-    const pid    = btn.dataset.productId;
-    const name   = btn.dataset.productName;
-    const slider = document.getElementById('slider-' + pid);
-    const markup = slider ? parseFloat(slider.value) : 50;
-
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Importing…';
-
-    const body = new URLSearchParams({ csrf_token: CSRF, product_id: pid, markup_pct: markup });
-
-    try {
-      const res  = await fetch('/api/dropshipping.php?action=import', { method: 'POST', body });
-      const data = await res.json();
-      showToast(data.message || (data.success ? 'Imported!' : data.error), data.success ? 'bg-success' : 'bg-warning');
-      if (data.success) {
-        btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Imported';
-      } else {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Import to Store';
-      }
-    } catch (e) {
-      showToast('Network error — please try again', 'bg-danger');
-      btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Import to Store';
-    }
-  });
-});
-
-function showToast(msg, bgClass) {
-  const toast = document.getElementById('importToast');
-  document.getElementById('toastMsg').textContent = msg;
-  toast.className = 'toast align-items-center text-white border-0 ' + bgClass;
-  bootstrap.Toast.getOrCreateInstance(toast).show();
-}
 </script>
-
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
