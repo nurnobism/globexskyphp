@@ -96,8 +96,8 @@ $fallbackCurrencies = [
                 <!-- Logo -->
                 <div class="col-auto">
                     <a href="<?= APP_URL ?>/" class="gs-logo text-decoration-none d-flex align-items-center gap-2">
-                        <i class="bi bi-globe2 text-primary fs-3"></i>
-                        <span class="fw-bold text-primary fs-5 lh-1"><?= e(APP_NAME) ?></span>
+                        <i class="bi bi-globe2 fs-3"></i>
+                        <span class="lh-1"><span class="gs-logo-globex">Globex</span><span class="gs-logo-sky">Sky</span></span>
                     </a>
                 </div>
 
@@ -136,12 +136,14 @@ $fallbackCurrencies = [
                     <!-- Language selector (hidden on mobile, shown in hamburger menu) -->
                     <div class="dropdown d-none d-lg-block">
                         <a href="#" class="gs-util-btn dropdown-toggle text-decoration-none text-dark small" data-bs-toggle="dropdown">
-                            <i class="bi bi-globe"></i>
                             <?php if (!empty($availLangs) && isset($availLangs[$curLang])): ?>
-                                <?= e($availLangs[$curLang]['flag'] ?? '🌐') ?> <?= e(strtoupper($curLang)) ?>
+                                <?= e($availLangs[$curLang]['flag'] ?? '🌐') ?> <?= e($availLangs[$curLang]['native'] ?? strtoupper($curLang)) ?>
+                            <?php elseif (isset($fallbackLangs[$curLang])): ?>
+                                <?= $fallbackLangs[$curLang]['flag'] ?> <?= e($fallbackLangs[$curLang]['native']) ?>
                             <?php else: ?>
-                                🌐 EN
+                                🇬🇧 English
                             <?php endif; ?>
+                            <i class="bi bi-chevron-down" style="font-size:.7rem"></i>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" style="max-height:300px;overflow-y:auto;min-width:160px">
                             <?php if (!empty($availLangs)): ?>
@@ -169,8 +171,18 @@ $fallbackCurrencies = [
                     <!-- Currency selector (hidden on mobile) -->
                     <div class="dropdown d-none d-lg-block">
                         <a href="#" class="gs-util-btn dropdown-toggle text-decoration-none text-dark small" data-bs-toggle="dropdown">
-                            <i class="bi bi-currency-dollar"></i>
-                            <?= e($curCurrency) ?>
+                            <?php
+                            $currSymbol = '';
+                            if (!empty($activeCurrencies)) {
+                                foreach ($activeCurrencies as $c) {
+                                    if ($c['code'] === $curCurrency) { $currSymbol = $c['symbol']; break; }
+                                }
+                            }
+                            if ($currSymbol === '' && isset($fallbackCurrencies[$curCurrency])) {
+                                $currSymbol = $fallbackCurrencies[$curCurrency]['symbol'];
+                            }
+                            echo e($currSymbol ? $currSymbol . ' ' : '') . e($curCurrency);
+                            ?>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" style="max-height:300px;overflow-y:auto;min-width:180px">
                             <?php if (!empty($activeCurrencies)): ?>
@@ -197,11 +209,7 @@ $fallbackCurrencies = [
                         </ul>
                     </div>
 
-                    <!-- PWA Install Button -->
-                    <button id="pwa-install-btn" class="btn btn-outline-secondary btn-sm d-none d-lg-inline-flex align-items-center gap-1" onclick="pwaInstall()">
-                        <i class="bi bi-download"></i><span class="d-none d-xl-inline">Install App</span>
-                    </button>
-
+                    <!-- PWA Install Button — logged-in users only, managed by JS -->
                     <!-- Auth / User area -->
                     <?php if (isLoggedIn() && $currentUser): ?>
                         <?php
@@ -240,6 +248,11 @@ $fallbackCurrencies = [
                             default        => 'KYC'
                         };
                         ?>
+
+                        <!-- Install App (logged-in only) -->
+                        <button id="pwa-install-btn" class="btn btn-outline-secondary btn-sm d-none d-lg-inline-flex align-items-center gap-1" onclick="pwaInstall()">
+                            <i class="bi bi-download"></i><span class="d-none d-xl-inline">Install App</span>
+                        </button>
 
                         <!-- Notifications bell (logged-in only) -->
                         <div class="dropdown" id="notificationDropdown">
@@ -337,11 +350,9 @@ $fallbackCurrencies = [
                     <!-- Cart -->
                     <a href="<?= APP_URL ?>/pages/cart/index.php" class="gs-icon-btn position-relative" title="Cart">
                         <i class="bi bi-cart3 fs-5"></i>
-                        <?php if ($cartCount > 0): ?>
-                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                                <?= $cartCount > 99 ? '99+' : $cartCount ?>
-                            </span>
-                        <?php endif; ?>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                            <?= $cartCount > 99 ? '99+' : $cartCount ?>
+                        </span>
                     </a>
 
                     <!-- Mobile hamburger -->
@@ -357,12 +368,12 @@ $fallbackCurrencies = [
     <div class="gs-separator"></div>
 
     <!-- ── Row 2: Category menu (desktop) ── -->
-    <nav class="gs-catbar bg-white border-bottom d-none d-lg-block" aria-label="Category navigation">
+    <nav class="gs-catbar d-none d-lg-block" aria-label="Category navigation">
         <div class="container-fluid px-3">
-            <ul class="gs-catbar-list list-unstyled d-flex align-items-center mb-0 gap-1">
+            <ul class="gs-catbar-list list-unstyled d-flex align-items-center mb-0">
                 <li>
                     <a href="<?= APP_URL ?>/pages/sourcing/index.php" class="gs-cat-link">
-                        <i class="bi bi-factory"></i> Sourcing
+                        Sourcing
                     </a>
                 </li>
                 <li>
@@ -403,11 +414,6 @@ $fallbackCurrencies = [
                 <li>
                     <a href="<?= APP_URL ?>/pages/api-platform/index.php" class="gs-cat-link">
                         <i class="bi bi-plug"></i> API Platform
-                    </a>
-                </li>
-                <li class="ms-auto">
-                    <a href="<?= APP_URL ?>/pages/rfq/create.php" class="gs-cat-link gs-cat-link--highlight">
-                        <i class="bi bi-file-earmark-plus"></i> Get Quote
                     </a>
                 </li>
             </ul>

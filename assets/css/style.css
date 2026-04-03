@@ -20,6 +20,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; }
     top: 0;
     z-index: 1030;
     box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    border-top: 3px solid #1B4B66;
 }
 
 /* ── Top bar ── */
@@ -27,8 +28,9 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; }
 
 /* Logo */
 .gs-logo:hover { opacity: .9; }
-.gs-logo .bi-globe2 { font-size: 1.6rem; }
-.gs-logo span { font-size: 1.2rem; color: var(--gs-primary); }
+.gs-logo .bi-globe2 { font-size: 1.6rem; color: #1B4B66; }
+.gs-logo-globex { font-size: 1.2rem; color: #1a1a2e; font-weight: 700; }
+.gs-logo-sky    { font-size: 1.2rem; color: #FF6B00; font-weight: 700; }
 
 /* Search form */
 .gs-search-form { width: 100%; }
@@ -41,9 +43,9 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; }
 }
 .gs-search-icons { background: transparent; }
 .gs-search-icon-btn {
-    color: #6B7280;
-    font-size: .95rem;
-    padding: 2px 5px;
+    color: #4B5563;
+    font-size: 1.15rem;
+    padding: 2px 6px;
     text-decoration: none;
     background: none;
     border: none;
@@ -51,6 +53,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; }
     line-height: 1;
     transition: color .15s;
 }
+.gs-search-icon-btn .bi { font-size: 1.15rem; font-weight: 700; }
 .gs-search-icon-btn:hover:not(:disabled) { color: var(--gs-primary); }
 .gs-search-icon-btn:disabled { opacity: .45; cursor: default; }
 .gs-search-divider { width: 1px; height: 16px; background: #D1D5DB; display: inline-block; vertical-align: middle; }
@@ -117,13 +120,15 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; }
 }
 
 /* ── Category menu bar (Row 2) ── */
-.gs-catbar { background: #fff; }
+.gs-catbar { background: #fff; border-bottom: 1px solid #E5E7EB; }
 .gs-catbar-list {
     overflow-x: auto;
     scrollbar-width: none;
     -ms-overflow-style: none;
     flex-wrap: nowrap;
     padding: .25rem 0;
+    justify-content: center;
+    gap: 30px;
 }
 .gs-catbar-list::-webkit-scrollbar { display: none; }
 
@@ -135,13 +140,13 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; }
     font-weight: 500;
     color: var(--gs-menu-text);
     text-decoration: none;
-    padding: .45rem .65rem;
+    padding: .45rem .4rem;
     border-radius: 4px;
     white-space: nowrap;
     transition: background .15s, color .15s;
 }
 .gs-cat-link:hover { background: #EEF2FF; color: var(--gs-primary); }
-.gs-cat-link .bi { font-size: .95rem; color: #6B7280; }
+.gs-cat-link .bi { font-size: 1rem; color: #374151; }
 
 .gs-cat-link--highlight {
     color: var(--gs-primary);
