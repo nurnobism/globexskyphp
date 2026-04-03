@@ -597,6 +597,7 @@ $fallbackCurrencies = [
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Upload barcode / QR image</label>
                     <input type="file" id="gsQrFileInput" class="form-control" accept="image/*" capture="environment">
+                    <div class="form-text">On mobile, this opens the camera. On desktop, select an image file.</div>
                 </div>
                 <div class="text-center text-muted my-2">— or —</div>
                 <div class="mb-3">
@@ -642,13 +643,14 @@ $fallbackCurrencies = [
     'use strict';
 
     /* ── Helpers ── */
+    var gsBaseUrl = <?= json_encode(rtrim(APP_URL, '/')) ?>;
     function getSearchInput() {
         return document.querySelector('.gs-search-input') || document.querySelector('input[name="q"]');
     }
     function redirectSearch(q, extra) {
         var params = new URLSearchParams({ q: q });
         if (extra) { Object.keys(extra).forEach(function(k){ params.set(k, extra[k]); }); }
-        window.location.href = '/pages/product/index.php?' + params.toString();
+        window.location.href = gsBaseUrl + '/pages/product/index.php?' + params.toString();
     }
 
     /* ── Voice Search ── */
@@ -662,6 +664,7 @@ $fallbackCurrencies = [
         voiceModal.addEventListener('hidden.bs.modal', function () {
             if (recognition) { try { recognition.stop(); } catch(e){} }
             statusEl.textContent = 'Press the button and start speaking';
+            statusEl.className = 'text-muted small mt-2';
             resultEl.classList.add('d-none');
             resultEl.textContent = '';
             startBtn.classList.remove('btn-danger');
@@ -671,11 +674,12 @@ $fallbackCurrencies = [
         startBtn.addEventListener('click', function () {
             var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) {
-                alert('Voice search is not supported in this browser. Please use Chrome or Edge.');
+                statusEl.textContent = 'Voice search is not supported in this browser. Please use Chrome or Edge.';
+                statusEl.className = 'text-danger small mt-2';
                 return;
             }
             recognition = new SpeechRecognition();
-            recognition.lang = 'en-US';
+            recognition.lang = navigator.language || 'en-US';
             recognition.interimResults = false;
             recognition.maxAlternatives = 1;
 
