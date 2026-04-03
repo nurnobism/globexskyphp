@@ -192,12 +192,22 @@ class SecureSession
 
     /**
      * Build a fingerprint string from stable browser characteristics.
+     * Handles both IPv4 and IPv6 addresses.
      */
     private static function buildFingerprint(): string
     {
-        $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
-        // Use the first three octets of the IP to balance NAT tolerance with security
-        $ip = implode('.', array_slice(explode('.', $_SERVER['REMOTE_ADDR'] ?? ''), 0, 3));
+        $ua  = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $raw = $_SERVER['REMOTE_ADDR']     ?? '';
+
+        if (str_contains($raw, ':')) {
+            // IPv6 — keep the first 4 groups (64-bit prefix) for NAT tolerance
+            $groups = explode(':', $raw);
+            $ip     = implode(':', array_slice($groups, 0, 4));
+        } else {
+            // IPv4 — keep the first 3 octets (allows last-octet churn in NAT pools)
+            $ip = implode('.', array_slice(explode('.', $raw), 0, 3));
+        }
+
         return hash('sha256', $ua . '|' . $ip);
     }
 }

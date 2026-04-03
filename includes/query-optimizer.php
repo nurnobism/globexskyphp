@@ -189,9 +189,14 @@ class QueryOptimizer
             preg_match_all('/\b(?:from|join)\s+`?(\w+)`?/i', $sql, $matches);
             $tables = $matches[1] ?? [];
 
-            // Heuristic: extract columns after WHERE
-            preg_match_all('/\bwhere\b.*?\b(\w+)\s*=/i', $sql, $wMatches);
-            $whereCols = $wMatches[1] ?? [];
+            // Heuristic: extract columns used in WHERE conditions with any comparison operator
+            // Matches: col =, col !=, col <>, col >, col <, col >=, col <=, col IN, col LIKE, col BETWEEN
+            preg_match_all(
+                '/\b(\w+)\s*(?:=|!=|<>|>=|<=|>|<|\bIN\b|\bLIKE\b|\bBETWEEN\b)/i',
+                (string) preg_replace('/.*?\bwhere\b/i', '', $sql, 1),
+                $wMatches
+            );
+            $whereCols = array_unique($wMatches[1] ?? []);
 
             foreach ($tables as $table) {
                 foreach ($whereCols as $col) {

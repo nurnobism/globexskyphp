@@ -39,8 +39,11 @@ class AssetOptimizer
     /**
      * Basic JS minification — strips line/block comments and collapses whitespace.
      *
-     * WARNING: This is a simple heuristic. Use a proper minifier (e.g. Terser)
-     * for production builds.
+     * WARNING: This is a simple heuristic minifier. It does NOT correctly handle
+     * comments inside string literals or template literals. It is safe for simple,
+     * well-structured application JS (e.g. inline scripts, small utility files).
+     * For production builds that include third-party libraries, use a dedicated
+     * tool such as Terser (CLI: `npx terser input.js -o output.min.js`).
      */
     public function jsMinify(string $js): string
     {
