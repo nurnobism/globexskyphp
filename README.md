@@ -126,7 +126,47 @@ globexskyphp/
 
 ## Deployment
 
-See [`DOCS/PRODUCTION-CHECKLIST.md`](DOCS/PRODUCTION-CHECKLIST.md) for a full production deployment checklist.
+### Quick Deploy (3 Steps)
+
+```bash
+# 1. Run the automated setup script
+bash deploy/setup.sh
+
+# 2. Fill in all values in .env
+#    (use deploy/production.env.template as a reference)
+nano .env
+
+# 3. Import the database
+bash deploy/database-setup.sh
+```
+
+### Production Checklist
+
+| Step | Command / Location |
+|---|---|
+| 1. Environment file | `cp deploy/production.env.template .env` then fill in values |
+| 2. PHP dependencies | `composer install --no-dev --optimize-autoloader` |
+| 3. Database import | `bash deploy/database-setup.sh` |
+| 4. Cron jobs | See [`deploy/cron-setup.md`](deploy/cron-setup.md) |
+| 5. Node.js server | See [`deploy/nodejs-setup.md`](deploy/nodejs-setup.md) |
+| 6. SSL & security | See [`deploy/ssl-checklist.md`](deploy/ssl-checklist.md) |
+| 7. Verify deployment | `php deploy/health-check.php` |
+| 8. Rollback if needed | `bash deploy/rollback.sh <commit-sha>` |
+
+### Deploy Folder Reference
+
+| File | Purpose |
+|---|---|
+| [`deploy/setup.sh`](deploy/setup.sh) | Automated one-click deployment script |
+| [`deploy/production.env.template`](deploy/production.env.template) | Production `.env` template with Namecheap hints |
+| [`deploy/database-setup.sh`](deploy/database-setup.sh) | Database schema import in correct order |
+| [`deploy/cron-setup.md`](deploy/cron-setup.md) | Cron job configuration for cPanel |
+| [`deploy/nodejs-setup.md`](deploy/nodejs-setup.md) | Node.js / Socket.io server setup |
+| [`deploy/ssl-checklist.md`](deploy/ssl-checklist.md) | SSL verification and security headers |
+| [`deploy/health-check.php`](deploy/health-check.php) | Post-deploy verification script |
+| [`deploy/rollback.sh`](deploy/rollback.sh) | Git-based rollback with DB backup |
+
+See also [`DOCS/PRODUCTION-CHECKLIST.md`](DOCS/PRODUCTION-CHECKLIST.md) for the full production checklist.
 
 ---
 
