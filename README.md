@@ -126,47 +126,225 @@ globexskyphp/
 
 ## Deployment
 
-### Quick Deploy (3 Steps)
+### Prerequisites
+
+| Requirement | Version | Notes |
+|---|---|---|
+| PHP | >= 8.0 | With extensions: pdo, pdo_mysql, mbstring, json, curl, gd, openssl, fileinfo |
+| MySQL / MariaDB | 8.0+ | Database created in cPanel → MySQL Databases |
+| Composer | latest | For PHP dependency management |
+| Node.js | 18+ LTS | Optional — for real-time chat / video features |
+| Apache | 2.4+ | mod_rewrite must be enabled |
+
+**Namecheap cPanel Details:**
+- cPanel URL: `https://premium116.web-hosting.com:2083`
+- Home directory: `/home/bidybxoc/`
+- Project root: `/home/bidybxoc/globexsky.com/`
+
+---
+
+### Quick Start — One-Click Setup
 
 ```bash
-# 1. Run the automated setup script
+# 1. Upload files to server via cPanel → File Manager or Git
+# 2. Open cPanel → Terminal and run:
+cd ~/globexsky.com
 bash deploy/setup.sh
+```
 
-# 2. Fill in all values in .env
-#    (use deploy/production.env.template as a reference)
-nano .env
+The setup script will:
+- ✅ Check PHP version and required extensions
+- ✅ Create `.env` from the production template
+- ✅ Test MySQL connection
+- ✅ Set correct file permissions (755 dirs / 644 files / 640 .env)
+- ✅ Create required upload/storage directories
+- ✅ Install Composer dependencies
+- ✅ Import the database schema
+- ✅ Create the admin user (if not exists)
+- ✅ Run the health check
 
-# 3. Import the database
+---
+
+### Manual Setup Steps
+
+#### 1. Environment Configuration
+
+```bash
+cp deploy/production.env.template .env
+nano .env   # Fill in all <FILL_IN> placeholders
+```
+
+Key values to set (find in Namecheap cPanel → MySQL Databases):
+```env
+DB_HOST=localhost
+DB_NAME=bidybxoc_globexsky
+DB_USER=bidybxoc_globexsky
+DB_PASS=your_db_password
+
+APP_URL=https://globexsky.com
+APP_ENV=production
+APP_DEBUG=false
+```
+
+#### 2. Install PHP Dependencies
+
+```bash
+composer install --no-dev --optimize-autoloader
+```
+
+#### 3. Database Setup
+
+```bash
 bash deploy/database-setup.sh
 ```
 
-### Production Checklist
+Or manually via cPanel → phpMyAdmin, import in this order:
+```
+database/schema.sql
+database/schema_v2.sql
+database/schema_v3.sql
+database/schema_v4.sql
+database/schema_v5.sql
+database/schema_v7.sql
+database/schema_v8.sql
+database/schema_v5_kyc.sql
+database/schema_v9.sql
+database/schema_v10.sql
+database/schema_v11.sql
+database/seed.sql
+```
 
-| Step | Command / Location |
+#### 4. Create Admin Account
+
+Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env`, then run:
+```bash
+bash deploy/setup.sh    # Admin creation is part of setup
+```
+
+Or via MySQL:
+```sql
+INSERT INTO users (email, password_hash, name, role, admin_role, status, is_verified, is_active, created_at, updated_at)
+VALUES ('admin@globexsky.com', '<bcrypt_hash>', 'Admin', 'admin', 'super_admin', 'active', 1, 1, NOW(), NOW());
+```
+
+Login at: `https://globexsky.com/pages/auth/login.php`
+
+---
+
+### Cron Jobs Setup
+
+Set up cron jobs in **cPanel → Advanced → Cron Jobs**.
+See [`deploy/cron-setup.md`](deploy/cron-setup.md) for exact commands and schedules.
+
+| Job | Schedule |
 |---|---|
-| 1. Environment file | `cp deploy/production.env.template .env` then fill in values |
-| 2. PHP dependencies | `composer install --no-dev --optimize-autoloader` |
-| 3. Database import | `bash deploy/database-setup.sh` |
-| 4. Cron jobs | See [`deploy/cron-setup.md`](deploy/cron-setup.md) |
-| 5. Node.js server | See [`deploy/nodejs-setup.md`](deploy/nodejs-setup.md) |
-| 6. SSL & security | See [`deploy/ssl-checklist.md`](deploy/ssl-checklist.md) |
-| 7. Verify deployment | `php deploy/health-check.php` |
-| 8. Rollback if needed | `bash deploy/rollback.sh <commit-sha>` |
+| Session cleanup | Daily 1 AM |
+| Exchange rate update | Every 6 hours |
+| Email queue | Every 5 minutes |
+| Subscription checks | Daily 2 AM |
+| KYC reminders | Daily 10 AM |
+| Analytics aggregation | Daily 3 AM |
+| Cache cleanup | Every 6 hours |
+| Database backup | Daily 4 AM |
+
+---
+
+### Node.js Real-Time Features
+
+The real-time server (`nodejs/server.js`) powers chat and video calls.
+
+For **Namecheap shared hosting**:
+1. cPanel → **Software** → **Setup Node.js App**
+2. Set Application root to `public_html/nodejs`
+3. Set Startup file to `server.js`
+4. Add environment variables (see `.env`)
+
+For production with high traffic, consider a separate VPS for the Node.js server.
+See [`deploy/nodejs-setup.md`](deploy/nodejs-setup.md) for full instructions.
+
+---
+
+### SSL Setup
+
+1. cPanel → **Security** → **SSL/TLS Status** → **Run AutoSSL**
+2. Force HTTPS is already enabled in `.htaccess`
+3. Verify at: `https://www.ssllabs.com/ssltest/`
+
+See [`deploy/ssl-checklist.md`](deploy/ssl-checklist.md) for the full security checklist.
+
+---
+
+### Health Check
+
+Verify your deployment is healthy:
+
+```bash
+# CLI check
+php deploy/health-check.php
+
+# Web check (set HEALTH_CHECK_KEY in .env first)
+curl "https://globexsky.com/deploy/health-check.php?key=YOUR_KEY"
+
+# JSON API
+curl "https://globexsky.com/deploy/health-check.php?key=YOUR_KEY&format=json"
+```
+
+---
+
+### Rollback Procedure
+
+If something goes wrong after deployment:
+
+```bash
+# Show recent commits and roll back
+bash deploy/rollback.sh
+
+# Roll back to a specific commit
+bash deploy/rollback.sh abc1234
+```
+
+The rollback script will:
+1. Create a database backup
+2. Create a code snapshot
+3. Restore code files from the target commit
+4. Reinstall dependencies
+
+---
 
 ### Deploy Folder Reference
 
 | File | Purpose |
 |---|---|
-| [`deploy/setup.sh`](deploy/setup.sh) | Automated one-click deployment script |
+| [`deploy/setup.sh`](deploy/setup.sh) | One-click automated deployment script |
 | [`deploy/production.env.template`](deploy/production.env.template) | Production `.env` template with Namecheap hints |
 | [`deploy/database-setup.sh`](deploy/database-setup.sh) | Database schema import in correct order |
 | [`deploy/cron-setup.md`](deploy/cron-setup.md) | Cron job configuration for cPanel |
-| [`deploy/nodejs-setup.md`](deploy/nodejs-setup.md) | Node.js / Socket.io server setup |
-| [`deploy/ssl-checklist.md`](deploy/ssl-checklist.md) | SSL verification and security headers |
-| [`deploy/health-check.php`](deploy/health-check.php) | Post-deploy verification script |
-| [`deploy/rollback.sh`](deploy/rollback.sh) | Git-based rollback with DB backup |
+| [`deploy/nodejs-setup.md`](deploy/nodejs-setup.md) | Node.js / Socket.io / PeerJS server setup |
+| [`deploy/ssl-checklist.md`](deploy/ssl-checklist.md) | SSL verification and security headers checklist |
+| [`deploy/health-check.php`](deploy/health-check.php) | Post-deploy verification script (HTML + JSON) |
+| [`deploy/rollback.sh`](deploy/rollback.sh) | Git-based rollback with automatic DB backup |
 
-See also [`DOCS/PRODUCTION-CHECKLIST.md`](DOCS/PRODUCTION-CHECKLIST.md) for the full production checklist.
+---
+
+### Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| "Invalid email or password" on admin login | Verify `role='admin'` and `admin_role='super_admin'` in users table |
+| White page / PHP errors | Set `APP_DEBUG=true` temporarily, check `storage/logs/` |
+| Database connection failed | Verify DB credentials in `.env` — Namecheap prefixes db names with cPanel username |
+| File upload fails | Run `chmod 755 uploads/` and subdirectories |
+| Cron jobs not running | Verify PHP path with `which php` in cPanel Terminal |
+| Node.js not connecting | Check `.htaccess` ProxyPass rules; confirm mod_proxy is enabled |
+| SSL redirect loop | Ensure `APP_URL=https://...` in `.env` |
+| Composer not found | Install via: `curl -sS https://getcomposer.org/installer \| php` |
+
+**Namecheap-Specific Tips:**
+- MySQL host is almost always `localhost` (not a remote IP)
+- Database and user names are prefixed with your cPanel username (e.g., `bidybxoc_dbname`)
+- PHP binary path: `/usr/local/bin/php` or check with `which php`
+- Error logs location: cPanel → **Metrics** → **Errors**
+- File Manager path: `/home/bidybxoc/globexsky.com/`
 
 ---
 
