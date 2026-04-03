@@ -102,7 +102,9 @@ function getOrCreateDropshipStore(int $userId, string $storeName = ''): ?array
             $userStmt = $db->prepare('SELECT first_name, email FROM users WHERE id = ?');
             $userStmt->execute([$userId]);
             $user = $userStmt->fetch();
-            $storeName = trim(($user['first_name'] ?? explode('@', $user['email'] ?? 'user@x')[0]) . "'s Store");
+            $emailPrefix = explode('@', $user['email'] ?? 'user@x')[0];
+            $displayName = $user['first_name'] ?? $emailPrefix;
+            $storeName = trim($displayName . "'s Store");
         }
         $slug = generateStoreSlug($storeName, $db);
 
@@ -154,7 +156,7 @@ function importProduct(
     // 1. Plan limit check
     $limits = checkDropshipPlanLimits($dropshipperId);
     if (!$limits['allowed']) {
-        return ['success' => false, 'error' => 'Upgrade to Pro plan to use dropshipping. Free plan cannot dropship.'];
+        return ['success' => false, 'error' => 'Upgrade to Pro or Enterprise plan to use dropshipping. Free plan cannot dropship.'];
     }
 
     // 2. Fetch original product
@@ -423,7 +425,8 @@ function syncAllProducts(?int $dropshipperId = null): array
         return ['synced' => 0, 'errors' => 0];
     }
 
-    $synced = 0; $errors = 0;
+    $synced = 0;
+    $errors = 0;
     foreach ($ids as $id) {
         $result = syncProduct((int)$id);
         if ($result['updated']) $synced++; else $errors++;
@@ -528,9 +531,9 @@ function getDropshipCatalog(array $filters = [], int $page = 1, int $perPage = 2
             LEFT JOIN supplier_dropship_settings sds ON sds.supplier_id = p.supplier_id
             WHERE $whereClause
             ORDER BY $orderClause
-            LIMIT $perPage OFFSET $offset
+            LIMIT ? OFFSET ?
         ");
-        $stmt->execute($params);
+        $stmt->execute(array_merge($params, [$perPage, $offset]));
         $products = $stmt->fetchAll();
     } catch (PDOException $e) {
         return ['products' => [], 'total' => 0];

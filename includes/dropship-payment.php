@@ -110,10 +110,9 @@ function requestDropshipPayout(int $dropshipperId, float $amount, string $method
 
     $db = getDB();
     try {
-        // Mark earnings as requested
+        // Mark earnings as requested (process all available earnings in batches)
         $db->prepare("UPDATE dropship_earnings SET status = 'requested'
-            WHERE dropshipper_id = ? AND status = 'available'
-            LIMIT 9999")
+            WHERE dropshipper_id = ? AND status = 'available'")
            ->execute([$dropshipperId]);
 
         // Create payout request (using existing payouts table if exists)
