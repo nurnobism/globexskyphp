@@ -72,3 +72,50 @@ ServerSignature Off
     ExpiresByType image/png "access plus 6 months"
     ExpiresByType image/webp "access plus 6 months"
 </IfModule>
+
+# ============================================================
+# Phase 11 — Security Hardening (appended)
+# ============================================================
+
+# Protect includes/ directory from direct browser access
+<IfModule mod_rewrite.c>
+    RewriteRule ^includes/ - [F,L]
+</IfModule>
+
+# Block access to additional sensitive file types not covered above
+<FilesMatch "\.(git|gitignore|gitattributes|bak|orig|swp|dist|yml|yaml|conf|ini)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Prevent hotlinking of images from external sites
+<IfModule mod_rewrite.c>
+    RewriteCond %{HTTP_REFERER} !^$
+    RewriteCond %{HTTP_REFERER} !^https?://(www\.)?%{HTTP_HOST} [NC]
+    RewriteRule \.(jpe?g|png|gif|webp|svg|ico)$ - [F,NC,L]
+</IfModule>
+
+# Block common exploit patterns in query strings
+<IfModule mod_rewrite.c>
+    RewriteCond %{QUERY_STRING} (eval\(|base64_decode|python|perl|wget|curl) [NC]
+    RewriteRule .* - [F,L]
+    RewriteCond %{QUERY_STRING} (<|%3C).*script.*(>|%3E) [NC]
+    RewriteRule .* - [F,L]
+    RewriteCond %{QUERY_STRING} GLOBALS(=|\[|\%[0-9A-Z]{0,2}) [OR]
+    RewriteCond %{QUERY_STRING} _REQUEST(=|\[|\%[0-9A-Z]{0,2})
+    RewriteRule .* - [F,L]
+</IfModule>
+
+# Restrict HTTP methods — only allow GET, POST, HEAD
+<LimitExcept GET POST HEAD>
+    Order allow,deny
+    Deny from all
+</LimitExcept>
+
+# Security headers via Apache (backup for PHP headers)
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "DENY"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    Header always unset X-Powered-By
+    Header always unset Server
+</IfModule>
