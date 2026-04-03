@@ -552,6 +552,62 @@ foreach ($phase8Cron as $f) {
     assertSyntax("$root/$f");
 }
 
+// ── Phase 9: KYC + Advanced Admin ────────────────────────────
+echo "\nPhase 9 database:\n";
+assertFile("$root/database/schema_v9.sql");
+
+echo "\nPhase 9 includes:\n";
+$phase9Includes = [
+    'includes/kyc.php',
+    'includes/feature_toggles.php',
+];
+foreach ($phase9Includes as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 9 pages:\n";
+$phase9Pages = [
+    'pages/supplier/kyc.php',
+    'pages/admin/kyc-management.php',
+    'pages/admin/advanced-settings.php',
+    'pages/admin/user-management.php',
+];
+foreach ($phase9Pages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 9 API:\n";
+assertFile("$root/api/kyc.php");
+assertSyntax("$root/api/kyc.php");
+
+// ── Phase 10: i18n + Currency + PWA ──────────────────────────
+echo "\nPhase 10 database:\n";
+assertFile("$root/database/schema_v10.sql");
+
+echo "\nPhase 10 includes:\n";
+$phase10Includes = [
+    'includes/i18n.php',
+    'includes/currency.php',
+];
+foreach ($phase10Includes as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 10 language files:\n";
+$langs = ['en','zh','ar','es','fr','de','ja','ko','pt','ru','hi','bn','tr','it','nl','th','vi','id','ms','pl'];
+foreach ($langs as $lang) {
+    assertFile("$root/lang/$lang.php");
+    assertSyntax("$root/lang/$lang.php");
+}
+
+echo "\nPhase 10 PWA files:\n";
+assertFile("$root/manifest.json");
+assertFile("$root/sw.js");
+assertFile("$root/assets/js/pwa.js");
+
 
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
