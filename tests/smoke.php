@@ -240,6 +240,98 @@ foreach ($phase2Files as $f) {
     if (str_ends_with($f, '.php')) assertSyntax("$root/$f");
 }
 
+// ── Phase 7: REST API Platform + Live Streaming + Webhooks ───
+echo "\nPhase 7 includes:\n";
+$phase7Includes = [
+    'includes/api-auth.php',
+    'includes/api-response.php',
+    'includes/webhooks.php',
+];
+foreach ($phase7Includes as $f) {
+    assertFile("$root/$f");
+}
+foreach ($phase7Includes as $f) {
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 7 database:\n";
+assertFile("$root/database/schema_v4.sql");
+
+echo "\nPhase 7 API v1 endpoints:\n";
+$phase7ApiV1 = [
+    'api/v1/gateway.php',
+    'api/v1/products.php',
+    'api/v1/orders.php',
+    'api/v1/users.php',
+    'api/v1/cart.php',
+    'api/v1/reviews.php',
+    'api/v1/shipping.php',
+    'api/v1/dropship.php',
+    'api/v1/webhooks.php',
+];
+foreach ($phase7ApiV1 as $f) {
+    assertFile("$root/$f");
+}
+foreach ($phase7ApiV1 as $f) {
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 7 Live Stream API:\n";
+assertFile("$root/api/live.php");
+assertSyntax("$root/api/live.php");
+
+echo "\nPhase 7 API developer portal pages:\n";
+$phase7ApiPages = [
+    'pages/api/index.php',
+    'pages/api/keys.php',
+    'pages/api/docs.php',
+    'pages/api/logs.php',
+    'pages/api/usage.php',
+    'pages/api/webhooks.php',
+];
+foreach ($phase7ApiPages as $f) {
+    assertFile("$root/$f");
+}
+foreach ($phase7ApiPages as $f) {
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 7 Live stream pages:\n";
+$phase7LivePages = [
+    'pages/live/index.php',
+    'pages/live/watch.php',
+    'pages/live/stream.php',
+    'pages/live/schedule.php',
+    'pages/live/vod.php',
+];
+foreach ($phase7LivePages as $f) {
+    assertFile("$root/$f");
+}
+foreach ($phase7LivePages as $f) {
+    assertSyntax("$root/$f");
+}
+
+echo "\nPhase 7 Admin pages:\n";
+assertFile("$root/pages/admin/api-management.php");
+assertSyntax("$root/pages/admin/api-management.php");
+assertFile("$root/pages/admin/live-streams.php");
+assertSyntax("$root/pages/admin/live-streams.php");
+
+echo "\nPhase 7 Cron:\n";
+assertFile("$root/cron/process-webhooks.php");
+assertSyntax("$root/cron/process-webhooks.php");
+
+echo "\nPhase 7 SDKs:\n";
+assertFile("$root/sdk/php/GlobexSkyClient.php");
+assertSyntax("$root/sdk/php/GlobexSkyClient.php");
+assertFile("$root/sdk/javascript/globexsky.js");
+assertFile("$root/sdk/python/globexsky.py");
+
+echo "\nPhase 7 JS & Node.js:\n";
+assertFile("$root/assets/js/live-stream.js");
+assertFile("$root/assets/js/api-docs.js");
+assertFile("$root/nodejs/server.js");
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
