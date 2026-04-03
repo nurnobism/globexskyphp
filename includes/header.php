@@ -4,11 +4,28 @@ $pageTitle    = $pageTitle ?? APP_NAME;
 $pageDesc     = $pageDesc ?? 'GlobexSky — Global B2B Trade Platform';
 $currentUser  = isLoggedIn() ? getCurrentUser() : null;
 $cartCount    = 0;
+$notifCount   = 0;
+$chatUnread   = 0;
 if (isLoggedIn()) {
     try {
         $stmt = getDB()->prepare('SELECT COALESCE(SUM(quantity),0) FROM cart_items WHERE user_id = ?');
         $stmt->execute([$_SESSION['user_id']]);
         $cartCount = (int)$stmt->fetchColumn();
+    } catch (PDOException $e) { /* ignore */ }
+    try {
+        $stmt = getDB()->prepare('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0');
+        $stmt->execute([$_SESSION['user_id']]);
+        $notifCount = (int)$stmt->fetchColumn();
+    } catch (PDOException $e) { /* ignore */ }
+    try {
+        $stmt = getDB()->prepare(
+            'SELECT COUNT(DISTINCT cm.id) FROM chat_messages cm
+             JOIN chat_participants cp ON cp.room_id = cm.room_id AND cp.user_id = ?
+             WHERE cm.created_at > COALESCE(cp.last_read_at, "1970-01-01")
+             AND cm.sender_id != ?'
+        );
+        $stmt->execute([$_SESSION['user_id'], $_SESSION['user_id']]);
+        $chatUnread = (int)$stmt->fetchColumn();
     } catch (PDOException $e) { /* ignore */ }
 } else {
     $cartCount = array_sum(array_column($_SESSION['cart'] ?? [], 'quantity'));
@@ -109,8 +126,47 @@ if (isLoggedIn()) {
             </div>
         </form>
 
-        <!-- Cart & toggler -->
+        <!-- Notifications, Messages, Cart & toggler -->
         <div class="d-flex align-items-center gap-2">
+            <?php if (isLoggedIn()): ?>
+            <!-- Notification Bell -->
+            <div class="dropdown" id="notificationDropdown">
+                <a href="#" class="btn btn-outline-secondary position-relative" data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Notifications">
+                    <i class="bi bi-bell"></i>
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger notification-badge" <?= $notifCount > 0 ? '' : 'style="display:none"' ?>>
+                        <?= $notifCount > 99 ? '99+' : $notifCount ?>
+                    </span>
+                </a>
+                <div class="dropdown-menu dropdown-menu-end shadow" style="width:320px;max-height:400px;overflow-y:auto">
+                    <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                        <strong>Notifications</strong>
+                        <a href="#" onclick="GlobexNotifications.markAllRead();return false;" class="small text-decoration-none">Mark all read</a>
+                    </div>
+                    <div id="notificationList">
+                        <div class="text-center py-3 text-muted"><div class="spinner-border spinner-border-sm"></div></div>
+                    </div>
+                    <div class="border-top text-center py-2">
+                        <a href="<?= APP_URL ?>/pages/notifications/index.php" class="small text-decoration-none">View All Notifications</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Icon -->
+            <a href="<?= APP_URL ?>/pages/messages/index.php" class="btn btn-outline-secondary position-relative" title="Messages">
+                <i class="bi bi-chat-dots"></i>
+                <?php if ($chatUnread > 0): ?>
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
+                        <?= $chatUnread > 99 ? '99+' : $chatUnread ?>
+                    </span>
+                <?php endif; ?>
+            </a>
+
+            <!-- Webmail Icon -->
+            <a href="<?= APP_URL ?>/pages/webmail/inbox.php" class="btn btn-outline-secondary" title="Webmail">
+                <i class="bi bi-envelope"></i>
+            </a>
+            <?php endif; ?>
+
             <a href="<?= APP_URL ?>/pages/cart/index.php" class="btn btn-outline-primary position-relative">
                 <i class="bi bi-cart3"></i>
                 <?php if ($cartCount > 0): ?>
@@ -198,7 +254,9 @@ if (isLoggedIn()) {
                         <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/order/index.php"><i class="bi bi-bag me-2"></i>My Orders</a></li>
                         <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/rfq/index.php"><i class="bi bi-file-text me-2"></i>My RFQs</a></li>
                         <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/notifications/index.php"><i class="bi bi-bell me-2"></i>Notifications</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/communication/index.php"><i class="bi bi-chat-left-text me-2"></i>Messages</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/messages/index.php"><i class="bi bi-chat-dots me-2"></i>Chat Messages</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/webmail/inbox.php"><i class="bi bi-envelope me-2"></i>Webmail</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/communication/index.php"><i class="bi bi-chat-left-text me-2"></i>Communication</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/payment/index.php"><i class="bi bi-credit-card me-2"></i>Payments</a></li>
                         <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/loyalty/index.php"><i class="bi bi-trophy me-2"></i>Loyalty Rewards</a></li>
