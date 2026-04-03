@@ -213,7 +213,7 @@ const STRIPE_KEY  = <?= json_encode($stripePublishableKey) ?>;
 let shippingFee   = 0;
 let discount      = 0;
 let stripeCard    = null;
-let stripeObj     = (STRIPE_KEY && typeof Stripe !== 'undefined') ? Stripe(STRIPE_KEY) : null;
+let stripeObj     = (typeof Stripe !== 'undefined' && STRIPE_KEY) ? Stripe(STRIPE_KEY) : null;
 
 if (stripeObj) {
     const elements = stripeObj.elements();

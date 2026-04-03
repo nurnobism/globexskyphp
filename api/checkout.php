@@ -135,7 +135,7 @@ switch ($action) {
         $tax   = round($subtotal * 0.05, 2);
         $total = max(0, round($subtotal + $shippingFee + $tax - $discount, 2));
 
-        $orderNumber   = 'GS-' . strtoupper(bin2hex(random_bytes(5))) . '-' . date('Ymd');
+        $orderNumber   = 'GS-' . strtoupper(bin2hex(random_bytes(8))) . '-' . date('Ymd');
         $paymentMethod = post('payment_method', 'cod');
 
         // Insert order
