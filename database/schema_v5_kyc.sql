@@ -154,6 +154,37 @@ SET @sql = IF(
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- -----------------------------------------------------
+-- ALTER TABLE system_settings: add columns introduced by KYC schema
+-- (table may already exist from schema.sql without these columns)
+-- -----------------------------------------------------
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME   = 'system_settings'
+      AND COLUMN_NAME  = 'description'
+);
+SET @sql = IF(
+    @col_exists = 0,
+    'ALTER TABLE `system_settings` ADD COLUMN `description` VARCHAR(255) NULL COLLATE utf8mb4_unicode_ci AFTER `setting_group`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME   = 'system_settings'
+      AND COLUMN_NAME  = 'updated_by'
+);
+SET @sql = IF(
+    @col_exists = 0,
+    'ALTER TABLE `system_settings` ADD COLUMN `updated_by` INT UNSIGNED NULL AFTER `updated_at`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- -----------------------------------------------------
 -- Default system_settings
 -- -----------------------------------------------------
 INSERT IGNORE INTO `system_settings` (`setting_key`, `setting_value`, `setting_group`, `description`) VALUES
