@@ -1,5 +1,6 @@
 <?php
 // includes/header.php — must be called after middleware.php is loaded
+if (function_exists('i18nInit')) { i18nInit(); }
 $pageTitle    = $pageTitle ?? APP_NAME;
 $pageDesc     = $pageDesc ?? 'GlobexSky — Global B2B Trade Platform';
 $currentUser  = isLoggedIn() ? getCurrentUser() : null;
@@ -32,7 +33,7 @@ if (isLoggedIn()) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?= function_exists('getLocale') ? e(getLocale()) : 'en' ?>" <?= (function_exists('isRTL') && isRTL()) ? 'dir="rtl"' : '' ?>>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -45,6 +46,13 @@ if (isLoggedIn()) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="<?= APP_URL ?>/assets/css/style.css">
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="GlobexSky">
 </head>
 <body>
 
@@ -52,8 +60,52 @@ if (isLoggedIn()) {
 <div class="topbar bg-primary text-white py-1 small">
     <div class="container d-flex justify-content-between align-items-center">
         <span><i class="bi bi-telephone-fill"></i> +1 (800) GLOBEX-SKY</span>
-        <div class="d-flex gap-3">
+        <div class="d-flex gap-3 align-items-center">
             <a href="<?= APP_URL ?>/pages/help.php" class="text-white text-decoration-none">Help</a>
+
+            <?php /* Language Switcher */ if (function_exists('getAvailableLanguages')): ?>
+            <?php $availLangs = getAvailableLanguages(); $curLang = function_exists('getLocale') ? getLocale() : 'en'; ?>
+            <div class="dropdown">
+                <a href="#" class="text-white text-decoration-none dropdown-toggle small" data-bs-toggle="dropdown">
+                    <?= e($availLangs[$curLang]['flag'] ?? '🌐') ?> <?= e(strtoupper($curLang)) ?>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end" style="max-height:300px;overflow-y:auto">
+                    <?php foreach ($availLangs as $code => $info): ?>
+                    <li>
+                        <a class="dropdown-item <?= $code === $curLang ? 'active' : '' ?>"
+                           href="?lang=<?= e($code) ?>">
+                            <?= e($info['flag']) ?> <?= e($info['native']) ?>
+                        </a>
+                    </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <?php endif; ?>
+
+            <?php /* Currency Switcher */ if (function_exists('getActiveCurrencies')): ?>
+            <?php $curCurrency = function_exists('getSelectedCurrency') ? getSelectedCurrency() : 'USD'; ?>
+            <div class="dropdown">
+                <a href="#" class="text-white text-decoration-none dropdown-toggle small" data-bs-toggle="dropdown">
+                    <?= e($curCurrency) ?>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end" style="max-height:300px;overflow-y:auto">
+                    <?php foreach (getActiveCurrencies() as $curr): ?>
+                    <li>
+                        <a class="dropdown-item <?= $curr['code'] === $curCurrency ? 'active' : '' ?>"
+                           href="?currency=<?= e($curr['code']) ?>"
+                           onclick="document.cookie='currency=<?= e($curr['code']) ?>;path=/;max-age=31536000';this.closest('.dropdown').querySelector('.dropdown-toggle').textContent=' <?= e($curr['code']) ?>';return true;">
+                            <?= e($curr['symbol']) ?> <?= e($curr['code']) ?> — <?= e($curr['name']) ?>
+                        </a>
+                    </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <?php endif; ?>
+
+            <!-- PWA Install Button -->
+            <button id="pwa-install-btn" class="btn btn-outline-light btn-sm" style="display:none" onclick="pwaInstall()">
+                <i class="bi bi-download me-1"></i>Install App
+            </button>
             <?php if (isLoggedIn() && $currentUser): ?>
                 <?php
                 $email       = $currentUser['email'] ?? '';

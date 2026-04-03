@@ -67,6 +67,8 @@
 <!-- Notification & Sound JS -->
 <script src="<?= APP_URL ?>/assets/js/notification-sounds.js"></script>
 <script src="<?= APP_URL ?>/assets/js/notifications.js"></script>
+<!-- PWA -->
+<script src="<?= APP_URL ?>/assets/js/pwa.js"></script>
 <?php if (isLoggedIn()): ?>
 <script>
 GlobexNotifications.init({

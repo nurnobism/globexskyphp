@@ -1,305 +1,170 @@
 <?php
 /**
- * includes/kyc.php — KYC Helper Functions
+ * includes/kyc.php — KYC Verification Engine (Phase 9)
  */
 
-/**
- * Get KYC status for a user.
- * Returns 'none' if no submission exists.
- */
-function getKycStatus(int $userId): string {
+/** KYC level labels */
+function kycLevelLabel(int $level): string {
+    return match($level) {
+        0 => 'L0 — Unverified',
+        1 => 'L1 — Basic Verified',
+        2 => 'L2 — Business Verified',
+        3 => 'L3 — Premium Verified',
+        4 => 'L4 — Gold Verified',
+        default => 'Unknown'
+    };
+}
+
+/** KYC level badge color */
+function kycLevelBadge(int $level): string {
+    return match($level) {
+        0 => 'secondary',
+        1 => 'info',
+        2 => 'primary',
+        3 => 'success',
+        4 => 'warning',
+        default => 'secondary'
+    };
+}
+
+/** Get user's current KYC level (0 if none) */
+function getKYCLevel(int $userId): int {
     try {
         $db   = getDB();
-        $stmt = $db->prepare('SELECT kyc_status FROM users WHERE id = ?');
+        $stmt = $db->prepare('SELECT current_level FROM kyc_levels WHERE user_id = ?');
         $stmt->execute([$userId]);
-        $row = $stmt->fetch();
-        return $row['kyc_status'] ?? 'none';
+        $row  = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ? (int)$row['current_level'] : 0;
     } catch (PDOException $e) {
-        error_log('getKycStatus error: ' . $e->getMessage());
-        return 'none';
+        return 0;
     }
 }
 
-/**
- * Get the most recent KYC submission for a user.
- * Returns submission row array or null.
- */
-function getKycSubmission(int $userId): ?array {
+/** Get all KYC submissions for a user */
+function getKYCSubmissions(int $userId, ?string $status = null): array {
+    try {
+        $db     = getDB();
+        $sql    = 'SELECT * FROM kyc_submissions WHERE user_id = ?';
+        $params = [$userId];
+        if ($status !== null) {
+            $sql    .= ' AND status = ?';
+            $params[] = $status;
+        }
+        $sql .= ' ORDER BY submitted_at DESC';
+        $stmt = $db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        return [];
+    }
+}
+
+/** Get all pending KYC submissions (admin) */
+function getPendingKYCSubmissions(int $limit = 50): array {
     try {
         $db   = getDB();
         $stmt = $db->prepare(
-            'SELECT * FROM kyc_submissions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1'
+            'SELECT s.*, u.email, u.first_name, u.last_name
+             FROM kyc_submissions s
+             JOIN users u ON u.id = s.user_id
+             WHERE s.status = "pending"
+             ORDER BY s.submitted_at ASC
+             LIMIT ?'
         );
+        $stmt->execute([$limit]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        return [];
+    }
+}
+
+/** Submit a KYC document */
+function submitKYCDocument(int $userId, int $level, string $docType, string $filePath): int {
+    $db   = getDB();
+    $stmt = $db->prepare(
+        'INSERT INTO kyc_submissions (user_id, level, document_type, file_path, status)
+         VALUES (?, ?, ?, ?, "pending")'
+    );
+    $stmt->execute([$userId, $level, $docType, $filePath]);
+    return (int)$db->lastInsertId();
+}
+
+/** Admin: approve or reject a KYC submission */
+function reviewKYCSubmission(int $submissionId, string $decision, int $reviewerId, string $notes = ''): bool {
+    if (!in_array($decision, ['approved', 'rejected'], true)) {
+        return false;
+    }
+    $db   = getDB();
+
+    // Update submission
+    $db->prepare(
+        'UPDATE kyc_submissions SET status=?, reviewer_id=?, review_notes=?, reviewed_at=NOW() WHERE id=?'
+    )->execute([$decision, $reviewerId, $notes, $submissionId]);
+
+    if ($decision !== 'approved') {
+        return true;
+    }
+
+    // Check if all level documents are approved → upgrade kyc_level
+    $sub  = $db->prepare('SELECT user_id, level FROM kyc_submissions WHERE id=?');
+    $sub->execute([$submissionId]);
+    $row  = $sub->fetch(PDO::FETCH_ASSOC);
+    if (!$row) return true;
+
+    $userId = (int)$row['user_id'];
+    $level  = (int)$row['level'];
+
+    upgradeKYCLevelIfEligible($userId, $level);
+    return true;
+}
+
+/** Check if user has all docs approved for a level and upgrade */
+function upgradeKYCLevelIfEligible(int $userId, int $level): void {
+    $db = getDB();
+
+    $required = kycRequiredDocs($level);
+    if (empty($required)) return;
+
+    // Count how many approved docs exist for this level
+    $stmt = $db->prepare(
+        'SELECT COUNT(*) FROM kyc_submissions
+         WHERE user_id=? AND level=? AND status="approved" AND document_type IN (' .
+         implode(',', array_fill(0, count($required), '?')) . ')'
+    );
+    $stmt->execute(array_merge([$userId, $level], $required));
+    $approvedCount = (int)$stmt->fetchColumn();
+
+    if ($approvedCount >= count($required)) {
+        // Use separate parameterized queries per level to avoid column name interpolation
+        $colMap = [
+            1 => 'INSERT INTO kyc_levels (user_id, current_level, l1_verified_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE current_level = GREATEST(current_level, ?), l1_verified_at = COALESCE(l1_verified_at, NOW())',
+            2 => 'INSERT INTO kyc_levels (user_id, current_level, l2_verified_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE current_level = GREATEST(current_level, ?), l2_verified_at = COALESCE(l2_verified_at, NOW())',
+            3 => 'INSERT INTO kyc_levels (user_id, current_level, l3_verified_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE current_level = GREATEST(current_level, ?), l3_verified_at = COALESCE(l3_verified_at, NOW())',
+            4 => 'INSERT INTO kyc_levels (user_id, current_level, l4_verified_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE current_level = GREATEST(current_level, ?), l4_verified_at = COALESCE(l4_verified_at, NOW())',
+        ];
+        if (!isset($colMap[$level])) return;
+        $db->prepare($colMap[$level])->execute([$userId, $level, $level]);
+    }
+}
+
+/** Required document types per KYC level */
+function kycRequiredDocs(int $level): array {
+    return match($level) {
+        1 => ['government_id'],
+        2 => ['business_license', 'proof_of_address'],
+        3 => ['factory_photos', 'video_verification'],
+        default => []
+    };
+}
+
+/** Get KYC record for a user */
+function getKYCRecord(int $userId): array {
+    try {
+        $db   = getDB();
+        $stmt = $db->prepare('SELECT * FROM kyc_levels WHERE user_id = ?');
         $stmt->execute([$userId]);
-        $row = $stmt->fetch();
-        return $row ?: null;
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: ['user_id' => $userId, 'current_level' => 0];
     } catch (PDOException $e) {
-        error_log('getKycSubmission error: ' . $e->getMessage());
-        return null;
-    }
-}
-
-/**
- * Submit a new KYC application.
- * $data keys: business_name, business_type, registration_number, tax_id,
- *             country, address, city, state, postal_code
- * Returns submission ID on success, throws RuntimeException on failure.
- */
-function submitKycApplication(int $userId, array $data): int {
-    $required = ['business_name', 'business_type', 'country', 'address', 'city'];
-    foreach ($required as $field) {
-        if (empty($data[$field])) {
-            throw new RuntimeException("Missing required field: {$field}");
-        }
-    }
-
-    try {
-        $db = getDB();
-        $db->beginTransaction();
-
-        $stmt = $db->prepare(
-            'INSERT INTO kyc_submissions
-                (user_id, business_name, business_type, registration_number, tax_id,
-                 country, address, city, state, postal_code, status, submitted_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'pending\', NOW())'
-        );
-        $stmt->execute([
-            $userId,
-            $data['business_name'],
-            $data['business_type'],
-            $data['registration_number'] ?? null,
-            $data['tax_id']              ?? null,
-            $data['country'],
-            $data['address'],
-            $data['city'],
-            $data['state']       ?? '',
-            $data['postal_code'] ?? '',
-        ]);
-
-        $submissionId = (int) $db->lastInsertId();
-
-        $db->prepare('UPDATE users SET kyc_status = \'pending\' WHERE id = ?')
-           ->execute([$userId]);
-
-        $db->commit();
-
-        logKycAudit($submissionId, 'submitted', $userId);
-
-        return $submissionId;
-    } catch (PDOException $e) {
-        if ($db->inTransaction()) {
-            $db->rollBack();
-        }
-        error_log('submitKycApplication error: ' . $e->getMessage());
-        throw new RuntimeException('Failed to submit KYC application.');
-    }
-}
-
-/**
- * Upload a KYC document for a submission.
- * $file is $_FILES['file'] element.
- * $type is the document_type string.
- * Validates: allowed extensions (jpg,jpeg,png,pdf), max 5MB, MIME type.
- * Stores to uploads/kyc/{submissionId}/ with random filename.
- * Returns document ID.
- */
-function uploadKycDocument(int $submissionId, array $file, string $type): int {
-    if ($file['error'] !== UPLOAD_ERR_OK) {
-        throw new RuntimeException('File upload error code: ' . $file['error']);
-    }
-
-    $maxSize = 5 * 1024 * 1024;
-    if ($file['size'] > $maxSize) {
-        throw new RuntimeException('File exceeds maximum allowed size of 5 MB.');
-    }
-
-    $allowedExtensions = ['jpg', 'jpeg', 'png', 'pdf'];
-    $allowedMimes      = ['image/jpeg', 'image/png', 'application/pdf'];
-
-    $originalName = $file['name'];
-    $ext          = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-
-    if (!in_array($ext, $allowedExtensions, true)) {
-        throw new RuntimeException('File type not allowed. Permitted types: jpg, jpeg, png, pdf.');
-    }
-
-    $finfo    = new finfo(FILEINFO_MIME_TYPE);
-    $mimeType = $finfo->file($file['tmp_name']);
-
-    if (!in_array($mimeType, $allowedMimes, true)) {
-        throw new RuntimeException('Invalid MIME type detected: ' . $mimeType);
-    }
-
-    $uploadDir = UPLOAD_DIR . 'kyc/' . $submissionId . '/';
-    if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true)) {
-        throw new RuntimeException('Failed to create upload directory.');
-    }
-
-    $filename    = bin2hex(random_bytes(16)) . '.' . $ext;
-    $destination = $uploadDir . $filename;
-
-    if (!move_uploaded_file($file['tmp_name'], $destination)) {
-        throw new RuntimeException('Failed to move uploaded file.');
-    }
-
-    $relativePath = 'kyc/' . $submissionId . '/' . $filename;
-
-    try {
-        $db = getDB();
-        $db->beginTransaction();
-
-        $stmt = $db->prepare(
-            'INSERT INTO kyc_documents
-                (kyc_submission_id, document_type, file_path, file_name, file_size, mime_type)
-             VALUES (?, ?, ?, ?, ?, ?)'
-        );
-        $stmt->execute([
-            $submissionId,
-            $type,
-            $relativePath,
-            $originalName,
-            $file['size'],
-            $mimeType,
-        ]);
-        $documentId = (int) $db->lastInsertId();
-
-        // Advance submission status from pending → under_review
-        $db->prepare(
-            "UPDATE kyc_submissions SET status = 'under_review'
-             WHERE id = ? AND status = 'pending'"
-        )->execute([$submissionId]);
-
-        $db->commit();
-
-        logKycAudit($submissionId, 'document_uploaded', $_SESSION['user_id'] ?? 0, [
-            'document_id'   => $documentId,
-            'document_type' => $type,
-            'file_name'     => $originalName,
-        ]);
-
-        return $documentId;
-    } catch (PDOException $e) {
-        if ($db->inTransaction()) {
-            $db->rollBack();
-        }
-        // Remove the uploaded file if the DB insert failed
-        if (file_exists($destination)) {
-            unlink($destination);
-        }
-        error_log('uploadKycDocument error: ' . $e->getMessage());
-        throw new RuntimeException('Failed to record document upload.');
-    }
-}
-
-/**
- * Guard function: require KYC to be approved for the current user.
- * Redirects to /pages/account/kyc.php if not approved.
- */
-function requireKycApproved(): void {
-    if (!isLoggedIn()) {
-        redirect('/pages/auth/login.php?redirect=' . urlencode($_SERVER['REQUEST_URI']));
-    }
-
-    $status = getKycStatus((int) $_SESSION['user_id']);
-    if ($status !== 'approved') {
-        redirect('/pages/account/kyc.php?notice=kyc_required');
-    }
-}
-
-/**
- * Guard function: require KYC for sellers (supplier/carrier roles).
- * Only enforces if kyc_required_for_sellers setting is enabled.
- * Redirects to KYC page with message if needed.
- */
-function requireKycForSellers(): void {
-    if (!isLoggedIn()) {
-        return;
-    }
-
-    $sellerRoles = ['supplier', 'carrier'];
-    if (!in_array($_SESSION['user_role'] ?? '', $sellerRoles, true)) {
-        return;
-    }
-
-    // Lazy-load getSystemSetting if admin_permissions.php is not included
-    $kycRequired = '0';
-    if (function_exists('getSystemSetting')) {
-        $kycRequired = getSystemSetting('kyc_required_for_sellers', '0');
-    } else {
-        try {
-            $db   = getDB();
-            $stmt = $db->prepare(
-                "SELECT setting_value FROM system_settings WHERE setting_key = 'kyc_required_for_sellers'"
-            );
-            $stmt->execute();
-            $row         = $stmt->fetch();
-            $kycRequired = $row['setting_value'] ?? '0';
-        } catch (PDOException $e) {
-            error_log('requireKycForSellers setting lookup error: ' . $e->getMessage());
-        }
-    }
-
-    if ($kycRequired !== '1') {
-        return;
-    }
-
-    $status = getKycStatus((int) $_SESSION['user_id']);
-    if ($status !== 'approved') {
-        redirect('/pages/account/kyc.php?notice=kyc_required_for_sellers');
-    }
-}
-
-/**
- * Log a KYC audit event.
- */
-function logKycAudit(int $submissionId, string $action, int $performedBy, array $details = []): void {
-    try {
-        $db   = getDB();
-        $stmt = $db->prepare(
-            'INSERT INTO kyc_audit_log
-                (kyc_submission_id, action, performed_by, ip_address, user_agent, details)
-             VALUES (?, ?, ?, ?, ?, ?)'
-        );
-        $stmt->execute([
-            $submissionId > 0 ? $submissionId : null,
-            $action,
-            $performedBy > 0 ? $performedBy : null,
-            $_SERVER['REMOTE_ADDR']     ?? null,
-            $_SERVER['HTTP_USER_AGENT'] ?? null,
-            $details ? json_encode($details) : null,
-        ]);
-    } catch (PDOException $e) {
-        error_log('logKycAudit error: ' . $e->getMessage());
-    }
-}
-
-/**
- * Log an admin audit event.
- */
-function logAdminAudit(
-    int    $adminId,
-    string $action,
-    string $targetType = '',
-    int    $targetId   = 0,
-    array  $details    = []
-): void {
-    try {
-        $db   = getDB();
-        $stmt = $db->prepare(
-            'INSERT INTO admin_audit_log
-                (admin_id, action, target_type, target_id, details, ip_address, user_agent)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
-        );
-        $stmt->execute([
-            $adminId,
-            $action,
-            $targetType ?: null,
-            $targetId > 0 ? $targetId : null,
-            $details ? json_encode($details) : null,
-            $_SERVER['REMOTE_ADDR']     ?? null,
-            $_SERVER['HTTP_USER_AGENT'] ?? null,
-        ]);
-    } catch (PDOException $e) {
-        error_log('logAdminAudit error: ' . $e->getMessage());
+        return ['user_id' => $userId, 'current_level' => 0];
     }
 }
