@@ -64,5 +64,16 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <!-- Custom JS -->
 <script src="<?= APP_URL ?>/assets/js/app.js"></script>
+<!-- Notification & Sound JS -->
+<script src="<?= APP_URL ?>/assets/js/notification-sounds.js"></script>
+<script src="<?= APP_URL ?>/assets/js/notifications.js"></script>
+<?php if (isLoggedIn()): ?>
+<script>
+GlobexNotifications.init({
+    baseUrl: <?= json_encode(APP_URL) ?>,
+    csrfToken: <?= json_encode(csrfToken()) ?>
+});
+</script>
+<?php endif; ?>
 </body>
 </html>
