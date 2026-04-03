@@ -314,7 +314,7 @@ $fallbackCurrencies = [
                                 <li><a class="dropdown-item fw-semibold" href="<?= APP_URL ?>/pages/supplier/index.php"><i class="bi bi-building me-2"></i>Supplier Dashboard</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <?php elseif ($userRole === 'carrier'): ?>
-                                <li><a class="dropdown-item fw-semibold" href="<?= APP_URL ?>/pages/shipment/carrier/"><i class="bi bi-truck me-2"></i>Carrier Dashboard</a></li>
+                                <li><a class="dropdown-item fw-semibold" href="<?= APP_URL ?>/pages/shipment/carry/dashboard.php"><i class="bi bi-truck me-2"></i>Carrier Dashboard</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <?php endif; ?>
                                 <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/account/profile.php"><i class="bi bi-person me-2"></i>My Profile</a></li>
