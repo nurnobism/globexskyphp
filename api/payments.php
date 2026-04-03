@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/middleware.php';
+require_once __DIR__ . '/../config/stripe.php';
 header('Content-Type: application/json');
 $db = getDB();
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
@@ -125,6 +126,89 @@ switch ($action) {
         );
         $stmt->execute([$userId, $orderId, $amount, $currency, $methodId]);
         jsonOut(['success' => true, 'id' => $db->lastInsertId(), 'status' => 'completed']);
+        break;
+
+    case 'create_intent':
+        if (!isLoggedIn()) jsonOut(['error' => 'Login required'], 401);
+        if (!verifyCsrf()) jsonOut(['error' => 'Invalid CSRF token'], 403);
+        $orderId = (int)($_POST['order_id'] ?? 0);
+        if (!$orderId) jsonOut(['error' => 'Order ID required'], 400);
+        $stmt = $db->prepare('SELECT * FROM orders WHERE id = ? AND buyer_id = ?');
+        $stmt->execute([$orderId, $_SESSION['user_id']]);
+        $order = $stmt->fetch();
+        if (!$order) jsonOut(['error' => 'Order not found'], 404);
+        if (!class_exists('\Stripe\Stripe')) jsonOut(['error' => 'Stripe is not configured'], 503);
+        try {
+            \Stripe\Stripe::setApiKey(STRIPE_SECRET_KEY);
+            $intent = \Stripe\PaymentIntent::create([
+                'amount'   => (int)round($order['total'] * 100),
+                'currency' => strtolower($order['currency'] ?? 'usd'),
+                'metadata' => ['order_id' => $orderId, 'order_number' => $order['order_number']],
+            ]);
+            $db->prepare('UPDATE orders SET stripe_payment_intent_id = ? WHERE id = ?')->execute([$intent->id, $orderId]);
+            jsonOut(['success' => true, 'client_secret' => $intent->client_secret, 'intent_id' => $intent->id]);
+        } catch (\Exception $e) {
+            jsonOut(['error' => $e->getMessage()], 500);
+        }
+        break;
+
+    case 'confirm':
+        if (!isLoggedIn()) jsonOut(['error' => 'Login required'], 401);
+        if (!verifyCsrf()) jsonOut(['error' => 'Invalid CSRF token'], 403);
+        $orderId  = (int)($_POST['order_id'] ?? 0);
+        $intentId = trim($_POST['intent_id'] ?? '');
+        if (!$orderId || !$intentId) jsonOut(['error' => 'Order ID and intent ID required'], 400);
+        $stmt = $db->prepare('SELECT id FROM orders WHERE id = ? AND buyer_id = ? AND stripe_payment_intent_id = ?');
+        $stmt->execute([$orderId, $_SESSION['user_id'], $intentId]);
+        if (!$stmt->fetch()) jsonOut(['error' => 'Order not found'], 404);
+        $db->prepare('UPDATE orders SET payment_status = "paid", status = "confirmed" WHERE id = ?')->execute([$orderId]);
+        jsonOut(['success' => true, 'order_id' => $orderId]);
+        break;
+
+    case 'webhook':
+        $payload   = file_get_contents('php://input');
+        $sigHeader = $_SERVER['HTTP_STRIPE_SIGNATURE'] ?? '';
+        if (!class_exists('\Stripe\Stripe')) { http_response_code(200); echo json_encode(['received' => true]); exit; }
+        try {
+            \Stripe\Stripe::setApiKey(STRIPE_SECRET_KEY);
+            $event = \Stripe\Webhook::constructEvent($payload, $sigHeader, STRIPE_WEBHOOK_SECRET);
+        } catch (\Exception $e) {
+            http_response_code(400); echo json_encode(['error' => $e->getMessage()]); exit;
+        }
+        switch ($event->type) {
+            case 'payment_intent.succeeded':
+                $pi = $event->data->object;
+                $oid = (int)($pi->metadata->order_id ?? 0);
+                if ($oid) $db->prepare('UPDATE orders SET payment_status = "paid", status = "confirmed" WHERE id = ? AND payment_status != "paid"')->execute([$oid]);
+                break;
+            case 'payment_intent.payment_failed':
+                $pi = $event->data->object;
+                $oid = (int)($pi->metadata->order_id ?? 0);
+                if ($oid) $db->prepare('UPDATE orders SET payment_status = "failed" WHERE id = ?')->execute([$oid]);
+                break;
+        }
+        http_response_code(200); echo json_encode(['received' => true]); exit;
+
+    case 'refund':
+        if (!isLoggedIn()) jsonOut(['error' => 'Login required'], 401);
+        if (!isAdmin())    jsonOut(['error' => 'Forbidden'], 403);
+        if (!verifyCsrf()) jsonOut(['error' => 'Invalid CSRF token'], 403);
+        $orderId = (int)($_POST['order_id'] ?? 0);
+        if (!$orderId) jsonOut(['error' => 'Order ID required'], 400);
+        $stmt = $db->prepare('SELECT * FROM orders WHERE id = ?');
+        $stmt->execute([$orderId]);
+        $order = $stmt->fetch();
+        if (!$order) jsonOut(['error' => 'Order not found'], 404);
+        if (empty($order['stripe_payment_intent_id'])) jsonOut(['error' => 'No Stripe payment found'], 400);
+        if (!class_exists('\Stripe\Stripe')) jsonOut(['error' => 'Stripe is not configured'], 503);
+        try {
+            \Stripe\Stripe::setApiKey(STRIPE_SECRET_KEY);
+            $refund = \Stripe\Refund::create(['payment_intent' => $order['stripe_payment_intent_id']]);
+            $db->prepare('UPDATE orders SET payment_status = "refunded", status = "refunded" WHERE id = ?')->execute([$orderId]);
+            jsonOut(['success' => true, 'refund_id' => $refund->id]);
+        } catch (\Exception $e) {
+            jsonOut(['error' => $e->getMessage()], 500);
+        }
         break;
 
     default:

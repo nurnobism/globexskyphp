@@ -122,6 +122,38 @@ switch ($action) {
         jsonResponse(['success' => true]);
         break;
 
+    case 'count':
+        if (!isLoggedIn()) {
+            $count = array_sum(array_column($_SESSION['cart'] ?? [], 'quantity'));
+            jsonResponse(['count' => (int)$count]);
+            break;
+        }
+        $stmt = $db->prepare('SELECT COALESCE(SUM(quantity), 0) AS cnt FROM cart_items WHERE user_id = ?');
+        $stmt->execute([$_SESSION['user_id']]);
+        jsonResponse(['count' => (int)$stmt->fetchColumn()]);
+        break;
+
+    case 'sync':
+        // Merge session cart into DB cart on login
+        if (!isLoggedIn()) jsonResponse(['error' => 'Login required'], 401);
+        $sessionCart = $_SESSION['cart'] ?? [];
+        foreach ($sessionCart as $item) {
+            $productId = (int)($item['id'] ?? 0);
+            $quantity  = max(1, (int)($item['quantity'] ?? 1));
+            $variantId = $item['variant_id'] ?? null;
+            if (!$productId) continue;
+            $existing = $db->prepare('SELECT id, quantity FROM cart_items WHERE user_id = ? AND product_id = ? AND ' . ($variantId ? 'variant_id = ?' : 'variant_id IS NULL'));
+            $existing->execute($variantId ? [$_SESSION['user_id'], $productId, $variantId] : [$_SESSION['user_id'], $productId]);
+            $row = $existing->fetch();
+            if ($row) {
+                $db->prepare('UPDATE cart_items SET quantity = quantity + ? WHERE id = ?')->execute([$quantity, $row['id']]);
+            } else {
+                $db->prepare('INSERT INTO cart_items (user_id, product_id, variant_id, quantity) VALUES (?, ?, ?, ?)')->execute([$_SESSION['user_id'], $productId, $variantId, $quantity]);
+            }
+        }
+        $_SESSION['cart'] = [];
+        jsonResponse(['success' => true]);
+
     default:
         jsonResponse(['error' => 'Unknown action'], 400);
 }
