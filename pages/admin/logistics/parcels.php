@@ -32,7 +32,7 @@ try {
          LEFT JOIN users u ON u.id = ps.user_id
          WHERE $whereStr
          ORDER BY ps.created_at DESC
-         LIMIT $limit OFFSET $offset"
+         LIMIT " . (int)$limit . " OFFSET " . (int)$offset
     );
     $stmt->execute($params);
     $shipments = $stmt->fetchAll(PDO::FETCH_ASSOC);
