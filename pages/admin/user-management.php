@@ -31,6 +31,19 @@ try {
     $users = []; $pagination = ['total' => 0, 'pages' => 1];
 }
 
+// CSV export — must run before any output (headers not yet sent)
+if (isset($_GET['export']) && $_GET['export'] === 'csv' && isAdmin()) {
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="users_export.csv"');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['ID','Email','First Name','Last Name','Role','KYC Level','Created At']);
+    foreach ($users as $u) {
+        fputcsv($out, [$u['id'],$u['email'],$u['first_name']??'',$u['last_name']??'',$u['role'],$u['kyc_level'],$u['created_at']]);
+    }
+    fclose($out);
+    exit;
+}
+
 $pageTitle = 'Admin — Enhanced User Management';
 include __DIR__ . '/../../includes/header.php';
 ?>
@@ -77,19 +90,6 @@ include __DIR__ . '/../../includes/header.php';
             </a>
         </div>
     </form>
-
-    <!-- CSV Export -->
-    <?php if (isset($_GET['export']) && $_GET['export'] === 'csv' && isAdmin()):
-        header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="users_export.csv"');
-        $out = fopen('php://output', 'w');
-        fputcsv($out, ['ID','Email','First Name','Last Name','Role','KYC Level','Created At']);
-        foreach ($users as $u) {
-            fputcsv($out, [$u['id'],$u['email'],$u['first_name']??'',$u['last_name']??'',$u['role'],$u['kyc_level'],$u['created_at']]);
-        }
-        fclose($out);
-        exit;
-    endif; ?>
 
     <!-- Users Table -->
     <div class="card border-0 shadow-sm">

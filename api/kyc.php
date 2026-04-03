@@ -64,13 +64,18 @@ try {
                 mkdir($uploadDir, 0755, true);
             }
 
-            $filename  = 'kyc_' . $userId . '_' . $level . '_' . $docType . '_' . time() . '.' . $ext;
-            $filePath  = $uploadDir . $filename;
-
-            // Prevent directory traversal: ensure resolved path stays within upload dir
+            // Prevent directory traversal: resolve upload dir after mkdir, then validate path
             $realUploadDir = realpath($uploadDir);
-            $realFilePath  = $realUploadDir . DIRECTORY_SEPARATOR . $filename;
-            if ($realUploadDir === false || strpos($realFilePath, $realUploadDir . DIRECTORY_SEPARATOR) !== 0) {
+            if ($realUploadDir === false) {
+                http_response_code(500);
+                echo json_encode(['error' => 'Upload directory unavailable']);
+                exit;
+            }
+
+            $filename     = 'kyc_' . $userId . '_' . $level . '_' . $docType . '_' . time() . '.' . $ext;
+            $realFilePath = $realUploadDir . DIRECTORY_SEPARATOR . $filename;
+
+            if (strpos($realFilePath, $realUploadDir . DIRECTORY_SEPARATOR) !== 0) {
                 http_response_code(400);
                 echo json_encode(['error' => 'Invalid file path']);
                 exit;

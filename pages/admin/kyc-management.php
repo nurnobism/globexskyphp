@@ -144,7 +144,7 @@ include __DIR__ . '/../../includes/header.php';
                                 </div>
                                 <?php else: ?>
                                     <?php if ($s['review_notes']): ?>
-                                        <small class="text-muted"><?= e(mb_substr($s['review_notes'], 0, 40)) ?>...</small>
+                                        <small class="text-muted"><?= e(mb_substr($s['review_notes'], 0, 40)) ?><?= mb_strlen($s['review_notes']) > 40 ? '...' : '' ?></small>
                                     <?php else: ?>
                                         <span class="text-muted">—</span>
                                     <?php endif; ?>
