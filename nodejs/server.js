@@ -83,6 +83,25 @@ const io = new Server(server, {
 // In-memory map: userId -> Set of socketIds (a user may have multiple tabs open)
 const userSockets = new Map();
 
+// ── Phase 7: Live Streaming In-Memory State ──────────────────────────────────
+const activeStreams = new Map();   // streamId -> { streamerId, title, viewers: Set, pinnedProduct, startedAt }
+const streamBans   = new Map();   // streamId -> Set of banned userIds
+
+function streamRoom(streamId) {
+    return `stream_${streamId}`;
+}
+
+function handleViewerLeave(socket, streamId) {
+    const room = streamRoom(streamId);
+    const stream = activeStreams.get(streamId);
+    if (stream) {
+        stream.viewers.delete(socket.id);
+        const count = stream.viewers.size;
+        io.to(room).emit('stream_viewer_count', { streamId, count });
+    }
+    socket.leave(room);
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function setUserOnline(userId, socketId) {
@@ -344,9 +363,215 @@ io.on('connection', async (socket) => {
         ack && ack({ success: true, delivered });
     });
 
+    // ── Phase 7: Live Streaming Events ─────────────────────────────────────────
+
+    socket.on('stream_start', (data) => {
+        const { streamId, title, category } = data || {};
+        if (!streamId) return;
+
+        const room = streamRoom(streamId);
+        socket.join(room);
+
+        activeStreams.set(streamId, {
+            streamerId: userId,
+            title: title || 'Live Stream',
+            category: category || 'general',
+            viewers: new Set(),
+            pinnedProduct: null,
+            startedAt: Date.now(),
+            streamerSocketId: socket.id
+        });
+        streamBans.set(streamId, new Set());
+
+        io.emit('stream_started', {
+            streamId,
+            streamerId: userId,
+            title,
+            category,
+            startedAt: new Date().toISOString()
+        });
+        console.log(`[stream_start] stream=${streamId} user=${userId}`);
+    });
+
+    socket.on('stream_end', (data) => {
+        const { streamId } = data || {};
+        if (!streamId) return;
+
+        const stream = activeStreams.get(streamId);
+        if (stream && stream.streamerId === userId) {
+            const room = streamRoom(streamId);
+            io.to(room).emit('stream_ended', {
+                streamId,
+                duration: Date.now() - stream.startedAt,
+                peakViewers: stream.viewers.size
+            });
+            activeStreams.delete(streamId);
+            streamBans.delete(streamId);
+            console.log(`[stream_end] stream=${streamId}`);
+        }
+    });
+
+    socket.on('stream_join', (data) => {
+        const { streamId } = data || {};
+        if (!streamId) return;
+
+        const bans = streamBans.get(streamId);
+        if (bans && bans.has(userId)) {
+            socket.emit('stream_error', { message: 'You are banned from this stream.' });
+            return;
+        }
+
+        const room = streamRoom(streamId);
+        const stream = activeStreams.get(streamId);
+
+        socket.join(room);
+        socket.streamId = streamId;
+
+        if (stream) {
+            stream.viewers.add(socket.id);
+            const count = stream.viewers.size;
+            io.to(room).emit('stream_viewer_count', { streamId, count });
+
+            if (stream.pinnedProduct) {
+                socket.emit('stream_product_pin', stream.pinnedProduct);
+            }
+        }
+        console.log(`[stream_join] user=${userId} stream=${streamId}`);
+    });
+
+    socket.on('stream_leave', (data) => {
+        const { streamId } = data || {};
+        if (streamId) handleViewerLeave(socket, streamId);
+    });
+
+    socket.on('stream_chat', (data) => {
+        const { streamId, message, type } = data || {};
+        if (!streamId || !message) return;
+
+        const bans = streamBans.get(streamId);
+        if (bans && bans.has(userId)) return;
+
+        const room = streamRoom(streamId);
+        io.to(room).emit('stream_chat_message', {
+            id: require('crypto').randomUUID(),
+            streamId,
+            userId,
+            username: socket.userName || 'Anonymous',
+            message: String(message).substring(0, 500),
+            type: type || 'message',
+            timestamp: new Date().toISOString()
+        });
+    });
+
+    socket.on('stream_reaction', (data) => {
+        const { streamId, emoji } = data || {};
+        if (!streamId || !emoji) return;
+
+        const room = streamRoom(streamId);
+        io.to(room).emit('stream_reaction_broadcast', {
+            streamId,
+            userId,
+            emoji,
+            id: require('crypto').randomUUID()
+        });
+    });
+
+    socket.on('stream_product_pin', (data) => {
+        const { streamId, product } = data || {};
+        if (!streamId || !product) return;
+
+        const stream = activeStreams.get(streamId);
+        if (stream && stream.streamerId === userId) {
+            stream.pinnedProduct = product;
+            const room = streamRoom(streamId);
+            io.to(room).emit('stream_product_pin', { streamId, product });
+        }
+    });
+
+    socket.on('stream_product_unpin', (data) => {
+        const { streamId } = data || {};
+        if (!streamId) return;
+
+        const stream = activeStreams.get(streamId);
+        if (stream && stream.streamerId === userId) {
+            stream.pinnedProduct = null;
+            const room = streamRoom(streamId);
+            io.to(room).emit('stream_product_unpin', { streamId });
+        }
+    });
+
+    socket.on('stream_question', (data) => {
+        const { streamId, question } = data || {};
+        if (!streamId || !question) return;
+
+        const stream = activeStreams.get(streamId);
+        if (!stream) return;
+
+        const room = streamRoom(streamId);
+        const questionData = {
+            id: require('crypto').randomUUID(),
+            streamId,
+            userId,
+            username: socket.userName || 'Anonymous',
+            question: String(question).substring(0, 500),
+            timestamp: new Date().toISOString()
+        };
+        io.to(stream.streamerSocketId).emit('stream_question_received', questionData);
+        io.to(room).emit('stream_question_broadcast', questionData);
+    });
+
+    socket.on('stream_ban', (data) => {
+        const { streamId, targetUserId } = data || {};
+        if (!streamId || !targetUserId) return;
+
+        const stream = activeStreams.get(streamId);
+        if (stream && stream.streamerId === userId) {
+            let bans = streamBans.get(streamId);
+            if (!bans) {
+                bans = new Set();
+                streamBans.set(streamId, bans);
+            }
+            bans.add(targetUserId);
+            const room = streamRoom(streamId);
+            io.to(room).emit('stream_user_banned', { streamId, userId: targetUserId });
+            console.log(`[stream_ban] user=${targetUserId} from stream=${streamId}`);
+        }
+    });
+
+    // WebRTC signaling
+    socket.on('webrtc_offer', (data) => {
+        const { streamId, offer, targetId } = data || {};
+        if (targetId) {
+            io.to(targetId).emit('webrtc_offer', { offer, senderId: socket.id, streamId });
+        } else if (streamId) {
+            socket.to(streamRoom(streamId)).emit('webrtc_offer', { offer, senderId: socket.id, streamId });
+        }
+    });
+
+    socket.on('webrtc_answer', (data) => {
+        const { targetId, answer, streamId } = data || {};
+        if (targetId) {
+            io.to(targetId).emit('webrtc_answer', { answer, senderId: socket.id, streamId });
+        }
+    });
+
+    socket.on('webrtc_ice_candidate', (data) => {
+        const { targetId, candidate, streamId } = data || {};
+        if (targetId) {
+            io.to(targetId).emit('webrtc_ice_candidate', { candidate, senderId: socket.id, streamId });
+        } else if (streamId) {
+            socket.to(streamRoom(streamId)).emit('webrtc_ice_candidate', { candidate, senderId: socket.id, streamId });
+        }
+    });
+
     // ── disconnect ─────────────────────────────────────────────────────────────
     socket.on('disconnect', async (reason) => {
         console.log(`[disconnect] user=${userId} socket=${socket.id} reason=${reason}`);
+
+        // Clean up streaming state
+        if (socket.streamId) {
+            handleViewerLeave(socket, socket.streamId);
+        }
 
         const sockets = userSockets.get(userId);
         if (sockets) {
@@ -364,6 +589,15 @@ io.on('connection', async (socket) => {
         console.error(`[socket error] user=${userId}:`, err.message);
     });
 });
+
+// ── Phase 7: Periodic viewer count broadcast ─────────────────────────────────
+setInterval(() => {
+    for (const [streamId, stream] of activeStreams.entries()) {
+        const room = streamRoom(streamId);
+        const count = stream.viewers.size;
+        io.to(room).emit('stream_viewer_count', { streamId, count });
+    }
+}, 10000);
 
 // ── Graceful shutdown ─────────────────────────────────────────────────────────
 
