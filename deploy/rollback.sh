@@ -58,19 +58,30 @@ read -r -p "  Type 'yes' to confirm: " confirm
 step "Step 1/4 — Database backup before rollback"
 mkdir -p "$BACKUP_DIR"
 ENV_FILE="$ROOT_DIR/.env"
+# Helper: extract a key value from .env, stripping surrounding quotes
+read_env() { grep -E "^$1=" "$ENV_FILE" | cut -d= -f2- | tr -d "\"'" | xargs 2>/dev/null || true; }
 if [ -f "$ENV_FILE" ]; then
-    DB_HOST=$(grep -E '^DB_HOST=' "$ENV_FILE" | cut -d= -f2- | xargs 2>/dev/null || echo "localhost")
-    DB_PORT=$(grep -E '^DB_PORT=' "$ENV_FILE" | cut -d= -f2- | xargs 2>/dev/null || echo "3306")
-    DB_NAME=$(grep -E '^DB_NAME=' "$ENV_FILE" | cut -d= -f2- | xargs 2>/dev/null || echo "")
-    DB_USER=$(grep -E '^DB_USER=' "$ENV_FILE" | cut -d= -f2- | xargs 2>/dev/null || echo "")
-    DB_PASS=$(grep -E '^DB_PASS=' "$ENV_FILE" | cut -d= -f2- | xargs 2>/dev/null || echo "")
+    DB_HOST=$(read_env DB_HOST)
+    DB_PORT=$(read_env DB_PORT)
+    DB_NAME=$(read_env DB_NAME)
+    DB_USER=$(read_env DB_USER)
+    DB_PASS=$(read_env DB_PASS)
 fi
 
 BACKUP_SQL="$BACKUP_DIR/db_backup_${TIMESTAMP}.sql"
 if command -v mysqldump &>/dev/null && [ -n "${DB_NAME:-}" ]; then
-    if mysqldump -h "${DB_HOST:-localhost}" -P "${DB_PORT:-3306}" \
-                 -u "${DB_USER:-}" "-p${DB_PASS:-}" \
-                 "${DB_NAME:-}" > "$BACKUP_SQL" 2>/dev/null; then
+    # Write temporary MySQL config to avoid password in process listing
+    MYSQL_CNF=$(mktemp /tmp/globexsky_mysql_XXXXXX.cnf)
+    chmod 600 "$MYSQL_CNF"
+    cat > "$MYSQL_CNF" <<EOF
+[client]
+host=${DB_HOST:-localhost}
+port=${DB_PORT:-3306}
+user=${DB_USER:-}
+password=${DB_PASS:-}
+EOF
+    trap 'rm -f "$MYSQL_CNF"' EXIT
+    if mysqldump --defaults-extra-file="$MYSQL_CNF" "${DB_NAME:-}" > "$BACKUP_SQL" 2>/dev/null; then
         ok "Database backed up to: $BACKUP_SQL"
     else
         warn "Could not back up database automatically."
@@ -94,10 +105,14 @@ rsync -a --exclude=".git" --exclude="vendor" --exclude="node_modules" \
 ok "Code snapshot saved to: $BACKUP_CODE"
 
 # ── Step 3: Git rollback ──────────────────────────────────────
-step "Step 3/4 — Rolling back code to $TARGET_SHA"
+# Using 'git checkout <sha> -- .' restores all tracked files to the state at that
+# commit without changing HEAD. This is a safe file-level rollback suitable for
+# shared hosting where a detached HEAD state could cause confusion. HEAD will still
+# point to the current branch; re-deploy from the target commit if needed.
+step "Step 3/4 — Rolling back code files to $TARGET_SHA"
 git -C "$ROOT_DIR" fetch --all
 git -C "$ROOT_DIR" checkout "$TARGET_SHA" -- .
-ok "Code rolled back to $TARGET_SHA"
+ok "Code files rolled back to $TARGET_SHA (HEAD unchanged)"
 
 # ── Step 4: Reinstall dependencies ───────────────────────────
 step "Step 4/4 — Reinstalling dependencies"

@@ -157,7 +157,8 @@ $requiredEnvVars = [
 ];
 foreach ($requiredEnvVars as $var) {
     $val = env($var);
-    $set = $val !== '' && !str_contains(strtolower($val), 'fill_in') && !str_contains($val, 'xxx');
+    $valLower = strtolower($val);
+    $set = $val !== '' && !str_contains($valLower, 'fill_in') && !str_contains($valLower, 'xxx');
     addCheck("ENV var set: $var", $set, $set ? '(set)' : 'EMPTY or placeholder');
 }
 
@@ -231,7 +232,8 @@ if (!$isCli && extension_loaded('curl')) {
         CURLOPT_HEADER         => true,
         CURLOPT_NOBODY         => true,
         CURLOPT_TIMEOUT        => 5,
-        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
     ]);
     $headerRaw = curl_exec($ch);
     curl_close($ch);

@@ -43,13 +43,15 @@ fi
 
 # ── Read .env or prompt for credentials ───────────────────────
 ENV_FILE="$ROOT_DIR/.env"
+# Helper: extract a key value from .env, stripping surrounding quotes
+read_env() { grep -E "^$1=" "$ENV_FILE" | cut -d= -f2- | tr -d "\"'" | xargs 2>/dev/null || true; }
 if [ -f "$ENV_FILE" ]; then
     info "Reading credentials from .env …"
-    DB_HOST=$(grep -E '^DB_HOST=' "$ENV_FILE" | cut -d= -f2- | tr -d '"'"'" | xargs)
-    DB_PORT=$(grep -E '^DB_PORT=' "$ENV_FILE" | cut -d= -f2- | tr -d '"'"'" | xargs)
-    DB_NAME=$(grep -E '^DB_NAME=' "$ENV_FILE" | cut -d= -f2- | tr -d '"'"'" | xargs)
-    DB_USER=$(grep -E '^DB_USER=' "$ENV_FILE" | cut -d= -f2- | tr -d '"'"'" | xargs)
-    DB_PASS=$(grep -E '^DB_PASS=' "$ENV_FILE" | cut -d= -f2- | tr -d '"'"'" | xargs)
+    DB_HOST=$(read_env DB_HOST)
+    DB_PORT=$(read_env DB_PORT)
+    DB_NAME=$(read_env DB_NAME)
+    DB_USER=$(read_env DB_USER)
+    DB_PASS=$(read_env DB_PASS)
 fi
 
 # Prompt if values are still empty / placeholder
@@ -73,9 +75,22 @@ if [ -z "${DB_PASS:-}" ]; then
     read -r -s -p "  Database password (hidden): " DB_PASS; echo ""
 fi
 
+# ── Write a temporary MySQL defaults file (avoids password in process list) ──
+MYSQL_CNF=$(mktemp /tmp/globexsky_mysql_XXXXXX.cnf)
+chmod 600 "$MYSQL_CNF"
+cat > "$MYSQL_CNF" <<EOF
+[client]
+host=${DB_HOST}
+port=${DB_PORT}
+user=${DB_USER}
+password=${DB_PASS}
+EOF
+# Ensure the temp file is removed on exit
+trap 'rm -f "$MYSQL_CNF"' EXIT
+
 # ── Test connection before importing ─────────────────────────
 step "Testing database connection …"
-if ! mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" "-p${DB_PASS}" \
+if ! mysql --defaults-extra-file="$MYSQL_CNF" \
        -e "SELECT 1;" "$DB_NAME" &>/dev/null; then
     err "Cannot connect to MySQL with the supplied credentials."
     warn "Check DB_HOST, DB_NAME, DB_USER, DB_PASS in your .env"
@@ -101,7 +116,7 @@ SQL_FILES=(
     "seed.sql"            # Optional seed data (admin user, categories)
 )
 
-MYSQL_CMD="mysql -h $DB_HOST -P $DB_PORT -u $DB_USER -p${DB_PASS} $DB_NAME"
+MYSQL_CMD="mysql --defaults-extra-file=$MYSQL_CNF $DB_NAME"
 IMPORTED=0
 SKIPPED=0
 FAILED=0
