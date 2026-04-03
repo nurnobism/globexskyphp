@@ -71,8 +71,6 @@ switch ($action) {
         } else {
             // Supplier sees only own
             $supplierId = $_SESSION['user_id'];
-            $total      = (int)$db->prepare('SELECT COUNT(*) FROM commission_logs WHERE supplier_id = ?')
-                             ->execute([$supplierId]) ? 0 : 0;
             $cStmt = $db->prepare('SELECT COUNT(*) FROM commission_logs WHERE supplier_id = ?');
             $cStmt->execute([$supplierId]);
             $total = (int)$cStmt->fetchColumn();

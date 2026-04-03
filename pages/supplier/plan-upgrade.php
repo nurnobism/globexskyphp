@@ -20,7 +20,7 @@ if (!$plan || (float)$plan['price'] <= 0) {
     exit;
 }
 
-$plan['limits_decoded']   = json_decode($plan['features'] ?? '{}', true) ?: [];
+$plan['limits_decoded']   = json_decode($plan['limits'] ?? '{}', true) ?: [];
 $plan['features_decoded'] = json_decode($plan['features'] ?? '{}', true) ?: [];
 
 // Check current subscription for proration
