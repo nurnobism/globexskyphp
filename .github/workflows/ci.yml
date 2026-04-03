@@ -116,6 +116,9 @@ jobs:
           if [ -f database/schema_v8.sql ]; then
             mysql -h 127.0.0.1 -u root -proot globexsky_test < database/schema_v8.sql
           fi
+          if [ -f database/schema_v5_kyc.sql ]; then
+            mysql -h 127.0.0.1 -u root -proot globexsky_test < database/schema_v5_kyc.sql
+          fi
           if [ -f database/schema_v9.sql ]; then
             mysql -h 127.0.0.1 -u root -proot globexsky_test < database/schema_v9.sql
           fi

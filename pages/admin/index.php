@@ -63,6 +63,8 @@ include __DIR__ . '/../../includes/header.php';
             <a href="/pages/admin/products.php" class="btn btn-outline-primary btn-sm"><i class="bi bi-box-seam me-1"></i>Products</a>
             <a href="/pages/admin/orders.php"   class="btn btn-outline-success btn-sm"><i class="bi bi-bag me-1"></i>Orders</a>
             <a href="/pages/admin/settings.php" class="btn btn-outline-dark btn-sm"><i class="bi bi-gear"></i></a>
+            <a href="/pages/admin/kyc/index.php"  class="btn btn-outline-warning btn-sm"><i class="bi bi-shield-check me-1"></i>KYC</a>
+            <a href="/pages/admin/audit-log.php"  class="btn btn-outline-info btn-sm"><i class="bi bi-journal-text me-1"></i>Audit Log</a>
         </div>
     </div>
 
@@ -150,6 +152,54 @@ include __DIR__ . '/../../includes/header.php';
             </div>
         </div>
     </div>
+
+    <!-- Phase 9: KYC Stats -->
+    <?php
+    $kycPending = 0; $kycApproved = 0; $kycRejected = 0; $kycUnderReview = 0;
+    try {
+        $kycPending     = (int)$db->query("SELECT COUNT(*) FROM kyc_submissions WHERE status='pending'")->fetchColumn();
+        $kycUnderReview = (int)$db->query("SELECT COUNT(*) FROM kyc_submissions WHERE status='under_review'")->fetchColumn();
+        $kycApproved    = (int)$db->query("SELECT COUNT(*) FROM kyc_submissions WHERE status='approved'")->fetchColumn();
+        $kycRejected    = (int)$db->query("SELECT COUNT(*) FROM kyc_submissions WHERE status='rejected'")->fetchColumn();
+    } catch (PDOException $e) { /* kyc tables may not exist yet */ }
+    if ($kycPending + $kycUnderReview + $kycApproved + $kycRejected > 0):
+    ?>
+    <div class="row g-3 mb-4">
+        <div class="col-12"><h6 class="text-muted fw-semibold">KYC Verification</h6></div>
+        <div class="col-6 col-md-3">
+            <a href="/pages/admin/kyc/index.php?status=pending" class="card border-0 shadow-sm text-decoration-none h-100">
+                <div class="card-body text-center">
+                    <div class="fs-3 fw-bold text-warning"><?= $kycPending ?></div>
+                    <small class="text-muted">Pending Review</small>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="/pages/admin/kyc/index.php?status=under_review" class="card border-0 shadow-sm text-decoration-none h-100">
+                <div class="card-body text-center">
+                    <div class="fs-3 fw-bold text-info"><?= $kycUnderReview ?></div>
+                    <small class="text-muted">Under Review</small>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="/pages/admin/kyc/index.php?status=approved" class="card border-0 shadow-sm text-decoration-none h-100">
+                <div class="card-body text-center">
+                    <div class="fs-3 fw-bold text-success"><?= $kycApproved ?></div>
+                    <small class="text-muted">Approved</small>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="/pages/admin/kyc/index.php?status=rejected" class="card border-0 shadow-sm text-decoration-none h-100">
+                <div class="card-body text-center">
+                    <div class="fs-3 fw-bold text-danger"><?= $kycRejected ?></div>
+                    <small class="text-muted">Rejected</small>
+                </div>
+            </a>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <!-- Secondary stats row -->
     <div class="row g-3 mb-4">
