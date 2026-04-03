@@ -240,6 +240,56 @@ foreach ($phase2Files as $f) {
     if (str_ends_with($f, '.php')) assertSyntax("$root/$f");
 }
 
+// ── Phase 2 files ────────────────────────────────────────────
+echo "\nPhase 2 files:\n";
+$phase2Files = [
+    'config/stripe.php',
+    'api/checkout.php',
+    'api/payments.php',
+    'pages/supplier/dashboard.php',
+    'pages/supplier/products.php',
+    'pages/supplier/product-add.php',
+    'pages/supplier/product-edit.php',
+    'pages/supplier/orders.php',
+    'pages/order/confirmation.php',
+];
+foreach ($phase2Files as $f) {
+    assertFile("$root/$f");
+}
+foreach ($phase2Files as $f) {
+    if (str_ends_with($f, '.php')) assertSyntax("$root/$f");
+}
+
+// ── Phase 8: AI Integration (DeepSeek) ──────────────────────
+echo "\nPhase 8 — AI Integration files:\n";
+$phase8Files = [
+    'database/schema_v6_ai.sql',
+    'includes/ai-engine.php',
+    'includes/ai-chatbot.php',
+    'includes/ai-recommendations.php',
+    'includes/ai-fraud.php',
+    'includes/ai-search.php',
+    'includes/ai-content.php',
+    'includes/ai-widget.php',
+    'api/ai.php',
+    'pages/ai/sourcing.php',
+    'pages/admin/ai-dashboard.php',
+    'pages/admin/ai-fraud.php',
+    'assets/js/ai-chatbot.js',
+    'assets/js/ai-recommendations.js',
+    'cron/ai-recommendations.php',
+    'cron/ai-fraud-scan.php',
+];
+foreach ($phase8Files as $f) {
+    assertFile("$root/$f");
+}
+
+echo "\nPhase 8 PHP syntax:\n";
+$phase8PhpFiles = array_filter($phase8Files, fn($f) => str_ends_with($f, '.php'));
+foreach ($phase8PhpFiles as $f) {
+    assertSyntax("$root/$f");
+}
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
