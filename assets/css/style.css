@@ -91,6 +91,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; }
     white-space: nowrap;
 }
 .gs-util-btn:hover { background: #f0f4f8; }
+.gs-chevron-sm { font-size: .7rem; }
 
 /* Icon-only action buttons (bell, chat, mail, cart) */
 .gs-icon-btn {

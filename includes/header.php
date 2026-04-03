@@ -139,11 +139,11 @@ $fallbackCurrencies = [
                             <?php if (!empty($availLangs) && isset($availLangs[$curLang])): ?>
                                 <?= e($availLangs[$curLang]['flag'] ?? '🌐') ?> <?= e($availLangs[$curLang]['native'] ?? strtoupper($curLang)) ?>
                             <?php elseif (isset($fallbackLangs[$curLang])): ?>
-                                <?= $fallbackLangs[$curLang]['flag'] ?> <?= e($fallbackLangs[$curLang]['native']) ?>
+                                <?= e($fallbackLangs[$curLang]['flag']) ?> <?= e($fallbackLangs[$curLang]['native']) ?>
                             <?php else: ?>
                                 🇬🇧 English
                             <?php endif; ?>
-                            <i class="bi bi-chevron-down" style="font-size:.7rem"></i>
+                            <i class="bi bi-chevron-down gs-chevron-sm"></i>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" style="max-height:300px;overflow-y:auto;min-width:160px">
                             <?php if (!empty($availLangs)): ?>
@@ -160,7 +160,7 @@ $fallbackCurrencies = [
                                 <li>
                                     <a class="dropdown-item <?= $code === $curLang ? 'active' : '' ?>"
                                        href="?lang=<?= e($code) ?>">
-                                        <?= $info['flag'] ?> <?= e($info['native']) ?>
+                                        <?= e($info['flag']) ?> <?= e($info['native']) ?>
                                     </a>
                                 </li>
                                 <?php endforeach; ?>
@@ -350,7 +350,8 @@ $fallbackCurrencies = [
                     <!-- Cart -->
                     <a href="<?= APP_URL ?>/pages/cart/index.php" class="gs-icon-btn position-relative" title="Cart">
                         <i class="bi bi-cart3 fs-5"></i>
-                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                              aria-label="Cart items: <?= $cartCount > 99 ? '99+' : $cartCount ?>">
                             <?= $cartCount > 99 ? '99+' : $cartCount ?>
                         </span>
                     </a>
