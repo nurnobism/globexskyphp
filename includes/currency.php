@@ -117,9 +117,14 @@ function refreshExchangeRates(): bool {
         } catch (PDOException $e) { /* unknown currency, skip */ }
     }
 
-    // Cache raw JSON
+    // Cache raw JSON; keep only the 10 most recent entries to prevent unbounded growth
     $db->prepare('INSERT INTO exchange_rate_cache (base_currency, rates_json, fetched_at) VALUES (?,?,NOW())')
        ->execute(['USD', json_encode($data['conversion_rates'])]);
+    $db->prepare(
+        'DELETE FROM exchange_rate_cache WHERE id NOT IN (
+             SELECT id FROM (SELECT id FROM exchange_rate_cache ORDER BY fetched_at DESC LIMIT 10) t
+         )'
+    )->execute();
 
     return true;
 }

@@ -1,7 +1,7 @@
 <?php
 /**
  * includes/i18n.php — Internationalization Engine (Phase 10)
- * Usage: __('key') to translate, setLocale('fr') to switch language
+ * Usage: __('key') to translate, setAppLocale('fr') to switch language
  */
 
 $_i18n_strings = [];

@@ -18,7 +18,9 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => {
-      return cache.addAll(STATIC_ASSETS.map(url => new Request(url, { cache: 'reload' }))).catch(() => {});
+      return cache.addAll(STATIC_ASSETS.map(url => new Request(url, { cache: 'reload' }))).catch((err) => {
+        console.warn('[SW] Pre-cache failed (non-fatal):', err);
+      });
     })
   );
 });
@@ -56,8 +58,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first for static assets
-  if (url.pathname.startsWith('/assets/') || url.hostname.includes('jsdelivr.net')) {
+  // Cache-first for static assets (exact hostname match to avoid substring spoofing)
+  if (url.pathname.startsWith('/assets/') || url.hostname === 'cdn.jsdelivr.net' || url.hostname.endsWith('.jsdelivr.net')) {
     event.respondWith(
       caches.match(request).then(cached => cached || fetch(request).then(response => {
         if (response.ok) {
