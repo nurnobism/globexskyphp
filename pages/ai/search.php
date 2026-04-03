@@ -96,14 +96,20 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(d => {
             const list = document.getElementById('search-history-list');
             if (d.success && d.data.length) {
-                list.innerHTML = d.data.map(h => `
-                    <li class="list-group-item d-flex justify-content-between align-items-center" style="cursor:pointer" onclick="document.getElementById('search-input').value='${h.original_query.replace(/'/g,"\\'")}'; document.getElementById('search-btn').click();">
+                list.innerHTML = d.data.map((h, i) => `
+                    <li class="list-group-item d-flex justify-content-between align-items-center history-item" style="cursor:pointer" data-query="${h.original_query.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}">
                         <div>
-                            <i class="bi bi-search me-2 text-muted"></i>${h.original_query}
-                            ${h.intent ? '<span class="badge bg-light text-dark ms-2">' + h.intent + '</span>' : ''}
+                            <i class="bi bi-search me-2 text-muted"></i>${h.original_query.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+                            ${h.intent ? '<span class="badge bg-light text-dark ms-2">' + h.intent.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>' : ''}
                         </div>
                         <small class="text-muted">${new Date(h.created_at).toLocaleDateString()}</small>
                     </li>`).join('');
+                list.querySelectorAll('.history-item').forEach(el => {
+                    el.addEventListener('click', () => {
+                        searchInput.value = el.dataset.query;
+                        searchBtn.click();
+                    });
+                });
             } else {
                 list.innerHTML = '<li class="list-group-item text-muted text-center py-3">No search history yet</li>';
             }
