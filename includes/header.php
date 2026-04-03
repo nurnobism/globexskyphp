@@ -89,7 +89,7 @@ $fallbackCurrencies = [
 <header class="gs-header sticky-top">
 
     <!-- ── Row 1: Top bar ── -->
-    <div class="gs-topbar bg-white border-bottom py-2">
+    <div class="gs-topbar bg-white border-bottom py-3">
         <div class="container-fluid px-3">
             <div class="row align-items-center g-2">
 
@@ -105,29 +105,25 @@ $fallbackCurrencies = [
                 <div class="col">
                     <form action="<?= APP_URL ?>/pages/product/index.php" method="GET" class="gs-search-form">
                         <div class="gs-search-inner d-flex align-items-center">
-                            <!-- Decorative search-tool icons (left side inside input) -->
-                            <div class="gs-search-icons d-none d-md-flex align-items-center gap-1 px-2">
-                                <a href="<?= APP_URL ?>/pages/ai/search.php" class="gs-search-icon-btn" title="AI Search">
-                                    <i class="bi bi-robot"></i>
-                                </a>
-                                <span class="gs-search-divider"></span>
-                                <a href="<?= APP_URL ?>/pages/barcode-scanner/index.php" class="gs-search-icon-btn" title="Barcode Scan">
-                                    <i class="bi bi-upc-scan"></i>
-                                </a>
-                                <span class="gs-search-divider"></span>
-                                <button type="button" class="gs-search-icon-btn" title="Image Search (coming soon)" aria-label="Image Search (coming soon)" disabled aria-disabled="true" tabindex="-1">
-                                    <i class="bi bi-camera" aria-hidden="true"></i>
-                                </button>
-                                <span class="gs-search-divider"></span>
-                                <button type="button" class="gs-search-icon-btn" title="Voice Search (coming soon)" aria-label="Voice Search (coming soon)" disabled aria-disabled="true" tabindex="-1">
-                                    <i class="bi bi-mic" aria-hidden="true"></i>
-                                </button>
-                                <span class="gs-search-divider"></span>
-                            </div>
                             <input type="text" name="q" class="gs-search-input form-control border-0 shadow-none"
                                    placeholder="Search products, suppliers, categories..."
                                    value="<?= e(get('q', '')) ?>">
-                            <button type="submit" class="gs-search-btn btn btn-primary px-3">
+                            <!-- Search-tool icons (right side inside input) -->
+                            <div class="gs-search-icons d-none d-md-flex align-items-center gap-1 px-2">
+                                <button type="button" class="gs-search-icon-btn" title="Voice Search (coming soon)" aria-label="Voice Search (coming soon)" disabled aria-disabled="true" tabindex="-1">
+                                    <i class="bi bi-mic" aria-hidden="true"></i>
+                                </button>
+                                <button type="button" class="gs-search-icon-btn" title="Image Search (coming soon)" aria-label="Image Search (coming soon)" disabled aria-disabled="true" tabindex="-1">
+                                    <i class="bi bi-camera" aria-hidden="true"></i>
+                                </button>
+                                <a href="<?= APP_URL ?>/pages/barcode-scanner/index.php" class="gs-search-icon-btn" title="Barcode Scan">
+                                    <i class="bi bi-upc-scan"></i>
+                                </a>
+                                <a href="<?= APP_URL ?>/pages/ai/search.php" class="gs-search-icon-btn" title="AI Search">
+                                    <i class="bi bi-robot"></i>
+                                </a>
+                            </div>
+                            <button type="submit" class="gs-search-btn btn btn-primary">
                                 <i class="bi bi-search"></i>
                             </button>
                         </div>
