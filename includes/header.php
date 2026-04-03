@@ -143,7 +143,9 @@ if (isLoggedIn()) {
                     </a>
                     <ul class="dropdown-menu">
                         <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/sourcing/index.php"><i class="bi bi-search me-2"></i>Sourcing</a></li>
-                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/shipment/index.php"><i class="bi bi-truck me-2"></i>Shipment</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/shipment/index.php"><i class="bi bi-truck me-2"></i>Parcel Service</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/shipment/carry/register.php"><i class="bi bi-airplane me-2"></i>Carry Service</a></li>
+                        <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/order/track.php"><i class="bi bi-search me-2"></i>Track Shipment</a></li>
                         <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/logistics/index.php"><i class="bi bi-geo-alt me-2"></i>Logistics</a></li>
                         <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/inspection/request.php"><i class="bi bi-clipboard-check me-2"></i>Inspection</a></li>
                         <li><a class="dropdown-item" href="<?= APP_URL ?>/pages/escrow/index.php"><i class="bi bi-shield-lock me-2"></i>Escrow</a></li>

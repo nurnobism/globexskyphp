@@ -139,9 +139,30 @@ foreach ($phase1Files as $f) {
     assertFile("$root/$f");
 }
 
+// ── Phase 4 Shipment System files ───────────────────────────
+echo "\nPhase 4 Shipment System files:\n";
+$phase4Files = [
+    'database/schema_v3.sql',
+    'pages/shipment/parcel/my-shipments.php',
+    'pages/shipment/carry/trips.php',
+    'pages/shipment/carry/requests.php',
+    'pages/shipment/carry/matches.php',
+    'pages/order/track.php',
+    'pages/admin/logistics/index.php',
+    'pages/admin/logistics/parcels.php',
+    'pages/admin/logistics/carriers.php',
+    'pages/admin/logistics/carry-requests.php',
+    'pages/admin/logistics/rates.php',
+    'pages/admin/pricing/parcel-rates.php',
+];
+foreach ($phase4Files as $f) {
+    assertFile("$root/$f");
+}
+
 // ── PHP syntax checks ────────────────────────────────────────
 echo "\nPHP syntax:\n";
-$allPhp = array_merge($newPages, $newApis, array_filter($phase1Files, fn($f) => str_ends_with($f, '.php')));
+$phase4PhpFiles = array_filter($phase4Files, fn($f) => str_ends_with($f, '.php'));
+$allPhp = array_merge($newPages, $newApis, array_filter($phase1Files, fn($f) => str_ends_with($f, '.php')), $phase4PhpFiles);
 foreach ($allPhp as $f) {
     assertSyntax("$root/$f");
 }
