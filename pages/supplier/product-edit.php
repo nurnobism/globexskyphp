@@ -217,7 +217,7 @@ async function uploadImage() {
     if (!fileInput.files.length) { alert('Please select an image first.'); return; }
     const formData = new FormData();
     formData.append('image', fileInput.files[0]);
-    formData.append('product_id', '<?= $product['id'] ?>');
+    formData.append('product_id', <?= json_encode((int)$product['id']) ?>);
     formData.append('_csrf_token', '<?= e(csrfToken()) ?>');
     const res = await fetch('/api/products.php?action=upload_image', { method: 'POST', body: formData });
     const data = await res.json();

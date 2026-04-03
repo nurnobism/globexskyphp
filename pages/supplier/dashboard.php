@@ -32,7 +32,7 @@ if ($supplierId) {
     $stmt->execute([$supplierId]);
     $statsData['total_products'] = (int)$stmt->fetchColumn();
 
-    $stmt = $db->prepare('SELECT COUNT(DISTINCT o.id), COALESCE(SUM(oi.total_price), 0) FROM orders o JOIN order_items oi ON oi.order_id = o.id JOIN products p ON p.id = oi.product_id WHERE p.supplier_id = ?');
+    $stmt = $db->prepare('SELECT COUNT(DISTINCT o.id), COALESCE(SUM(oi.total_price), 0) FROM orders o JOIN order_items oi ON oi.order_id = o.id JOIN products p ON p.id = oi.product_id WHERE p.supplier_id = ? AND o.status NOT IN ("cancelled","refunded")');
     $stmt->execute([$supplierId]);
     $row = $stmt->fetch(PDO::FETCH_NUM);
     $statsData['total_orders'] = (int)$row[0];

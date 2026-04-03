@@ -213,7 +213,7 @@ const STRIPE_KEY  = <?= json_encode($stripePublishableKey) ?>;
 let shippingFee   = 0;
 let discount      = 0;
 let stripeCard    = null;
-let stripeObj     = STRIPE_KEY ? Stripe(STRIPE_KEY) : null;
+let stripeObj     = (STRIPE_KEY && typeof Stripe !== 'undefined') ? Stripe(STRIPE_KEY) : null;
 
 if (stripeObj) {
     const elements = stripeObj.elements();
@@ -256,7 +256,7 @@ function onPaymentChange() {
         });
     } else {
         sec.style.display = 'none';
-        if (stripeCard) try { stripeCard.unmount(); } catch(e) {}
+        if (stripeCard) try { stripeCard.unmount(); } catch(e) { console.error('Stripe unmount error:', e); }
     }
 }
 
@@ -266,7 +266,8 @@ async function applyCoupon() {
     const formData = new FormData();
     formData.append('coupon_code', code);
     formData.append('subtotal', SUBTOTAL);
-    formData.append('_csrf_token', document.querySelector('input[name=_csrf_token]').value);
+    const csrfInput = document.querySelector('input[name=_csrf_token]');
+    formData.append('_csrf_token', csrfInput ? csrfInput.value : '');
     const res  = await fetch('/api/checkout.php?action=apply_coupon', { method: 'POST', body: formData });
     const data = await res.json();
     const el   = document.getElementById('couponResult');
