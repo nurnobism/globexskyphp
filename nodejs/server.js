@@ -3,7 +3,6 @@ const http = require('http');
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const mysql = require('mysql2/promise');
-const cors = require('cors');
 
 const PORT = process.env.PORT || 3001;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
@@ -121,7 +120,7 @@ async function saveMessage(roomId, senderId, message, type, extra) {
         [roomId, senderId, message, type || 'text', fileUrl, fileName, fileSize, replyToId]
     );
     // Update room's last-message preview
-    const preview = (message || fileName || '').substring(0, 120);
+    const preview = String(message || fileName || '').substring(0, 120);
     await db.execute(
         `UPDATE chat_rooms
          SET last_message_at = NOW(), last_message_preview = ?
