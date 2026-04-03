@@ -199,15 +199,19 @@ include __DIR__ . '/../../includes/header.php';
                         </div>
                         <div class="col-4">
                             <small class="text-muted d-block">Created</small>
-                            <strong><?= e(date('M j, Y', strtotime($shipment['created_at']))) ?></strong>
+                            <?php $createdTs = strtotime($shipment['created_at'] ?? ''); ?>
+                            <strong><?= $createdTs ? e(date('M j, Y', $createdTs)) : '—' ?></strong>
                         </div>
                     </div>
                     <?php if ($shipment['estimated_delivery']): ?>
+                    <?php $estTs = strtotime($shipment['estimated_delivery']); ?>
+                    <?php if ($estTs): ?>
                     <div class="mt-3 alert alert-light mb-0">
                         <i class="bi bi-calendar-check me-2 text-primary"></i>
                         <strong>Estimated Delivery:</strong>
-                        <?= e(date('M j, Y', strtotime($shipment['estimated_delivery']))) ?>
+                        <?= e(date('M j, Y', $estTs)) ?>
                     </div>
+                    <?php endif; ?>
                     <?php endif; ?>
                 </div>
             </div>
