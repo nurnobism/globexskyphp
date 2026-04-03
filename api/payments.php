@@ -6,6 +6,8 @@ $db = getDB();
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 function jsonOut($data, $code = 200) { http_response_code($code); echo json_encode($data); exit; }
+function validateCsrf(): void { if (!verifyCsrf()) { jsonOut(['error' => 'Invalid CSRF token'], 403); } }
+function sanitize(string $val): string { return trim($val); }
 
 switch ($action) {
     case 'list_methods':
