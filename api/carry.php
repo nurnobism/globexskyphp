@@ -114,7 +114,7 @@ switch ($action) {
         $travelDate      = trim($_POST['travel_date'] ?? '');
         $capacityKg      = (float)($_POST['available_capacity_kg'] ?? 0);
         $pricePerKg      = (float)($_POST['price_per_kg'] ?? 0);
-        $transportMode   = trim($_POST['transport_mode'] ?? 'air');
+        $transportMode   = trim($_POST['transport_mode'] ?? 'flight');
         $notes           = trim($_POST['notes'] ?? '');
         if (!$departureCity || !$arrivalCity || !$travelDate || $capacityKg <= 0) {
             jsonResponse(['error' => 'Required fields missing'], 422);

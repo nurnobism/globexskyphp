@@ -158,7 +158,7 @@ include __DIR__ . '/../../../includes/header.php';
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Insurance Rate (%)</label>
-                            <input type="number" name="insurance_rate" id="insuranceRate" class="form-control" min="0" step="0.01" value="1.50">
+                            <input type="number" name="insurance_rate" id="insuranceRate" class="form-control" min="0" step="0.01" value="2.00">
                         </div>
                     </div>
                 </div>
