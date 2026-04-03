@@ -6,8 +6,21 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'globexsky_secret';
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+const SHUTDOWN_TIMEOUT_MS = parseInt(process.env.SHUTDOWN_TIMEOUT_MS || '5000', 10);
+
+// Require JWT_SECRET and INTERNAL_API_KEY to be explicitly configured
+const JWT_SECRET = process.env.JWT_SECRET;
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
+
+if (!JWT_SECRET) {
+    console.error('[startup] FATAL: JWT_SECRET environment variable is required.');
+    process.exit(1);
+}
+if (!INTERNAL_API_KEY) {
+    console.error('[startup] FATAL: INTERNAL_API_KEY environment variable is required.');
+    process.exit(1);
+}
 
 // --- Database pool ---
 const db = mysql.createPool({
@@ -20,8 +33,39 @@ const db = mysql.createPool({
     queueLimit: 0,
 });
 
-// --- HTTP server (no Express needed; Socket.io handles upgrade) ---
+// --- HTTP server ---
+// All request handling is consolidated here to avoid double-execution.
 const server = http.createServer((req, res) => {
+    if (req.method === 'POST' && req.url === '/internal/notify') {
+        const authHeader = req.headers['authorization'] || '';
+        if (authHeader !== `Bearer ${INTERNAL_API_KEY}`) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ error: 'Unauthorized' }));
+        }
+
+        let body = '';
+        req.on('data', (chunk) => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const { targetUserId, notification } = JSON.parse(body);
+                const uid = parseInt(targetUserId, 10);
+                if (!Number.isFinite(uid) || !notification) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ error: 'Valid targetUserId (integer) and notification required' }));
+                }
+                const delivered = pushNotificationToUser(uid, notification);
+                io.to(`user:${uid}`).emit('notification', notification);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, delivered }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid JSON' }));
+            }
+        });
+        return;
+    }
+
+    // Health-check for all other requests
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'GlobexSky Realtime OK' }));
 });
@@ -142,13 +186,14 @@ io.use((socket, next) => {
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        socket.userId = decoded.user_id || decoded.id || decoded.sub;
+        // JWT must include `user_id` (integer) as the canonical user identifier
+        const userId = parseInt(decoded.user_id, 10);
+        if (!Number.isFinite(userId)) {
+            return next(new Error('Invalid token payload: user_id must be an integer'));
+        }
+        socket.userId = userId;
         socket.userRole = decoded.role || 'buyer';
         socket.userName = decoded.name || decoded.username || '';
-
-        if (!socket.userId) {
-            return next(new Error('Invalid token payload'));
-        }
         next();
     } catch (err) {
         next(new Error('Invalid or expired token'));
@@ -286,17 +331,17 @@ io.on('connection', async (socket) => {
         }
     });
 
-    // ── push_notification (server-to-client helper, callable from PHP via HTTP) ─
-    // Clients can also request pushing to another user (admin use only)
+    // ── push_notification (admin-only socket event) ────────────────────────────
     socket.on('push_notification', (data, ack) => {
         if (socket.userRole !== 'admin') {
             return ack && ack({ error: 'Unauthorized' });
         }
         const { targetUserId, notification } = data || {};
-        if (!targetUserId || !notification) {
-            return ack && ack({ error: 'targetUserId and notification required' });
+        const uid = parseInt(targetUserId, 10);
+        if (!Number.isFinite(uid) || !notification) {
+            return ack && ack({ error: 'Valid targetUserId (integer) and notification required' });
         }
-        const delivered = pushNotificationToUser(targetUserId, notification);
+        const delivered = pushNotificationToUser(uid, notification);
         ack && ack({ success: true, delivered });
     });
 
@@ -321,43 +366,6 @@ io.on('connection', async (socket) => {
     });
 });
 
-// ── Internal HTTP endpoint for PHP → Node notification push ─────────────────
-// PHP backend can POST to /internal/notify with a bearer token check
-server.on('request', (req, res) => {
-    if (req.method === 'POST' && req.url === '/internal/notify') {
-        const authHeader = req.headers['authorization'] || '';
-        if (authHeader !== `Bearer ${JWT_SECRET}`) {
-            res.writeHead(401);
-            return res.end(JSON.stringify({ error: 'Unauthorized' }));
-        }
-
-        let body = '';
-        req.on('data', (chunk) => { body += chunk; });
-        req.on('end', () => {
-            try {
-                const { targetUserId, notification } = JSON.parse(body);
-                if (!targetUserId || !notification) {
-                    res.writeHead(400);
-                    return res.end(JSON.stringify({ error: 'targetUserId and notification required' }));
-                }
-                const delivered = pushNotificationToUser(Number(targetUserId), notification);
-                // Also emit to user's personal room (covers cases where socket isn't in userSockets yet)
-                io.to(`user:${targetUserId}`).emit('notification', notification);
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true, delivered }));
-            } catch (e) {
-                res.writeHead(400);
-                res.end(JSON.stringify({ error: 'Invalid JSON' }));
-            }
-        });
-        return; // handled
-    }
-
-    // Default health-check response for all other requests
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'GlobexSky Realtime OK' }));
-});
-
 // ── Graceful shutdown ─────────────────────────────────────────────────────────
 
 async function shutdown(signal) {
@@ -368,7 +376,7 @@ async function shutdown(signal) {
         console.log('[shutdown] DB pool closed. Bye!');
         process.exit(0);
     });
-    setTimeout(() => process.exit(1), 10000);
+    setTimeout(() => process.exit(1), SHUTDOWN_TIMEOUT_MS);
 }
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
