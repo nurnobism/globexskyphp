@@ -1,7 +1,7 @@
 // sw.js — GlobexSky Service Worker (Phase 10)
-const CACHE_NAME = 'globexsky-v1';
-const STATIC_CACHE = 'globexsky-static-v1';
-const API_CACHE = 'globexsky-api-v1';
+const CACHE_NAME = 'globexsky-v2';
+const STATIC_CACHE = 'globexsky-static-v2';
+const API_CACHE = 'globexsky-api-v2';
 
 const STATIC_ASSETS = [
   '/',
@@ -60,14 +60,21 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Cache-first for static assets (exact hostname match to avoid substring spoofing)
-  const CDN_HOSTS = ['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
+  const CDN_HOSTS = ['cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
   if (url.pathname.startsWith('/assets/') || CDN_HOSTS.includes(url.hostname)) {
     event.respondWith(
       caches.match(request).then(cached => cached || fetch(request).then(response => {
         if (response.ok) {
-          caches.open(STATIC_CACHE).then(c => c.put(request, response.clone()));
+          try {
+            caches.open(STATIC_CACHE).then(c => c.put(request, response.clone()));
+          } catch (e) {
+            console.warn('[SW] Could not clone response for caching:', request.url, e);
+          }
         }
         return response;
+      }).catch(err => {
+        console.warn('[SW] Fetch failed (possible CSP block):', request.url, err);
+        return caches.match(request).then(r => r || Promise.reject(err));
       }))
     );
     return;
@@ -78,7 +85,11 @@ self.addEventListener('fetch', (event) => {
     fetch(request)
       .then(response => {
         if (response.ok) {
-          caches.open(STATIC_CACHE).then(c => c.put(request, response.clone()));
+          try {
+            caches.open(STATIC_CACHE).then(c => c.put(request, response.clone()));
+          } catch (e) {
+            console.warn('[SW] Could not clone response for caching:', request.url, e);
+          }
         }
         return response;
       })
