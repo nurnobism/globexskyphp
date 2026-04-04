@@ -383,7 +383,11 @@ The repository ships with a ready-to-run seed file that populates the database w
 **Option 1 — Shell script** (recommended):
 
 ```bash
+# Uses DB_USER=root and DB_NAME=globexsky_db by default
 bash database/run_seed.sh
+
+# Override with your own credentials:
+DB_USER=bidybxoc_globexsky DB_NAME=bidybxoc_globexsky bash database/run_seed.sh
 ```
 
 **Option 2 — Direct MySQL command**:
