@@ -15,27 +15,27 @@
             <div class="col-lg-3 col-md-6">
                 <h6 class="fw-bold mb-3">Quick Links</h6>
                 <ul class="list-unstyled small">
-                    <li><a href="<?= APP_URL ?>/pages/product/index.php" class="text-muted text-decoration-none">Products</a></li>
-                    <li><a href="<?= APP_URL ?>/pages/supplier/index.php" class="text-muted text-decoration-none">Suppliers</a></li>
-                    <li><a href="<?= APP_URL ?>/pages/rfq/create.php" class="text-muted text-decoration-none">Request for Quote</a></li>
-                    <li><a href="<?= APP_URL ?>/pages/sourcing/index.php" class="text-muted text-decoration-none">Sourcing</a></li>
-                    <li><a href="<?= APP_URL ?>/pages/shipment/tracking.php" class="text-muted text-decoration-none">Track Shipment</a></li>
-                    <li><a href="<?= APP_URL ?>/pages/flash-sales/index.php" class="text-muted text-decoration-none">Flash Sales</a></li>
-                    <li><a href="<?= APP_URL ?>/pages/about.php" class="text-muted text-decoration-none">About Us</a></li>
-                    <li><a href="<?= APP_URL ?>/pages/blog/index.php" class="text-muted text-decoration-none">Blog</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/product/index.php" class="text-white-50 text-decoration-none">Products</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/supplier/index.php" class="text-white-50 text-decoration-none">Suppliers</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/rfq/create.php" class="text-white-50 text-decoration-none">Request for Quote</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/sourcing/index.php" class="text-white-50 text-decoration-none">Sourcing</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/shipment/tracking.php" class="text-white-50 text-decoration-none">Track Shipment</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/flash-sales/index.php" class="text-white-50 text-decoration-none">Flash Sales</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/about.php" class="text-white-50 text-decoration-none">About Us</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/blog/index.php" class="text-white-50 text-decoration-none">Blog</a></li>
                 </ul>
             </div>
             <div class="col-lg-3 col-md-6">
                 <h6 class="fw-bold mb-3">Support</h6>
                 <ul class="list-unstyled small">
-                    <li><a href="<?= APP_URL ?>/pages/support/faq.php" class="text-muted text-decoration-none">FAQ</a></li>
-                    <li><a href="<?= APP_URL ?>/pages/support/index.php" class="text-muted text-decoration-none">Support Center</a></li>
-                    <li><a href="<?= APP_URL ?>/pages/help.php" class="text-muted text-decoration-none">Help Center</a></li>
-                    <li><a href="<?= APP_URL ?>/pages/contact.php" class="text-muted text-decoration-none">Contact Us</a></li>
-                    <li><a href="<?= APP_URL ?>/pages/privacy.php" class="text-muted text-decoration-none">Privacy Policy</a></li>
-                    <li><a href="<?= APP_URL ?>/pages/terms.php" class="text-muted text-decoration-none">Terms of Service</a></li>
-                    <li><a href="<?= APP_URL ?>/pages/cookie-policy.php" class="text-muted text-decoration-none">Cookie Policy</a></li>
-                    <li><a href="<?= APP_URL ?>/pages/gdpr/index.php" class="text-muted text-decoration-none">GDPR</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/support/faq.php" class="text-white-50 text-decoration-none">FAQ</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/support/index.php" class="text-white-50 text-decoration-none">Support Center</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/help.php" class="text-white-50 text-decoration-none">Help Center</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/contact.php" class="text-white-50 text-decoration-none">Contact Us</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/privacy.php" class="text-white-50 text-decoration-none">Privacy Policy</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/terms.php" class="text-white-50 text-decoration-none">Terms of Service</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/cookie-policy.php" class="text-white-50 text-decoration-none">Cookie Policy</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/gdpr/index.php" class="text-white-50 text-decoration-none">GDPR</a></li>
                 </ul>
             </div>
             <div class="col-lg-3 col-md-6">
