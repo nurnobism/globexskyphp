@@ -348,6 +348,60 @@ The rollback script will:
 
 ---
 
+## Demo Data
+
+The repository ships with a ready-to-run seed file that populates the database with realistic demo data so the homepage, product listing pages, and counters look alive immediately after deployment.
+
+### What gets seeded
+
+| Section | Records | Details |
+|---|---|---|
+| **Categories** | 10 | Electronics, Machinery, Apparel & Fashion, Home & Garden, Food & Beverage, Chemicals, Automotive, Health & Beauty, Sports & Outdoors, Industrial |
+| **Users** | 6 | 1 admin + 3 suppliers + 2 buyers — password **Demo@2026** for all |
+| **Suppliers** | 3 | TechVision Electronics (China), Global Machinery Corp (Germany), FashionHub International (Bangladesh) |
+| **Products** | 30 | Spread across 6 categories; ~8 featured; realistic prices, MOQs, ratings |
+| **Reviews** | 20 | Mix of 4 & 5-star reviews linked to products and buyers |
+| **RFQs** | 5 | Mix of open/closed statuses |
+| **Orders** | 8 | Mix of pending / confirmed / shipped / delivered |
+| **Order Items** | 9 | Linked to the orders above |
+| **Wishlist Items** | 5 | Linked to buyer accounts |
+| **Cart Items** | 3 | Linked to buyer accounts |
+
+### Demo login credentials
+
+| Role | Email | Password |
+|---|---|---|
+| Admin | admin@globexsky.com | Demo@2026 |
+| Supplier | supplier1@demo.com | Demo@2026 |
+| Supplier | supplier2@demo.com | Demo@2026 |
+| Supplier | supplier3@demo.com | Demo@2026 |
+| Buyer | buyer1@demo.com | Demo@2026 |
+| Buyer | buyer2@demo.com | Demo@2026 |
+
+### How to seed
+
+**Option 1 — Shell script** (recommended):
+
+```bash
+# Uses DB_USER=root and DB_NAME=globexsky_db by default
+bash database/run_seed.sh
+
+# Override with your own credentials:
+DB_USER=bidybxoc_globexsky DB_NAME=bidybxoc_globexsky bash database/run_seed.sh
+```
+
+**Option 2 — Direct MySQL command**:
+
+```bash
+mysql -u <db_user> -p <db_name> < database/seed_demo_data.sql
+```
+
+**Option 3 — phpMyAdmin**: import `database/seed_demo_data.sql` via the Import tab.
+
+> The seed file uses `INSERT IGNORE` so it is safe to run multiple times without creating duplicates. All demo rows use IDs ≥ 101 to avoid collisions with existing data.
+
+---
+
 ## License
 
 [MIT](LICENSE) — placeholder, update before release.
