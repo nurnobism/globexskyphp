@@ -219,3 +219,438 @@ img { max-width: 100%; height: auto; }
 
 /* Loading spinner */
 .spinner-overlay { position: fixed; inset: 0; background: rgba(255,255,255,.7); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+
+/* =============================================
+   Alibaba-Style Homepage Additions
+   ============================================= */
+
+/* Hero wave separator */
+.gs-hero-wave { line-height: 0; margin-top: -2px; }
+.gs-hero-wave svg { display: block; width: 100%; }
+
+/* AI badge in hero */
+.gs-ai-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    background: rgba(255,255,255,.15);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,.3);
+    color: #fff;
+    font-size: .8rem;
+    font-weight: 600;
+    padding: .3rem .75rem;
+    border-radius: 50px;
+    letter-spacing: .03em;
+}
+.gs-ai-badge .gs-ai-dot {
+    width: 8px;
+    height: 8px;
+    background: #4ade80;
+    border-radius: 50%;
+    animation: gsPulse 1.6s ease-in-out infinite;
+}
+
+/* Trust floating badges in hero */
+.gs-trust-badges { gap: .6rem; }
+.gs-trust-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.25);
+    color: rgba(255,255,255,.9);
+    font-size: .78rem;
+    font-weight: 500;
+    padding: .28rem .65rem;
+    border-radius: 50px;
+    backdrop-filter: blur(6px);
+    transition: background .2s;
+}
+.gs-trust-badge:hover { background: rgba(255,255,255,.22); }
+.gs-trust-badge .bi { font-size: .85rem; }
+
+/* Stats counter animation */
+.gs-counter-animate {
+    animation: gsCountUp .8s ease-out;
+}
+@keyframes gsCountUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes gsPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .5; transform: scale(1.3); }
+}
+
+/* Service Highlight Cards */
+.gs-service-card {
+    border-radius: 16px;
+    padding: 1.5rem;
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+    transition: transform .2s, box-shadow .2s;
+    min-height: 160px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.gs-service-card::after {
+    content: '';
+    position: absolute;
+    top: -30px;
+    right: -30px;
+    width: 100px;
+    height: 100px;
+    background: rgba(255,255,255,.1);
+    border-radius: 50%;
+}
+.gs-service-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,.18) !important; }
+.gs-service-card .gs-service-icon { font-size: 2rem; margin-bottom: .5rem; }
+.gs-service-card .gs-service-title { font-size: 1.05rem; font-weight: 700; margin-bottom: .25rem; }
+.gs-service-card .gs-service-desc { font-size: .82rem; opacity: .88; margin-bottom: .75rem; }
+.gs-service-card .btn-service {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: .8rem;
+    font-weight: 600;
+    color: #fff;
+    text-decoration: none;
+    border: 1px solid rgba(255,255,255,.5);
+    padding: .25rem .7rem;
+    border-radius: 50px;
+    width: fit-content;
+    transition: background .2s;
+}
+.gs-service-card .btn-service:hover { background: rgba(255,255,255,.2); }
+.gs-service-card--blue { background: linear-gradient(135deg,#2563EB,#1e40af); }
+.gs-service-card--orange { background: linear-gradient(135deg,#f97316,#c2410c); }
+.gs-service-card--green { background: linear-gradient(135deg,#16a34a,#15803d); }
+.gs-service-card--purple { background: linear-gradient(135deg,#7c3aed,#5b21b6); }
+
+/* Category sidebar */
+.gs-category-sidebar {
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+}
+.gs-cat-sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .6rem 1rem;
+    font-size: .88rem;
+    color: #374151;
+    text-decoration: none;
+    border-left: 3px solid transparent;
+    transition: all .15s;
+}
+.gs-cat-sidebar-item:hover, .gs-cat-sidebar-item.active {
+    background: #eff6ff;
+    color: var(--gs-primary);
+    border-left-color: var(--gs-primary);
+}
+.gs-cat-sidebar-item .bi { font-size: 1.1rem; color: #6b7280; }
+.gs-cat-sidebar-item:hover .bi, .gs-cat-sidebar-item.active .bi { color: var(--gs-primary); }
+
+/* Modern product cards */
+.gs-product-card-modern {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    transition: transform .2s, box-shadow .2s;
+    flex-shrink: 0;
+}
+.gs-product-card-modern:hover { transform: translateY(-4px); box-shadow: 0 10px 28px rgba(0,0,0,.12) !important; }
+.gs-product-card-modern .gs-card-img-wrap {
+    position: relative;
+    overflow: hidden;
+    height: 160px;
+}
+.gs-product-card-modern .gs-card-img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform .35s ease;
+}
+.gs-product-card-modern:hover .gs-card-img-wrap img { transform: scale(1.07); }
+.gs-product-card-modern .gs-card-body { padding: .7rem .85rem .85rem; }
+.gs-product-card-modern .gs-product-name {
+    font-size: .85rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: .2rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 2.4em;
+}
+.gs-product-card-modern .gs-product-price {
+    font-size: .95rem;
+    font-weight: 700;
+    color: var(--gs-primary);
+    margin-bottom: .15rem;
+}
+.gs-product-card-modern .gs-product-moq {
+    font-size: .75rem;
+    color: #6b7280;
+    margin-bottom: .3rem;
+}
+.gs-product-card-modern .gs-supplier-line {
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: .75rem;
+    color: #6b7280;
+}
+.gs-product-card-modern .gs-verified-dot {
+    width: 8px;
+    height: 8px;
+    background: #16a34a;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* Trending / Hot badge */
+.gs-trending-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    font-size: .68rem;
+    font-weight: 700;
+    padding: .18rem .5rem;
+    border-radius: 50px;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    z-index: 2;
+}
+.gs-trending-badge--hot { background: #ef4444; color: #fff; }
+.gs-trending-badge--new { background: #16a34a; color: #fff; }
+.gs-trending-badge--trending { background: #f97316; color: #fff; }
+
+/* Star ratings */
+.gs-stars { color: #f59e0b; font-size: .78rem; letter-spacing: -.05em; }
+.gs-stars-count { color: #9ca3af; font-size: .72rem; }
+
+/* Horizontal scrollable row */
+.gs-scroll-row {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    padding-bottom: .5rem;
+    scrollbar-width: thin;
+    scrollbar-color: #d1d5db #f3f4f6;
+}
+.gs-scroll-row::-webkit-scrollbar { height: 5px; }
+.gs-scroll-row::-webkit-scrollbar-track { background: #f3f4f6; border-radius: 4px; }
+.gs-scroll-row::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+.gs-scroll-row .gs-product-card-modern { width: 200px; }
+
+/* Top Ranking section */
+.gs-rank-card {
+    border-radius: 12px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+    transition: box-shadow .2s;
+}
+.gs-rank-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,.1); }
+.gs-rank-num {
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: #f3f4f6;
+    line-height: 1;
+}
+.gs-rank-num--top { color: #fbbf24; }
+
+/* Tailored Selections */
+.gs-selection-card {
+    border-radius: 14px;
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    transition: transform .2s, box-shadow .2s;
+}
+.gs-selection-card:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(0,0,0,.1); }
+.gs-selection-card .gs-selection-header {
+    padding: .85rem 1rem .5rem;
+    font-size: .95rem;
+    font-weight: 700;
+    color: #111827;
+}
+.gs-selection-card .gs-selection-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+}
+.gs-selection-card .gs-selection-grid img {
+    width: 100%;
+    height: 80px;
+    object-fit: cover;
+    display: block;
+}
+.gs-selection-card .gs-selection-footer {
+    padding: .5rem 1rem .75rem;
+    font-size: .78rem;
+    color: #6b7280;
+}
+
+/* AI Feature Cards */
+.gs-ai-feature-card {
+    border-radius: 14px;
+    padding: 1.4rem 1.2rem;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    text-align: center;
+    transition: transform .2s, box-shadow .2s;
+}
+.gs-ai-feature-card:hover { transform: translateY(-4px); box-shadow: 0 10px 28px rgba(0,0,0,.1); }
+.gs-ai-feature-card .gs-ai-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto .85rem;
+    font-size: 1.6rem;
+}
+.gs-ai-feature-card h6 { font-size: .9rem; font-weight: 700; color: #111827; margin-bottom: .35rem; }
+.gs-ai-feature-card p { font-size: .78rem; color: #6b7280; margin: 0; line-height: 1.4; }
+
+/* How It Works modernized */
+.gs-how-step {
+    text-align: center;
+    position: relative;
+}
+.gs-step-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #2563EB, #7c3aed);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    margin: 0 auto 1rem;
+    box-shadow: 0 6px 18px rgba(37,99,235,.35);
+    position: relative;
+    z-index: 1;
+    transition: transform .2s;
+}
+.gs-step-circle:hover { transform: scale(1.08); }
+.gs-step-num {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 24px;
+    height: 24px;
+    background: #fbbf24;
+    color: #111;
+    font-size: .72rem;
+    font-weight: 800;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+}
+.gs-how-connector {
+    display: none; /* Reserved for future desktop connector line between steps */
+}
+
+/* CTA Section patterns */
+.gs-cta-section {
+    background: linear-gradient(135deg, #1B4B66 0%, #2563EB 50%, #7c3aed 100%);
+    position: relative;
+    overflow: hidden;
+}
+.gs-cta-section::before {
+    content: '';
+    position: absolute;
+    top: -60px;
+    left: -60px;
+    width: 220px;
+    height: 220px;
+    background: rgba(255,255,255,.06);
+    border-radius: 50%;
+}
+.gs-cta-section::after {
+    content: '';
+    position: absolute;
+    bottom: -80px;
+    right: -40px;
+    width: 300px;
+    height: 300px;
+    background: rgba(255,255,255,.05);
+    border-radius: 50%;
+}
+.gs-cta-card {
+    background: rgba(255,255,255,.1);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,.2);
+    border-radius: 16px;
+    padding: 1.75rem 1.5rem;
+    transition: background .2s;
+}
+.gs-cta-card:hover { background: rgba(255,255,255,.18); }
+
+/* Trust & Security */
+.gs-trust-section { background: #f8fafc; }
+.gs-trust-cert-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: .5rem 1rem;
+    font-size: .82rem;
+    color: #374151;
+    font-weight: 500;
+    transition: box-shadow .15s;
+}
+.gs-trust-cert-badge:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+.gs-trust-cert-badge .bi { color: var(--gs-primary); font-size: 1.1rem; }
+
+/* Section header styling */
+.gs-section-label {
+    font-size: .75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--gs-primary);
+    margin-bottom: .25rem;
+}
+.gs-section-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #111827;
+    margin-bottom: .25rem;
+}
+.gs-section-sub {
+    font-size: .88rem;
+    color: #6b7280;
+}
+
+/* Quick-action button on product cards */
+.gs-card-actions {
+    display: flex;
+    gap: .4rem;
+    margin-top: .5rem;
+}
+.gs-card-actions .btn { font-size: .75rem; padding: .3rem .6rem; flex: 1; border-radius: 8px; }
+
+/* Responsive tweaks */
+@media (max-width: 767.98px) {
+    .gs-section-title { font-size: 1.2rem; }
+    .gs-service-card { min-height: 140px; }
+    .gs-scroll-row .gs-product-card-modern { width: 170px; }
+    .gs-selection-card .gs-selection-grid img { height: 60px; }
+    .gs-step-circle { width: 64px; height: 64px; font-size: 1.5rem; }
+}
