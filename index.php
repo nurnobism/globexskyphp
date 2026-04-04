@@ -536,7 +536,7 @@ $catIcons = ['electronics'=>'cpu-fill','machinery'=>'gear-fill','apparel-fashion
     <div class="container position-relative" style="z-index:1">
         <div class="text-center mb-5">
             <h2 class="fw-bold display-6 mb-2">Ready to Grow Your Business?</h2>
-            <p class="lead mb-1" style="color:rgba(255,255,255,.8)">Join 10,000+ businesses already trading on GlobexSky</p>
+            <p class="lead mb-1" style="color:rgba(255,255,255,.8)">Join businesses across 50+ countries already trading on GlobexSky</p>
             <div class="d-flex justify-content-center gap-3 flex-wrap mt-2">
                 <span class="gs-trust-badge"><i class="bi bi-check-circle-fill text-success"></i>Free to Register</span>
                 <span class="gs-trust-badge"><i class="bi bi-check-circle-fill text-success"></i>No Hidden Fees</span>

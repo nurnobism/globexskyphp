@@ -561,13 +561,7 @@ img { max-width: 100%; height: auto; }
     border: 2px solid #fff;
 }
 .gs-how-connector {
-    position: absolute;
-    top: 40px;
-    right: -50%;
-    width: 100%;
-    height: 2px;
-    background: linear-gradient(90deg, #2563EB44, #7c3aed44);
-    z-index: 0;
+    display: none; /* Reserved for future desktop connector line between steps */
 }
 
 /* CTA Section patterns */
