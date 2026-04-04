@@ -1,16 +1,13 @@
 // sw.js — GlobexSky Service Worker (Phase 10)
-const CACHE_NAME = 'globexsky-v2';
-const STATIC_CACHE = 'globexsky-static-v2';
-const API_CACHE = 'globexsky-api-v2';
+const CACHE_NAME = 'globexsky-v3';
+const STATIC_CACHE = 'globexsky-static-v3';
+const API_CACHE = 'globexsky-api-v3';
 
 const STATIC_ASSETS = [
   '/',
   '/assets/css/style.css',
   '/assets/js/app.js',
   '/manifest.json',
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js',
 ];
 
 // Install — cache static assets
