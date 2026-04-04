@@ -67,14 +67,16 @@ $fallbackCurrencies = [
 
     <!-- Bootstrap 5 CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-          integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous"
+          integrity="sha384-9ndCyUaIBzAi2FUVXJi0CjmCapSm075np3ef0486qhLnuZ2cdeRh0O2iuK6FUUVM" crossorigin="anonymous"
           onerror="this.onerror=null;this.integrity='';this.href='https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css'">
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css"
-          integrity="sha384-tViUnnbplMdV4Zrok7OsNikEFskRB/lL6aT8U6H6Q3j58Px+N4tnFvpjB0yBcRwI" crossorigin="anonymous"
+          integrity="sha384-QuGBSgV5Im3DzLz2+8Ko9/hqMy/NOO7ZwVXAtfd1MvPKWa/UbELV6Scfm4BV5Wwg" crossorigin="anonymous"
           onerror="this.onerror=null;this.integrity='';this.href='https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.css'">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="<?= rtrim(APP_URL, '/') ?>/assets/css/style.css">
+    <!-- Favicon -->
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0d6efd">

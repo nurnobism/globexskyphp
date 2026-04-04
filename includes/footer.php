@@ -62,7 +62,7 @@
 
 <!-- Bootstrap 5 JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-ENjdO4Dr2bkBIFxQpeoTz1HIcje39Wm4jDKdf19U8gI4ddQ3GYNS7NTKfAdVzdl1" crossorigin="anonymous"
+        integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGd1Krydi1ligb/j/6RSIy3Te4Bkz" crossorigin="anonymous"
         onerror="this.onerror=null;this.integrity='';this.src='https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js'"></script>
 <!-- Custom JS -->
 <script src="<?= rtrim(APP_URL, '/') ?>/assets/js/app.js"></script>
