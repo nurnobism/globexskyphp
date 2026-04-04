@@ -380,12 +380,12 @@ $fallbackCurrencies = [
             <ul class="gs-catbar-list list-unstyled d-flex align-items-center mb-0">
                 <li>
                     <a href="<?= APP_URL ?>/pages/sourcing/index.php" class="gs-cat-link">
-                        <i class="bi bi-factory"></i> Sourcing
+                        <i class="bi bi-buildings"></i> Sourcing
                     </a>
                 </li>
                 <li>
                     <a href="<?= APP_URL ?>/pages/shipment/index.php" class="gs-cat-link">
-                        <i class="bi bi-ship"></i> Shipment
+                        <i class="bi bi-box-seam"></i> Shipment
                     </a>
                 </li>
                 <li>
@@ -455,8 +455,8 @@ $fallbackCurrencies = [
             <!-- Mobile category links -->
             <nav aria-label="Mobile category navigation">
                 <ul class="list-unstyled mb-2">
-                    <li><a href="<?= APP_URL ?>/pages/sourcing/index.php" class="gs-mobile-cat-link"><i class="bi bi-factory me-2"></i>Sourcing</a></li>
-                    <li><a href="<?= APP_URL ?>/pages/shipment/index.php" class="gs-mobile-cat-link"><i class="bi bi-ship me-2"></i>Shipment</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/sourcing/index.php" class="gs-mobile-cat-link"><i class="bi bi-buildings me-2"></i>Sourcing</a></li>
+                    <li><a href="<?= APP_URL ?>/pages/shipment/index.php" class="gs-mobile-cat-link"><i class="bi bi-box-seam me-2"></i>Shipment</a></li>
                     <li><a href="<?= APP_URL ?>/pages/shipment/carry/register.php" class="gs-mobile-cat-link"><i class="bi bi-truck me-2"></i>Carry Service</a></li>
                     <li><a href="<?= APP_URL ?>/pages/supplier/index.php" class="gs-mobile-cat-link"><i class="bi bi-building me-2"></i>Suppliers</a></li>
                     <li><a href="<?= APP_URL ?>/pages/livestream/index.php" class="gs-mobile-cat-link"><i class="bi bi-broadcast me-2"></i>Live Streams</a></li>
