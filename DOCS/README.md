@@ -29,6 +29,10 @@ Welcome to the GlobexSky project documentation. This folder contains comprehensi
 | 20 | [20-hosting-environment.md](20-hosting-environment.md) | Namecheap shared hosting specs, Node.js, file structure, environment |
 | 21 | [21-china-gfw.md](21-china-gfw.md) | Great Firewall considerations, blocked services, China-safe alternatives |
 | 22 | [22-self-hosted-alternatives.md](22-self-hosted-alternatives.md) | Free self-hosted alternatives to Google/paid services |
+| 23 | [23-security-audit.md](23-security-audit.md) | Security audit results, OWASP Top 10 compliance, headers, rate limiting |
+| 24 | [24-performance-optimization.md](24-performance-optimization.md) | OPcache, query optimizer, asset optimization, caching strategy |
+| 25 | [25-complete-53-pr-plan.md](25-complete-53-pr-plan.md) | **Complete 53-PR development master plan** — definitive PR breakdown |
+| — | [PRODUCTION-CHECKLIST.md](PRODUCTION-CHECKLIST.md) | Production deployment checklist (critical/high/medium/final) |
 | — | [ROADMAP.md](ROADMAP.md) | 12-phase development roadmap with status |
 
 ## 🔗 Quick Links
