@@ -1,362 +1,313 @@
 <?php
 /**
- * pages/admin/plans/index.php — Admin Plan Configuration (PR #9)
- *
- * View/edit plan details: name, price, limits, features
- * View subscriber count per plan
- * Revenue from plans this month
+ * pages/admin/plans/index.php — Admin Plan Overview (PR #9)
  */
-
 require_once __DIR__ . '/../../../includes/middleware.php';
 require_once __DIR__ . '/../../../includes/plans.php';
-requireRole(['admin', 'super_admin']);
+requireAdmin();
 
-$db    = getDB();
-$plans = getPlans();
+$db = getDB();
 
-// Enrich with subscriber counts and monthly revenue
-foreach ($plans as &$p) {
-    $p['subscriber_count'] = 0;
-    $p['monthly_revenue']  = 0.0;
-    try {
-        $cStmt = $db->prepare(
-            'SELECT COUNT(*) FROM plan_subscriptions WHERE plan_id = ? AND status = "active"'
-        );
-        $cStmt->execute([$p['id']]);
-        $p['subscriber_count'] = (int)$cStmt->fetchColumn();
+// Stats: subscribers by plan + MRR
+$planStats = getPlanSubscriberCounts();
 
-        $rStmt = $db->prepare(
-            "SELECT COALESCE(SUM(pi.amount),0)
-             FROM plan_invoices pi
-             WHERE pi.subscription_id IN (
-                 SELECT id FROM plan_subscriptions WHERE plan_id = ?
-             )
-             AND pi.status = 'paid'
-             AND pi.created_at >= DATE_FORMAT(NOW(),'%Y-%m-01')"
-        );
-        $rStmt->execute([$p['id']]);
-        $p['monthly_revenue'] = (float)$rStmt->fetchColumn();
-    } catch (PDOException $e) { /* ignore */ }
-}
-unset($p);
+// Total MRR
+$totalMRR = array_sum(array_column($planStats, 'mrr'));
 
-// Overall stats
-$totalSubs    = 0;
-$totalRevenue = 0.0;
-$totalMRR     = 0.0;
-foreach ($plans as $p) {
-    $totalSubs    += $p['subscriber_count'];
-    $totalRevenue += $p['monthly_revenue'];
-    $totalMRR     += $p['subscriber_count'] * (float)($p['price_monthly'] ?? $p['price'] ?? 0);
-}
+// Recent subscription changes
+$recentChanges = [];
+try {
+    $stmt = $db->query(
+        'SELECT ps.*, sp.name AS plan_name, sp.slug AS plan_slug,
+                u.name AS supplier_name, u.email AS supplier_email
+         FROM plan_subscriptions ps
+         JOIN supplier_plans sp ON sp.id = ps.plan_id
+         JOIN users u ON u.id = ps.supplier_id
+         ORDER BY ps.updated_at DESC LIMIT 10'
+    );
+    $recentChanges = $stmt->fetchAll();
+} catch (PDOException $e) { /* table may not exist */ }
 
-$pageTitle = 'Plan Management';
+// Supplier plan table (paginated)
+$page    = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 25;
+$offset  = ($page - 1) * $perPage;
+$search  = trim($_GET['search'] ?? '');
+$planFilter = trim($_GET['plan'] ?? '');
+
+$suppliers   = [];
+$totalCount  = 0;
+try {
+    $where  = 'WHERE 1=1';
+    $params = [];
+    if ($search !== '') {
+        $where  .= ' AND (u.name LIKE ? OR u.email LIKE ?)';
+        $params[] = "%$search%";
+        $params[] = "%$search%";
+    }
+    if ($planFilter !== '') {
+        $where  .= ' AND sp.slug = ?';
+        $params[] = $planFilter;
+    }
+
+    $countStmt = $db->prepare(
+        "SELECT COUNT(DISTINCT u.id)
+         FROM users u
+         LEFT JOIN plan_subscriptions ps ON ps.supplier_id = u.id AND ps.status IN ('active','trialing')
+         LEFT JOIN supplier_plans sp ON sp.id = ps.plan_id
+         $where"
+    );
+    $countStmt->execute($params);
+    $totalCount = (int)$countStmt->fetchColumn();
+
+    $listStmt = $db->prepare(
+        "SELECT u.id AS user_id, u.name, u.email,
+                COALESCE(sp.name,'Free') AS plan_name,
+                COALESCE(sp.slug,'free') AS plan_slug,
+                ps.status AS sub_status,
+                ps.billing_period,
+                ps.current_period_end,
+                ps.cancel_at_period_end,
+                ps.created_at AS subscribed_at,
+                COALESCE(ps.amount,0) AS amount
+         FROM users u
+         LEFT JOIN plan_subscriptions ps ON ps.supplier_id = u.id AND ps.status IN ('active','trialing')
+         LEFT JOIN supplier_plans sp ON sp.id = ps.plan_id
+         $where
+         ORDER BY subscribed_at DESC
+         LIMIT ? OFFSET ?"
+    );
+    $listStmt->execute(array_merge($params, [$perPage, $offset]));
+    $suppliers = $listStmt->fetchAll();
+} catch (PDOException $e) { /* ignore */ }
+
+$allPlans  = getPlans();
+$totalPages = (int)ceil($totalCount / $perPage);
+
+$pageTitle = 'Admin — Supplier Plans';
 include __DIR__ . '/../../../includes/header.php';
+
+$planBadge = function (string $slug, string $name): string {
+    return match ($slug) {
+        'pro'        => '<span class="badge bg-primary">' . htmlspecialchars($name) . '</span>',
+        'enterprise' => '<span class="badge bg-warning text-dark">' . htmlspecialchars($name) . '</span>',
+        default      => '<span class="badge bg-light text-dark border">' . htmlspecialchars($name) . '</span>',
+    };
+};
+
+$statusBadge = function (?string $status): string {
+    return match ($status) {
+        'active'   => '<span class="badge bg-success">Active</span>',
+        'trialing' => '<span class="badge bg-info">Trial</span>',
+        'past_due' => '<span class="badge bg-warning text-dark">Past Due</span>',
+        null       => '<span class="badge bg-light text-dark border">Free</span>',
+        default    => '<span class="badge bg-secondary">' . htmlspecialchars(ucfirst((string)$status)) . '</span>',
+    };
+};
 ?>
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fw-bold mb-0"><i class="bi bi-diagram-3 me-2"></i>Supplier Plans</h2>
-        <a href="/pages/admin/plans/subscribers.php" class="btn btn-outline-primary">
-            <i class="bi bi-people me-1"></i>View Subscribers
+        <h3 class="fw-bold"><i class="bi bi-layers text-primary me-2"></i>Supplier Plans</h3>
+        <a href="/pages/admin/index.php" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i> Admin Dashboard
         </a>
     </div>
 
-    <!-- Stats Row -->
-    <div class="row g-4 mb-5">
-        <div class="col-sm-6 col-xl-3">
-            <div class="card text-center border-0 shadow-sm">
-                <div class="card-body py-4">
-                    <i class="bi bi-people fs-1 text-primary mb-2"></i>
-                    <h3 class="fw-bold"><?= number_format($totalSubs) ?></h3>
-                    <div class="text-muted">Active Subscribers</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-sm-6 col-xl-3">
-            <div class="card text-center border-0 shadow-sm">
-                <div class="card-body py-4">
-                    <i class="bi bi-currency-dollar fs-1 text-success mb-2"></i>
-                    <h3 class="fw-bold">$<?= number_format($totalRevenue, 0) ?></h3>
-                    <div class="text-muted">Revenue This Month</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-sm-6 col-xl-3">
-            <div class="card text-center border-0 shadow-sm">
-                <div class="card-body py-4">
-                    <i class="bi bi-graph-up fs-1 text-info mb-2"></i>
-                    <h3 class="fw-bold">$<?= number_format($totalMRR, 0) ?></h3>
-                    <div class="text-muted">MRR (Monthly Recurring)</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-sm-6 col-xl-3">
-            <div class="card text-center border-0 shadow-sm">
-                <div class="card-body py-4">
-                    <i class="bi bi-layers fs-1 text-warning mb-2"></i>
-                    <h3 class="fw-bold"><?= count($plans) ?></h3>
-                    <div class="text-muted">Active Plans</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Plan Cards -->
-    <div class="row g-4 mb-5">
-        <?php foreach ($plans as $plan):
-            $icons = ['free' => 'bi-shop', 'pro' => 'bi-star-fill', 'enterprise' => 'bi-gem'];
-            $colors = ['free' => 'secondary', 'pro' => 'primary', 'enterprise' => 'warning'];
-            $icon  = $icons[$plan['slug']]  ?? 'bi-tag';
-            $color = $colors[$plan['slug']] ?? 'info';
-        ?>
-        <div class="col-md-4">
-            <div class="card h-100 border-<?= $color ?> border-2">
-                <div class="card-header bg-<?= $color ?> <?= $color === 'warning' ? 'text-dark' : 'text-white' ?> d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="bi <?= $icon ?> me-2"></i><?= htmlspecialchars($plan['name']) ?></h5>
-                    <span class="badge bg-light <?= $color === 'warning' ? 'text-dark' : 'text-' . $color ?>">
-                        <?= $plan['subscriber_count'] ?> subs
-                    </span>
-                </div>
+    <!-- Stats cards -->
+    <div class="row g-3 mb-4">
+        <?php foreach ($planStats as $stat): ?>
+        <div class="col-sm-6 col-md-3">
+            <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
-                    <table class="table table-sm mb-0">
-                        <tr>
-                            <td class="text-muted">Monthly Price</td>
-                            <td class="fw-semibold">$<?= number_format((float)($plan['price_monthly'] ?? $plan['price'] ?? 0), 0) ?>/mo</td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">Quarterly</td>
-                            <td>$<?= number_format((float)($plan['price_quarterly'] ?? 0), 2) ?>/mo</td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">Semi-Annual</td>
-                            <td>$<?= number_format((float)($plan['price_semi_annual'] ?? 0), 2) ?>/mo</td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">Annual</td>
-                            <td>$<?= number_format((float)($plan['price_annual'] ?? 0), 2) ?>/mo</td>
-                        </tr>
-                        <tr><td colspan="2"><hr class="my-1"></td></tr>
-                        <tr>
-                            <td class="text-muted">Products</td>
-                            <td><?= (int)($plan['max_products'] ?? 10) < 0 ? '<span class="text-success fw-bold">Unlimited</span>' : number_format((int)($plan['max_products'] ?? 10)) ?></td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">Images/Product</td>
-                            <td><?= (int)($plan['max_images_per_product'] ?? 3) < 0 ? '∞' : (int)($plan['max_images_per_product'] ?? 3) ?></td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">Shipping Templates</td>
-                            <td><?= (int)($plan['max_shipping_templates'] ?? 1) < 0 ? '∞' : (int)($plan['max_shipping_templates'] ?? 1) ?></td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">Dropship Imports</td>
-                            <td><?= (int)($plan['max_dropship_imports'] ?? 0) < 0 ? '∞' : (int)($plan['max_dropship_imports'] ?? 0) ?></td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">Commission Discount</td>
-                            <td class="text-success fw-bold"><?= (float)($plan['commission_discount'] ?? 0) ?>%</td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">Revenue (this mo.)</td>
-                            <td class="text-success fw-bold">$<?= number_format($plan['monthly_revenue'], 2) ?></td>
-                        </tr>
-                    </table>
-                </div>
-                <div class="card-footer d-flex gap-2">
-                    <a href="/pages/admin/plans/subscribers.php?plan_id=<?= $plan['id'] ?>"
-                       class="btn btn-outline-<?= $color ?> btn-sm flex-grow-1">
-                        <i class="bi bi-people me-1"></i>Subscribers
-                    </a>
-                    <button class="btn btn-outline-secondary btn-sm"
-                            data-bs-toggle="modal"
-                            data-bs-target="#editPlanModal"
-                            data-plan='<?= htmlspecialchars(json_encode([
-                                'id'                     => $plan['id'],
-                                'name'                   => $plan['name'],
-                                'price_monthly'          => $plan['price_monthly'] ?? $plan['price'] ?? 0,
-                                'price_quarterly'        => $plan['price_quarterly']   ?? 0,
-                                'price_semi_annual'      => $plan['price_semi_annual'] ?? 0,
-                                'price_annual'           => $plan['price_annual']      ?? 0,
-                                'commission_discount'    => $plan['commission_discount'] ?? 0,
-                                'max_products'           => $plan['max_products']           ?? 10,
-                                'max_images_per_product' => $plan['max_images_per_product'] ?? 3,
-                                'max_shipping_templates' => $plan['max_shipping_templates'] ?? 1,
-                                'max_dropship_imports'   => $plan['max_dropship_imports']   ?? 0,
-                            ]), ENT_QUOTES) ?>'>
-                        <i class="bi bi-pencil"></i>
-                    </button>
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="text-muted small mb-1"><?= e($stat['name']) ?> Plan</div>
+                            <div class="fs-3 fw-bold"><?= (int)($stat['subscriber_count'] ?? 0) ?></div>
+                            <div class="small text-muted">subscribers</div>
+                        </div>
+                        <span class="fs-2">
+                            <?= match ($stat['slug'] ?? 'free') {
+                                'pro'        => '⭐',
+                                'enterprise' => '💎',
+                                default      => '🆓',
+                            } ?>
+                        </span>
+                    </div>
+                    <?php if ((float)($stat['mrr'] ?? 0) > 0): ?>
+                    <div class="mt-2 text-success small fw-semibold">
+                        MRR: $<?= number_format((float)$stat['mrr'], 0) ?>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
         <?php endforeach; ?>
+        <!-- Total MRR card -->
+        <div class="col-sm-6 col-md-3">
+            <div class="card border-0 shadow-sm h-100 bg-success bg-opacity-10">
+                <div class="card-body">
+                    <div class="text-muted small mb-1">Total MRR</div>
+                    <div class="fs-3 fw-bold text-success">$<?= number_format($totalMRR, 0) ?></div>
+                    <div class="small text-muted">monthly recurring revenue</div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Subscribers Overview Table -->
-    <div class="card">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center">
-            <h5 class="mb-0 fw-bold"><i class="bi bi-table me-2"></i>Recent Subscribers</h5>
-            <a href="/pages/admin/plans/subscribers.php" class="btn btn-sm btn-outline-primary">View All</a>
+    <!-- Recent changes -->
+    <?php if (!empty($recentChanges)): ?>
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-light fw-semibold">
+            <i class="bi bi-clock-history me-2 text-primary"></i>Recent Subscription Changes
         </div>
-        <?php
-        $recentSubs = [];
-        try {
-            $stmt = $db->query(
-                "SELECT ps.*, sp.name AS plan_name, sp.price_monthly AS plan_price,
-                        u.email, CONCAT(u.first_name,' ',u.last_name) AS supplier_name
-                 FROM plan_subscriptions ps
-                 JOIN supplier_plans sp ON sp.id = ps.plan_id
-                 JOIN users u ON u.id = ps.supplier_id
-                 ORDER BY ps.created_at DESC
-                 LIMIT 10"
-            );
-            $recentSubs = $stmt->fetchAll();
-        } catch (PDOException $e) { /* ignore */ }
-        ?>
-        <?php if ($recentSubs): ?>
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Supplier</th>
-                        <th>Plan</th>
-                        <th>Duration</th>
-                        <th>Start Date</th>
-                        <th>Next Billing</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($recentSubs as $sub): ?>
-                    <tr>
-                        <td>
-                            <div class="fw-semibold"><?= htmlspecialchars(trim($sub['supplier_name'] ?? '')) ?></div>
-                            <div class="text-muted small"><?= htmlspecialchars($sub['email'] ?? '') ?></div>
-                        </td>
-                        <td><?= htmlspecialchars($sub['plan_name'] ?? '') ?></td>
-                        <td class="text-capitalize"><?= htmlspecialchars($sub['duration'] ?? 'monthly') ?></td>
-                        <td><?= $sub['starts_at'] ? htmlspecialchars(date('M j, Y', strtotime($sub['starts_at']))) : '—' ?></td>
-                        <td><?= $sub['ends_at'] ? htmlspecialchars(date('M j, Y', strtotime($sub['ends_at']))) : '—' ?></td>
-                        <td>
-                            <?php
-                            echo match($sub['status'] ?? '') {
-                                'active'   => '<span class="badge bg-success">Active</span>',
-                                'trialing' => '<span class="badge bg-info">Trialing</span>',
-                                'past_due' => '<span class="badge bg-warning text-dark">Past Due</span>',
-                                'cancelled'=> '<span class="badge bg-danger">Cancelled</span>',
-                                default    => '<span class="badge bg-secondary">' . htmlspecialchars($sub['status'] ?? '?') . '</span>',
-                            };
-                            ?>
-                        </td>
-                        <td>
-                            <a href="/pages/admin/plans/subscribers.php?supplier_id=<?= (int)$sub['supplier_id'] ?>"
-                               class="btn btn-outline-secondary btn-sm">
-                                <i class="bi bi-eye"></i>
-                            </a>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3">Supplier</th>
+                            <th>Plan</th>
+                            <th>Status</th>
+                            <th>Changed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($recentChanges as $chg): ?>
+                        <tr>
+                            <td class="ps-3 small">
+                                <div class="fw-semibold"><?= e($chg['supplier_name'] ?? '—') ?></div>
+                                <div class="text-muted"><?= e($chg['supplier_email'] ?? '') ?></div>
+                            </td>
+                            <td><?= $planBadge($chg['plan_slug'] ?? 'free', $chg['plan_name'] ?? 'Free') ?></td>
+                            <td><?= $statusBadge($chg['status'] ?? null) ?></td>
+                            <td class="small text-muted">
+                                <?= htmlspecialchars(!empty($chg['updated_at']) ? date('M j, Y H:i', strtotime($chg['updated_at'])) : '—') ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
-        <?php else: ?>
-        <div class="card-body text-center text-muted py-4">
-            No subscribers yet.
+    </div>
+    <?php endif; ?>
+
+    <!-- Supplier plan list -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-light">
+            <div class="d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-people me-2 text-primary"></i>All Suppliers</span>
+                <form method="GET" class="d-flex gap-2">
+                    <input type="text" name="search" class="form-control form-control-sm"
+                           placeholder="Search name / email…" value="<?= htmlspecialchars($search) ?>">
+                    <select name="plan" class="form-select form-select-sm" style="width:auto">
+                        <option value="">All plans</option>
+                        <?php foreach ($allPlans as $p): ?>
+                        <option value="<?= e($p['slug']) ?>" <?= $planFilter === $p['slug'] ? 'selected' : '' ?>>
+                            <?= e($p['name']) ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button class="btn btn-outline-primary btn-sm" type="submit">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3">Supplier</th>
+                            <th>Plan</th>
+                            <th>Billing</th>
+                            <th>Status</th>
+                            <th>Next Billing</th>
+                            <th>MRR</th>
+                            <th class="text-end pe-3">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($suppliers)): ?>
+                        <tr><td colspan="7" class="text-center text-muted py-4">No suppliers found.</td></tr>
+                        <?php else: foreach ($suppliers as $sup): ?>
+                        <tr>
+                            <td class="ps-3">
+                                <div class="fw-semibold"><?= e($sup['name'] ?? '—') ?></div>
+                                <div class="small text-muted"><?= e($sup['email'] ?? '') ?></div>
+                            </td>
+                            <td><?= $planBadge($sup['plan_slug'] ?? 'free', $sup['plan_name'] ?? 'Free') ?></td>
+                            <td class="small text-muted">
+                                <?= e(ucwords(str_replace('_', '-', $sup['billing_period'] ?? 'monthly'))) ?>
+                            </td>
+                            <td>
+                                <?= $statusBadge($sup['sub_status'] ?? null) ?>
+                                <?php if (!empty($sup['cancel_at_period_end'])): ?>
+                                <span class="badge bg-warning text-dark ms-1 small">Cancelling</span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="small text-muted">
+                                <?= !empty($sup['current_period_end'])
+                                    ? htmlspecialchars(date('M j, Y', strtotime($sup['current_period_end'])))
+                                    : '—' ?>
+                            </td>
+                            <td class="small">
+                                <?= (float)($sup['amount'] ?? 0) > 0
+                                    ? '$' . number_format((float)$sup['amount'], 0)
+                                    : '—' ?>
+                            </td>
+                            <td class="text-end pe-3">
+                                <div class="dropdown">
+                                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle"
+                                            data-bs-toggle="dropdown">
+                                        Manage
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <?php foreach ($allPlans as $p): ?>
+                                        <?php if ($p['slug'] !== ($sup['plan_slug'] ?? 'free')): ?>
+                                        <li>
+                                            <form method="POST" action="/api/plans.php?action=admin_update" class="d-inline">
+                                                <?= csrfField() ?>
+                                                <input type="hidden" name="supplier_id" value="<?= (int)$sup['user_id'] ?>">
+                                                <input type="hidden" name="plan_slug"   value="<?= e($p['slug']) ?>">
+                                                <button type="submit" class="dropdown-item"
+                                                        onclick="return confirm('Set <?= e($sup['name'] ?? '') ?> to <?= e($p['name']) ?> plan?')">
+                                                    <i class="bi bi-arrow-right-circle me-2"></i>Set to <?= e($p['name']) ?>
+                                                </button>
+                                            </form>
+                                        </li>
+                                        <?php endif; endforeach; ?>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <a href="/pages/admin/users.php?id=<?= (int)$sup['user_id'] ?>" class="dropdown-item">
+                                                <i class="bi bi-person me-2"></i>View Profile
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php if ($totalPages > 1): ?>
+        <div class="card-footer bg-transparent">
+            <nav>
+                <ul class="pagination pagination-sm mb-0 justify-content-center">
+                    <?php for ($p = 1; $p <= $totalPages; $p++): ?>
+                    <li class="page-item <?= $p === $page ? 'active' : '' ?>">
+                        <a class="page-link" href="?page=<?= $p ?>&search=<?= urlencode($search) ?>&plan=<?= urlencode($planFilter) ?>">
+                            <?= $p ?>
+                        </a>
+                    </li>
+                    <?php endfor; ?>
+                </ul>
+            </nav>
         </div>
         <?php endif; ?>
     </div>
 </div>
-
-<!-- Edit Plan Modal -->
-<div class="modal fade" id="editPlanModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Edit Plan</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" action="/api/admin.php?action=update_plan">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generateCsrfToken()) ?>">
-                <input type="hidden" name="plan_id"    id="editPlanId">
-                <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">Plan Name</label>
-                            <input type="text" class="form-control" name="name" id="editPlanName" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">Commission Discount (%)</label>
-                            <input type="number" class="form-control" name="commission_discount"
-                                   id="editPlanCommDisc" min="0" max="100" step="0.01">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold">Monthly Price ($)</label>
-                            <input type="number" class="form-control" name="price_monthly"
-                                   id="editPriceMonthly" min="0" step="0.01">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold">Quarterly ($/mo)</label>
-                            <input type="number" class="form-control" name="price_quarterly"
-                                   id="editPriceQuarterly" min="0" step="0.01">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold">Semi-Annual ($/mo)</label>
-                            <input type="number" class="form-control" name="price_semi_annual"
-                                   id="editPriceSemiAnnual" min="0" step="0.01">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold">Annual ($/mo)</label>
-                            <input type="number" class="form-control" name="price_annual"
-                                   id="editPriceAnnual" min="0" step="0.01">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold">Max Products</label>
-                            <input type="number" class="form-control" name="max_products"
-                                   id="editMaxProducts" min="-1" title="-1 = unlimited">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold">Max Images/Product</label>
-                            <input type="number" class="form-control" name="max_images_per_product"
-                                   id="editMaxImages" min="-1">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold">Max Shipping Templates</label>
-                            <input type="number" class="form-control" name="max_shipping_templates"
-                                   id="editMaxShipping" min="-1">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold">Max Dropship Imports</label>
-                            <input type="number" class="form-control" name="max_dropship_imports"
-                                   id="editMaxDropship" min="-1">
-                        </div>
-                    </div>
-                    <p class="text-muted small mt-2 mb-0">Use <strong>-1</strong> for unlimited.</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<script>
-document.getElementById('editPlanModal').addEventListener('show.bs.modal', function (e) {
-    const btn  = e.relatedTarget;
-    const plan = JSON.parse(btn.dataset.plan || '{}');
-    document.getElementById('editPlanId').value          = plan.id                    || '';
-    document.getElementById('editPlanName').value        = plan.name                  || '';
-    document.getElementById('editPlanCommDisc').value    = plan.commission_discount   || 0;
-    document.getElementById('editPriceMonthly').value    = plan.price_monthly         || 0;
-    document.getElementById('editPriceQuarterly').value  = plan.price_quarterly       || 0;
-    document.getElementById('editPriceSemiAnnual').value = plan.price_semi_annual     || 0;
-    document.getElementById('editPriceAnnual').value     = plan.price_annual          || 0;
-    document.getElementById('editMaxProducts').value     = plan.max_products          ?? 10;
-    document.getElementById('editMaxImages').value       = plan.max_images_per_product ?? 3;
-    document.getElementById('editMaxShipping').value     = plan.max_shipping_templates ?? 1;
-    document.getElementById('editMaxDropship').value     = plan.max_dropship_imports  ?? 0;
-});
-</script>
-
 <?php include __DIR__ . '/../../../includes/footer.php'; ?>
