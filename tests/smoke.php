@@ -756,6 +756,51 @@ foreach ($pr7AdminPages as $f) {
     assertSyntax("$root/$f");
 }
 
+// ── PR #10: Add-On Purchases & Invoice System ────────────────
+echo "\nPR #10 Add-On & Invoice database:\n";
+assertFile("$root/database/schema_v15_addons.sql");
+
+echo "\nPR #10 includes:\n";
+$pr10Includes = [
+    'includes/addons.php',
+    'includes/invoices.php',
+];
+foreach ($pr10Includes as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #10 APIs:\n";
+$pr10Apis = [
+    'api/addons.php',
+    'api/invoices.php',
+];
+foreach ($pr10Apis as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #10 Supplier billing pages:\n";
+$pr10SupplierPages = [
+    'pages/supplier/billing/addons.php',
+    'pages/supplier/billing/invoices.php',
+    'pages/supplier/billing/invoice-detail.php',
+];
+foreach ($pr10SupplierPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #10 Admin billing pages:\n";
+$pr10AdminPages = [
+    'pages/admin/billing/addons.php',
+    'pages/admin/billing/invoices.php',
+];
+foreach ($pr10AdminPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
