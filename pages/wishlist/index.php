@@ -221,20 +221,6 @@ function moveQtyAdj(delta) {
     input.value = Math.max(1, parseInt(input.value) + delta);
 }
 
-function updateWishlistBadge(count) {
-    document.querySelectorAll('[data-wishlist-badge]').forEach(el => {
-        el.textContent = count > 99 ? '99+' : count;
-    });
-}
-
-function updateCartBadge(count) {
-    if (count !== undefined) {
-        document.querySelectorAll('[data-cart-badge]').forEach(el => {
-            el.textContent = count > 99 ? '99+' : count;
-        });
-    }
-}
-
 function showToast(msg, type = 'success') {
     const toastHtml = `
         <div class="toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0 show" role="alert" style="min-width:200px">

@@ -456,7 +456,7 @@ function toggleWishlist(productId) {
             }
 
             // Look up the SKU via API
-            fetch(`<?= APP_URL ?>/api/products.php?action=get_skus&product_id=${productId}`)
+            fetch(`<?= APP_URL ?>/api/products.php?action=get_skus&product_id=${encodeURIComponent(productId)}`)
                 .then(r => r.json())
                 .then(data => {
                     if (!data.success) return;

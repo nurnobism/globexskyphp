@@ -224,6 +224,9 @@ include __DIR__ . '/../../includes/header.php';
 const CSRF = '<?= e(csrfToken()) ?>';
 const CART_API = '<?= APP_URL ?>/api/cart.php';
 
+function fmtMoney(amount) {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+}
 function cartPost(action, data, onSuccess) {
     const body = new URLSearchParams({ _csrf_token: CSRF, ...data });
     fetch(`${CART_API}?action=${action}`, { method: 'POST', body })
@@ -262,12 +265,12 @@ function cartSetQty(itemId, productId, qty) {
             // Update row subtotal
             if (input && price > 0) {
                 const sub = document.getElementById('subtotal-' + rowId);
-                if (sub) sub.textContent = '$' + (price * qty).toFixed(2);
+                if (sub) sub.textContent = fmtMoney(price * qty);
             }
             // Update summary
             if (res.total !== undefined) {
                 document.querySelectorAll('#summarySubtotal, #summaryTotal').forEach(el => {
-                    el.textContent = '$' + parseFloat(res.total).toFixed(2);
+                    el.textContent = fmtMoney(parseFloat(res.total));
                 });
             }
         });
@@ -301,7 +304,7 @@ function cartClear() {
 function updateSummary(res) {
     if (res.total !== undefined) {
         document.querySelectorAll('#summarySubtotal, #summaryTotal').forEach(el => {
-            el.textContent = '$' + parseFloat(res.total).toFixed(2);
+            el.textContent = fmtMoney(parseFloat(res.total));
         });
     }
     if (res.count !== undefined) {

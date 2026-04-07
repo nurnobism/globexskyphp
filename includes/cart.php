@@ -519,7 +519,7 @@ function validateCartStock(int $userId): array
             if ($userId > 0 && $item['id'] > 0) {
                 getDB()->prepare('UPDATE cart_items SET quantity = ? WHERE id = ? AND user_id = ?')
                        ->execute([$stock, $item['id'], $userId]);
-            } elseif ($userId <= 0 && isset($item['session_key'])) {
+            } elseif ($userId <= 0 && isset($item['session_key']) && isset($_SESSION['cart'][$item['session_key']])) {
                 $_SESSION['cart'][$item['session_key']]['quantity'] = $stock;
             }
             $issues[] = array_merge($item, [
