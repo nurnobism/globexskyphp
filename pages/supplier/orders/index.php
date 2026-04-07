@@ -176,11 +176,14 @@ include __DIR__ . '/../../../includes/header.php';
                            class="btn btn-sm btn-outline-primary">
                             <i class="bi bi-eye"></i>
                         </a>
-                        <?php if ($o['status'] === 'confirmed'): ?>
+                        <?php
+                            $validNext = getValidStatusTransitions($o['status'], 'supplier');
+                        ?>
+                        <?php if (in_array('processing', $validNext, true)): ?>
                         <button class="btn btn-sm btn-success" onclick="acceptOrder(<?= (int)$o['id'] ?>)" title="Accept / Start Processing">
                             <i class="bi bi-check-lg"></i>
                         </button>
-                        <?php elseif ($o['status'] === 'processing'): ?>
+                        <?php elseif (in_array('shipped', $validNext, true)): ?>
                         <button class="btn btn-sm btn-primary" onclick="showShipModal(<?= (int)$o['id'] ?>)" title="Mark as Shipped">
                             <i class="bi bi-truck"></i>
                         </button>

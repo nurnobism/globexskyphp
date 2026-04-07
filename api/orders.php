@@ -133,7 +133,7 @@ switch ($action) {
             jsonResponse(['success' => false, 'message' => 'order_id and tracking_number required'], 400);
         }
 
-        $result = addTrackingInfo($db, $orderId, $supplierId ?: $userId, $carrier, $trackingNumber, $trackingUrl);
+        $result = addTrackingInfo($db, $orderId, $supplierId > 0 ? $supplierId : $userId, $carrier, $trackingNumber, $trackingUrl);
         jsonResponse($result, $result['success'] ? 200 : 422);
         break;
 
@@ -239,7 +239,8 @@ switch ($action) {
 
         // Accept JSON array or regular POST array
         if (is_string($rawIds)) {
-            $orderIds = json_decode($rawIds, true);
+            $decoded  = json_decode($rawIds, true);
+            $orderIds = is_array($decoded) ? $decoded : [];
         } elseif (is_array($rawIds)) {
             $orderIds = $rawIds;
         } else {

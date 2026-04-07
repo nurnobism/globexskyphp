@@ -514,13 +514,13 @@ function getOrderStats(PDO $db, int $userId, string $role): array
 function getRevenueStats(PDO $db, int $supplierId, string $period = 'monthly'): array
 {
     if ($period === 'daily') {
-        $groupBy = 'DATE(o.placed_at)';
-        $label   = 'DATE(o.placed_at) AS period_label';
-        $having  = 'o.placed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)';
+        $groupBy  = 'DATE(o.placed_at)';
+        $label    = 'DATE(o.placed_at) AS period_label';
+        $interval = 'INTERVAL 30 DAY';
     } else {
-        $groupBy = 'YEAR(o.placed_at), MONTH(o.placed_at)';
-        $label   = 'DATE_FORMAT(o.placed_at, "%Y-%m") AS period_label';
-        $having  = 'o.placed_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)';
+        $groupBy  = 'YEAR(o.placed_at), MONTH(o.placed_at)';
+        $label    = 'DATE_FORMAT(o.placed_at, "%Y-%m") AS period_label';
+        $interval = 'INTERVAL 12 MONTH';
     }
 
     $stmt = $db->prepare(
@@ -530,7 +530,8 @@ function getRevenueStats(PDO $db, int $supplierId, string $period = 'monthly'): 
          FROM orders o
          JOIN order_items oi ON oi.order_id = o.id
          JOIN products p ON p.id = oi.product_id
-         WHERE p.supplier_id = ? AND o.payment_status = 'paid' AND $having
+         WHERE p.supplier_id = ? AND o.payment_status = 'paid'
+           AND o.placed_at >= DATE_SUB(NOW(), $interval)
          GROUP BY $groupBy
          ORDER BY period_label ASC"
     );
@@ -556,14 +557,16 @@ function addOrderNote(PDO $db, int $orderId, int $userId, string $note, bool $is
  */
 function getOrderNotes(PDO $db, int $orderId, bool $includeInternal = false): array
 {
-    $where = $includeInternal ? '' : 'AND on2.is_internal = 0';
-    $stmt  = $db->prepare(
-        "SELECT on2.*, u.first_name, u.last_name, u.role AS user_role
-         FROM order_notes on2
-         LEFT JOIN users u ON u.id = on2.user_id
-         WHERE on2.order_id = ? $where
-         ORDER BY on2.created_at ASC"
-    );
+    $sql = "SELECT on2.*, u.first_name, u.last_name, u.role AS user_role
+            FROM order_notes on2
+            LEFT JOIN users u ON u.id = on2.user_id
+            WHERE on2.order_id = ?";
+    if (!$includeInternal) {
+        $sql .= ' AND on2.is_internal = 0';
+    }
+    $sql .= ' ORDER BY on2.created_at ASC';
+
+    $stmt = $db->prepare($sql);
     $stmt->execute([$orderId]);
     return $stmt->fetchAll();
 }

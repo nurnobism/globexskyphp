@@ -104,7 +104,7 @@ include __DIR__ . '/../../../includes/header.php';
             <select name="supplier_id" class="form-select form-select-sm">
                 <option value="">All Suppliers</option>
                 <?php foreach ($suppList as $s): ?>
-                <option value="<?= (int)$s['id'] ?>" <?= (string)$filters['supplier_id'] === (string)$s['id'] ? 'selected' : '' ?>>
+                <option value="<?= (int)$s['id'] ?>" <?= (int)$filters['supplier_id'] === (int)$s['id'] ? 'selected' : '' ?>>
                     <?= e($s['business_name']) ?>
                 </option>
                 <?php endforeach; ?>
