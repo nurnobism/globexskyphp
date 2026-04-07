@@ -16,6 +16,9 @@
 require_once __DIR__ . '/feature_toggles.php';
 require_once __DIR__ . '/cart.php';
 require_once __DIR__ . '/commission.php';
+if (file_exists(__DIR__ . '/shipping.php')) {
+    require_once __DIR__ . '/shipping.php';
+}
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -216,20 +219,55 @@ function createOrder(int $userId, int $addressId, string $paymentMethod, array $
 /**
  * Calculate order totals for a set of cart items and address.
  *
+ * Uses zone-based shipping when the shipping_calculator feature is enabled
+ * and a valid address is provided; otherwise falls back to a flat rate.
+ *
  * @param  array $cartItems  items from getCart() for one supplier group
- * @param  int   $addressId  (unused for now — placeholder for zone-based shipping)
- * @return array{subtotal:float, shipping:float, tax:float, total:float}
+ * @param  int   $addressId  User address ID for zone-based rate lookup
+ * @param  int   $methodId   Specific shipping method ID (0 = cheapest available)
+ * @return array{subtotal:float, shipping:float, tax:float, total:float, shipping_method_id:int|null}
  */
-function calculateOrderTotals(array $cartItems, int $addressId = 0): array
+function calculateOrderTotals(array $cartItems, int $addressId = 0, int $methodId = 0): array
 {
     $subtotal = 0.0;
     foreach ($cartItems as $item) {
-        $subtotal += (float)$item['unit_price'] * (int)$item['quantity'];
+        $subtotal += (float)($item['unit_price'] ?? $item['price'] ?? 0) * (int)$item['quantity'];
     }
     $subtotal = round($subtotal, 2);
 
-    // Flat-rate shipping: free over $100, else $9.99
-    $shipping = ($subtotal >= 100.0) ? 0.0 : 9.99;
+    // Zone-based shipping when feature is enabled and address provided
+    $shipping         = null;
+    $chosenMethodId   = null;
+    if ($addressId > 0
+        && function_exists('isFeatureEnabled') && isFeatureEnabled('shipping_calculator')
+        && function_exists('getShippingRates')
+    ) {
+        try {
+            $rates = getShippingRates($cartItems, $addressId);
+            if (!empty($rates['methods'])) {
+                $selectedMethod = null;
+                if ($methodId > 0) {
+                    foreach ($rates['methods'] as $m) {
+                        if ((int)$m['id'] === $methodId) { $selectedMethod = $m; break; }
+                    }
+                }
+                // Default: cheapest available method
+                if (!$selectedMethod) {
+                    usort($rates['methods'], fn($a, $b) => $a['cost'] <=> $b['cost']);
+                    $selectedMethod = $rates['methods'][0];
+                }
+                $shipping       = (float)$selectedMethod['cost'];
+                $chosenMethodId = (int)$selectedMethod['id'];
+            }
+        } catch (Throwable $e) {
+            $shipping = null;
+        }
+    }
+
+    // Fallback: flat-rate shipping (free over $100, else $9.99)
+    if ($shipping === null) {
+        $shipping = ($subtotal >= 100.0) ? 0.0 : 9.99;
+    }
 
     // Tax: try tax engine, fall back to 0
     $tax = 0.0;
@@ -245,10 +283,11 @@ function calculateOrderTotals(array $cartItems, int $addressId = 0): array
     $total = round($subtotal + $shipping + $tax, 2);
 
     return [
-        'subtotal' => $subtotal,
-        'shipping' => $shipping,
-        'tax'      => $tax,
-        'total'    => $total,
+        'subtotal'           => $subtotal,
+        'shipping'           => $shipping,
+        'tax'                => $tax,
+        'total'              => $total,
+        'shipping_method_id' => $chosenMethodId,
     ];
 }
 
