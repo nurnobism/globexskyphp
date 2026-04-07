@@ -166,7 +166,7 @@ $periodLabel = [
                         <div class="text-muted small">Amount due: <strong>$<?= number_format($amountDue, 2) ?></strong></div>
                     </div>
 
-                    <?php if ((float)($newPlan['stripe_price_id'] ?? '') !== ''): ?>
+                    <?php if (!empty($newPlan['stripe_price_id'])): ?>
                     <!-- Stripe payment form -->
                     <div id="stripePaymentSection">
                         <div class="mb-3">
@@ -186,7 +186,7 @@ $periodLabel = [
 
                         <button type="submit" class="btn btn-success w-100 mb-2" id="upgradeBtn">
                             <i class="bi bi-check-circle me-2"></i>
-                            <?= $amountDue > 0 ? 'Pay $' . number_format($amountDue, 2) . ' &amp; Upgrade' : 'Confirm Upgrade' ?>
+                            <?= $amountDue > 0 ? 'Pay $' . htmlspecialchars(number_format($amountDue, 2)) . ' &amp; Upgrade' : 'Confirm Upgrade' ?>
                         </button>
                         <a href="/pages/supplier/plans/index.php" class="btn btn-outline-secondary w-100 btn-sm">
                             Cancel

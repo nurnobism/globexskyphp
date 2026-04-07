@@ -110,12 +110,14 @@ $invoiceBadge = function (string $status): string {
                         <?php if (!empty($subscription['next_billing_date'])): ?>
                         <li class="mb-1">
                             <i class="bi bi-arrow-repeat me-1"></i>
-                            Next billing: <strong><?= htmlspecialchars(date('M j, Y', strtotime($subscription['next_billing_date']))) ?></strong>
+                            <?php $nbTs = strtotime($subscription['next_billing_date']); ?>
+                            Next billing: <strong><?= htmlspecialchars($nbTs ? date('M j, Y', $nbTs) : '—') ?></strong>
                         </li>
                         <?php elseif (!empty($subscription['current_period_end'])): ?>
                         <li class="mb-1">
                             <i class="bi bi-arrow-repeat me-1"></i>
-                            Period ends: <strong><?= htmlspecialchars(date('M j, Y', strtotime($subscription['current_period_end']))) ?></strong>
+                            <?php $peTs = strtotime($subscription['current_period_end']); ?>
+                            Period ends: <strong><?= htmlspecialchars($peTs ? date('M j, Y', $peTs) : '—') ?></strong>
                         </li>
                         <?php endif; ?>
                         <?php if ($subscription['cancel_at_period_end']): ?>

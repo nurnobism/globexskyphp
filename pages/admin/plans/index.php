@@ -75,9 +75,9 @@ try {
          LEFT JOIN supplier_plans sp ON sp.id = ps.plan_id
          $where
          ORDER BY subscribed_at DESC
-         LIMIT $perPage OFFSET $offset"
+         LIMIT ? OFFSET ?"
     );
-    $listStmt->execute($params);
+    $listStmt->execute(array_merge($params, [$perPage, $offset]));
     $suppliers = $listStmt->fetchAll();
 } catch (PDOException $e) { /* ignore */ }
 

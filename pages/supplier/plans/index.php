@@ -138,7 +138,12 @@ $discountPct = getDurationDiscount($billingPeriod);
                         $features = [
                             '<i class="bi bi-box-seam text-primary me-2"></i>' . ($productLimit < 0 ? 'Unlimited products' : $productLimit . ' products'),
                             '<i class="bi bi-images text-primary me-2"></i>' . $imgLimit . ' images per product',
-                            '<i class="bi bi-truck text-primary me-2"></i>Dropshipping: ' . ($dropship ? ($productLimit < 0 ? 'Unlimited' : '100 products') : 'Not available'),
+                            '<i class="bi bi-truck text-primary me-2"></i>Dropshipping: ' . (function() use ($dropship, $lim, $productLimit): string {
+                                if (!$dropship) return 'Not available';
+                                $ds = $lim['max_dropship_products'] ?? -1;
+                                if ($ds < 0) return 'Unlimited';
+                                return $ds . ' products';
+                            })(),
                             '<i class="bi bi-camera-video text-primary me-2"></i>Livestream: ' . ($livestream < 0 ? 'Unlimited' : ($livestream === 0 ? 'Not available' : $livestream . '/week')),
                             '<i class="bi bi-code-slash text-primary me-2"></i>API access: ' . ($apiAccess ? ucfirst($apiAccess) : 'Not available'),
                             '<i class="bi bi-percent text-primary me-2"></i>' . ($plan['commission_discount'] ?? 0) . '% commission discount',

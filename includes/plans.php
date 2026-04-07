@@ -58,8 +58,9 @@ function getPlan(string $planSlug): ?array
  */
 function getSupplierActivePlan(int $supplierId): array
 {
-    static $planCache = [];
-    if (isset($planCache[$supplierId])) return $planCache[$supplierId];
+    global $_supplierPlanCache;
+    if (!isset($_supplierPlanCache)) $_supplierPlanCache = [];
+    if (isset($_supplierPlanCache[$supplierId])) return $_supplierPlanCache[$supplierId];
 
     $db = getDB();
     try {
@@ -74,16 +75,27 @@ function getSupplierActivePlan(int $supplierId): array
         $stmt->execute([$supplierId]);
         $row = $stmt->fetch();
         if ($row) {
-            $row['limits_decoded']   = json_decode($row['limits']   ?? '{}', true) ?: [];
-            $row['features_decoded'] = json_decode($row['features'] ?? '{}', true) ?: [];
-            $planCache[$supplierId]  = $row;
+            $row['limits_decoded']   = json_decode($row['limits']   ?? '{}', true) ?? [];
+            $row['features_decoded'] = json_decode($row['features'] ?? '{}', true) ?? [];
+            $_supplierPlanCache[$supplierId] = $row;
             return $row;
         }
     } catch (PDOException $e) { /* tables may not exist yet */ }
 
     $free = _freePlanDefaults();
-    $planCache[$supplierId] = $free;
+    $_supplierPlanCache[$supplierId] = $free;
     return $free;
+}
+
+/**
+ * Clear the cached plan for a supplier (call after plan changes).
+ */
+function clearSupplierPlanCache(int $supplierId): void
+{
+    global $_supplierPlanCache;
+    if (isset($_supplierPlanCache[$supplierId])) {
+        unset($_supplierPlanCache[$supplierId]);
+    }
 }
 
 /**
@@ -194,8 +206,8 @@ function upgradePlan(int $supplierId, string $newPlanSlug): array
                 'Upgrade to ' . $newPlan['name']);
         }
 
-        // Invalidate cache
-        unset($GLOBALS['_planCache'][$supplierId]);
+        // Invalidate static cache in getSupplierActivePlan
+        clearSupplierPlanCache($supplierId);
 
         return [
             'success'         => true,
@@ -435,8 +447,11 @@ function calculateProration(int $supplierId, string $newPlanSlug): array
     $proratedCredit = 0.0;
 
     if (!empty($current['current_period_end'])) {
-        $daysInPeriod   = _billingPeriodMonths($current['billing_period'] ?? 'monthly') * 30;
-        $endTs          = strtotime($current['current_period_end']);
+        $endTs   = strtotime($current['current_period_end']);
+        $startTs = !empty($current['current_period_start'])
+            ? strtotime($current['current_period_start'])
+            : strtotime('-' . _billingPeriodMonths($current['billing_period'] ?? 'monthly') . ' months');
+        $daysInPeriod   = max(1, (int)ceil(($endTs - $startTs) / 86400));
         $daysRemaining  = max(0, (int)ceil(($endTs - time()) / 86400));
         $proratedCredit = round(($currentPrice / $daysInPeriod) * $daysRemaining, 2);
     }

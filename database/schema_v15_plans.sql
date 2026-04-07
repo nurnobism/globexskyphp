@@ -44,12 +44,46 @@ CREATE TABLE IF NOT EXISTS plan_invoices (
 
 -- -----------------------------------------------------------
 -- Extend plan_subscriptions with billing_period + amount
--- (idempotent ALTER TABLE — safe to run multiple times)
+-- Uses a stored procedure for compatibility with MySQL < 8.0.29
 -- -----------------------------------------------------------
-ALTER TABLE plan_subscriptions
-    ADD COLUMN IF NOT EXISTS billing_period ENUM('monthly','quarterly','semi_annual','annual') NOT NULL DEFAULT 'monthly' AFTER plan_id,
-    ADD COLUMN IF NOT EXISTS amount         DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER billing_period,
-    ADD COLUMN IF NOT EXISTS next_billing_date DATE DEFAULT NULL AFTER cancel_at_period_end;
+DROP PROCEDURE IF EXISTS _add_plans_columns;
+DELIMITER //
+CREATE PROCEDURE _add_plans_columns()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME   = 'plan_subscriptions'
+          AND COLUMN_NAME  = 'billing_period'
+    ) THEN
+        ALTER TABLE plan_subscriptions
+            ADD COLUMN billing_period ENUM('monthly','quarterly','semi_annual','annual')
+            NOT NULL DEFAULT 'monthly' AFTER plan_id;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME   = 'plan_subscriptions'
+          AND COLUMN_NAME  = 'amount'
+    ) THEN
+        ALTER TABLE plan_subscriptions
+            ADD COLUMN amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER billing_period;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME   = 'plan_subscriptions'
+          AND COLUMN_NAME  = 'next_billing_date'
+    ) THEN
+        ALTER TABLE plan_subscriptions
+            ADD COLUMN next_billing_date DATE DEFAULT NULL AFTER cancel_at_period_end;
+    END IF;
+END //
+DELIMITER ;
+CALL _add_plans_columns();
+DROP PROCEDURE IF EXISTS _add_plans_columns;
 
 -- -----------------------------------------------------------
 -- Seed: plan_features rows for Free / Pro / Enterprise
