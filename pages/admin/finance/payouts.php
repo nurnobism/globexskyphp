@@ -88,12 +88,14 @@ include __DIR__ . '/../../../includes/header.php';
                     </td>
                     <td><?= formatDate($p['created_at']) ?></td>
                     <td>
+                        <a href="/pages/admin/finance/payout-detail.php?id=<?= (int)$p['id'] ?>"
+                           class="btn btn-sm btn-outline-primary">👁️ View</a>
                         <?php if ($p['status'] === 'pending'): ?>
-                        <form method="POST" action="/api/payouts.php?action=approve" class="d-inline">
+                        <form method="POST" action="/api/payouts.php?action=admin_approve" class="d-inline">
                             <?= csrfField() ?>
-                            <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
+                            <input type="hidden" name="payout_id" value="<?= (int)$p['id'] ?>">
                             <button type="submit" class="btn btn-sm btn-success"
-                                    onclick="return confirm('Approve this payout?')">Approve</button>
+                                    onclick="return confirm('Approve this payout?')">✅ Approve</button>
                         </form>
                         <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal"
                                 data-bs-target="#rejectModal" data-id="<?= (int)$p['id'] ?>">Reject</button>
@@ -132,9 +134,9 @@ include __DIR__ . '/../../../includes/header.php';
                 <h5 class="modal-title">Reject Payout</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="/api/payouts.php?action=reject">
+            <form method="POST" action="/api/payouts.php?action=admin_reject">
                 <?= csrfField() ?>
-                <input type="hidden" name="id" id="rejectId">
+                <input type="hidden" name="payout_id" id="rejectId">
                 <div class="modal-body">
                     <label class="form-label fw-semibold">Reason for rejection</label>
                     <textarea name="reason" class="form-control" rows="3" required
@@ -157,12 +159,12 @@ include __DIR__ . '/../../../includes/header.php';
                 <h5 class="modal-title">Mark Payout Complete</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="/api/payouts.php?action=complete">
+            <form method="POST" action="/api/payouts.php?action=admin_complete">
                 <?= csrfField() ?>
-                <input type="hidden" name="id" id="completeId">
+                <input type="hidden" name="payout_id" id="completeId">
                 <div class="modal-body">
-                    <label class="form-label fw-semibold">Reference Number</label>
-                    <input type="text" name="reference_number" class="form-control"
+                    <label class="form-label fw-semibold">Transaction Reference</label>
+                    <input type="text" name="transaction_ref" class="form-control"
                            placeholder="Transaction / wire reference number">
                 </div>
                 <div class="modal-footer">

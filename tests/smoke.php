@@ -819,6 +819,41 @@ echo "\nPR #9 Plan limit enforcement:\n";
 assertFile("$root/pages/supplier/product-add.php");
 assertSyntax("$root/pages/supplier/product-add.php");
 
+// ── PR #11: Payout System — Supplier Withdrawals ─────────────
+echo "\nPR #11 Payout System database:\n";
+assertFile("$root/database/schema_v16_payouts.sql");
+
+echo "\nPR #11 Payout includes:\n";
+assertFile("$root/includes/payouts.php");
+assertSyntax("$root/includes/payouts.php");
+
+echo "\nPR #11 Payout API:\n";
+assertFile("$root/api/payouts.php");
+assertSyntax("$root/api/payouts.php");
+
+echo "\nPR #11 Supplier earnings pages:\n";
+$pr11SupplierPages = [
+    'pages/supplier/earnings/index.php',
+    'pages/supplier/earnings/withdraw.php',
+    'pages/supplier/earnings/history.php',
+    'pages/supplier/earnings/methods.php',
+];
+foreach ($pr11SupplierPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #11 Admin payout pages:\n";
+$pr11AdminPages = [
+    'pages/admin/finance/payouts.php',
+    'pages/admin/finance/payout-detail.php',
+    'pages/admin/finance/index.php',
+];
+foreach ($pr11AdminPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
