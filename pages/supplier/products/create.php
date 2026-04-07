@@ -629,6 +629,13 @@ function validateStep(step) {
             return false;
         }
     }
+    if (step === 2) {
+        const mainImg = document.getElementById('mainImageInput');
+        if (!mainImg.files || mainImg.files.length === 0) {
+            showAlert('Please upload a main product image.', 'danger');
+            return false;
+        }
+    }
     if (step === 3) {
         const price = parseFloat(document.getElementById('basePrice').value);
         if (isNaN(price) || price < 0.01) {
@@ -788,9 +795,12 @@ function generateSkuMatrix(types) {
         cells += `<td><input type="text" name="sku_codes[]" class="form-control form-control-sm" value="SKU-${skuSuffix}" style="min-width:100px"></td>`;
         cells += `<td><input type="number" name="sku_prices[]" class="form-control form-control-sm" min="0" step="0.01" placeholder="Base" style="min-width:80px"></td>`;
         cells += `<td><input type="number" name="sku_stocks[]" class="form-control form-control-sm" min="0" value="0" style="min-width:70px"></td>`;
-        // store combo as hidden
-        cells += `<td class="d-none"><input type="hidden" name="sku_attributes[]" value='${JSON.stringify(Object.fromEntries(types.map((t,j) => [t.name, combo[j]])))}'></td>`;
+        // store combo as hidden — value set via DOM to avoid attribute-injection
+        cells += `<td class="d-none"><input type="hidden" name="sku_attributes[]"></td>`;
         tr.innerHTML = cells;
+        // Safely assign JSON value through the DOM property (not via innerHTML attribute)
+        tr.querySelector('[name="sku_attributes[]"]').value =
+            JSON.stringify(Object.fromEntries(types.map((t, j) => [t.name, combo[j]])));
         body.appendChild(tr);
     });
 }

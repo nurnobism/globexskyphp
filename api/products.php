@@ -198,7 +198,7 @@ switch ($action) {
                 if (is_array($skus)) {
                     foreach ($skus as $sku) {
                         $skuCode  = trim($sku['sku_code'] ?? '');
-                        $skuPrice = (isset($sku['price']) && $sku['price'] !== null) ? (float)$sku['price'] : $price;
+                        $skuPrice = (isset($sku['price']) && $sku['price'] !== null && $sku['price'] !== '') ? (float)$sku['price'] : $price;
                         $skuStock = max(0, (int)($sku['stock'] ?? 0));
                         $attrs    = isset($sku['attributes']) ? json_encode($sku['attributes']) : null;
                         $db->prepare('INSERT INTO product_variants (product_id, sku, attributes, price, stock_qty) VALUES (?, ?, ?, ?, ?)')
