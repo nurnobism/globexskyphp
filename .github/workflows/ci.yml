@@ -134,6 +134,9 @@ jobs:
           if [ -f database/schema_v13_categories.sql ]; then
             mysql -h 127.0.0.1 -u root -proot globexsky_test < database/schema_v13_categories.sql
           fi
+          if [ -f database/schema_v14_checkout.sql ]; then
+            mysql -h 127.0.0.1 -u root -proot globexsky_test < database/schema_v14_checkout.sql
+          fi
 
       - name: Run smoke tests
         run: php tests/smoke.php
