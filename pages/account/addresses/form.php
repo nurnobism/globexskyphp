@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             exit;
         } catch (InvalidArgumentException $e) {
-            $errors = explode(' ', $e->getMessage());
+            $errors = [$e->getMessage()];
         } catch (RuntimeException $e) {
             $errors[] = $e->getMessage();
         }

@@ -123,8 +123,7 @@ include __DIR__ . '/../../../includes/header.php';
                                         <?php endif; ?>
                                         <li><hr class="dropdown-divider"></li>
                                         <li>
-                                            <form method="POST" action="/api/addresses.php?action=delete"
-                                                  onsubmit="return confirm('Remove this address?')">
+                                            <form method="POST" action="/api/addresses.php?action=delete">
                                                 <?= csrfField() ?>
                                                 <input type="hidden" name="address_id" value="<?= (int)$addr['id'] ?>">
                                                 <button type="submit" class="dropdown-item text-danger">

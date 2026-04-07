@@ -61,6 +61,8 @@ function createAddress(int $userId, array $data): int
 
     $countryName = getCountryName($data['country_code'] ?? 'US');
 
+    // Insert into both legacy (address_line1/2) and new (address_line_1/2) columns
+    // to maintain backwards compatibility with existing checkout.php and orders queries.
     $stmt = $db->prepare(
         'INSERT INTO user_addresses
             (user_id, label, full_name, phone, address_line1, address_line2,
@@ -230,9 +232,9 @@ function getUserAddresses(int $userId, ?string $type = null): array
     $params = [$userId];
 
     if ($type === 'shipping') {
-        $sql .= ' AND (is_default_shipping = 1 OR 1=1)';
+        $sql .= ' AND is_default_shipping = 1';
     } elseif ($type === 'billing') {
-        $sql .= ' AND (is_default_billing = 1 OR 1=1)';
+        $sql .= ' AND is_default_billing = 1';
     }
 
     $sql .= ' ORDER BY is_default_shipping DESC, is_default_billing DESC, created_at DESC';
