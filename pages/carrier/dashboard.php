@@ -76,13 +76,11 @@ include __DIR__ . '/../../includes/header.php';
 
     <!-- Stats Cards -->
     <div class="row g-4 mb-4">
-        <div class="col-sm-6 col-xl-2-4">
-            <div class="col">
-                <div class="card border-0 shadow-sm text-center p-3">
-                    <i class="bi bi-airplane display-5 text-primary mb-2"></i>
-                    <h2 class="fw-bold"><?= count($activeTrips) ?></h2>
-                    <p class="text-muted mb-0">Active Trips</p>
-                </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <i class="bi bi-airplane display-5 text-primary mb-2"></i>
+                <h2 class="fw-bold"><?= count($activeTrips) ?></h2>
+                <p class="text-muted mb-0">Active Trips</p>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
