@@ -1,180 +1,275 @@
 <?php
 /**
- * api/orders.php — Orders API
+ * api/orders.php — Orders API (PR #7)
  */
-
 require_once __DIR__ . '/../includes/middleware.php';
+require_once __DIR__ . '/../includes/orders.php';
 requireLogin();
 
 $action = $_GET['action'] ?? 'list';
 $method = $_SERVER['REQUEST_METHOD'];
 $db     = getDB();
+$userId = (int)$_SESSION['user_id'];
+$role   = $_SESSION['user_role'] ?? 'buyer';
+
+// Determine supplierId if supplier
+$supplierId = 0;
+if (isSupplier() && !isAdmin()) {
+    $sStmt = $db->prepare('SELECT id FROM suppliers WHERE user_id = ?');
+    $sStmt->execute([$userId]);
+    $supp = $sStmt->fetch();
+    $supplierId = $supp ? (int)$supp['id'] : 0;
+}
 
 switch ($action) {
 
+    // ── List orders ──────────────────────────────────────────
     case 'list':
-        $page   = max(1, (int)get('page', 1));
-        $status = get('status', '');
-        $where  = ['o.buyer_id = ?'];
-        $params = [$_SESSION['user_id']];
-        if ($status) { $where[] = 'o.status = ?'; $params[] = $status; }
-        $sql = 'SELECT o.*, COUNT(oi.id) item_count FROM orders o
-            LEFT JOIN order_items oi ON oi.order_id = o.id
-            WHERE ' . implode(' AND ', $where) . ' GROUP BY o.id ORDER BY o.placed_at DESC';
-        jsonResponse(paginate($db, $sql, $params, $page));
-        break;
-
-    case 'detail':
-        $id = (int)get('id', 0);
-        if (!$id) jsonResponse(['error' => 'Order ID required'], 400);
-
-        $stmt = $db->prepare('SELECT * FROM orders WHERE id = ? AND buyer_id = ?');
-        $stmt->execute([$id, $_SESSION['user_id']]);
-        $order = $stmt->fetch();
-        if (!$order) jsonResponse(['error' => 'Order not found'], 404);
-
-        $iStmt = $db->prepare('SELECT * FROM order_items WHERE order_id = ?');
-        $iStmt->execute([$id]);
-        $order['items'] = $iStmt->fetchAll();
-
-        $sStmt = $db->prepare('SELECT * FROM shipments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1');
-        $sStmt->execute([$id]);
-        $order['shipment'] = $sStmt->fetch() ?: null;
-
-        jsonResponse(['data' => $order]);
-        break;
-
-    case 'place':
-        if ($method !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
-        if (!verifyCsrf())      jsonResponse(['error' => 'Invalid CSRF token'], 403);
-
-        // Get cart items
-        $cStmt = $db->prepare('SELECT ci.*, p.price, p.name, p.sku, p.stock_qty, p.supplier_id
-            FROM cart_items ci JOIN products p ON p.id = ci.product_id
-            WHERE ci.user_id = ?');
-        $cStmt->execute([$_SESSION['user_id']]);
-        $cartItems = $cStmt->fetchAll();
-
-        if (empty($cartItems)) jsonResponse(['error' => 'Cart is empty'], 400);
-
-        $shippingAddress = [
-            'full_name'    => post('full_name', ''),
-            'phone'        => post('phone', ''),
-            'address_line1'=> post('address_line1', ''),
-            'address_line2'=> post('address_line2', ''),
-            'city'         => post('city', ''),
-            'state'        => post('state', ''),
-            'postal_code'  => post('postal_code', ''),
-            'country'      => post('country', 'US'),
+        $page    = max(1, (int)get('page', 1));
+        $perPage = max(5, min(100, (int)get('per_page', 15)));
+        $filters = [
+            'status'    => get('status', ''),
+            'search'    => get('search', ''),
+            'date_from' => get('date_from', ''),
+            'date_to'   => get('date_to', ''),
         ];
 
-        if (empty($shippingAddress['full_name']) || empty($shippingAddress['address_line1']) || empty($shippingAddress['city'])) {
-            jsonResponse(['error' => 'Shipping address is incomplete'], 422);
+        if (isAdmin()) {
+            $filters['supplier_id']    = get('supplier_id', '');
+            $filters['buyer_id']       = get('buyer_id', '');
+            $filters['payment_method'] = get('payment_method', '');
+            $result = getAdminOrders($db, $filters, $page, $perPage);
+        } elseif (isSupplier()) {
+            $result = getSupplierOrders($db, $supplierId, $filters, $page, $perPage);
+        } else {
+            $result = getBuyerOrders($db, $userId, $filters, $page, $perPage);
         }
 
-        // Apply coupon
-        $couponCode = trim(post('coupon_code', ''));
-        $discount   = 0.00;
-        if ($couponCode) {
-            $cpStmt = $db->prepare('SELECT * FROM coupons WHERE code = ? AND is_active = 1 AND (expires_at IS NULL OR expires_at > NOW()) AND (usage_limit IS NULL OR used_count < usage_limit) LIMIT 1');
-            $cpStmt->execute([$couponCode]);
-            $coupon = $cpStmt->fetch();
-            if ($coupon) {
-                $subtotal = array_sum(array_map(fn($i) => $i['price'] * $i['quantity'], $cartItems));
-                if ($coupon['type'] === 'percent') {
-                    $discount = min($subtotal * $coupon['value'] / 100, $coupon['max_discount'] ?? PHP_INT_MAX);
-                } else {
-                    $discount = min($coupon['value'], $subtotal);
-                }
-                $db->prepare('UPDATE coupons SET used_count = used_count + 1 WHERE id = ?')->execute([$coupon['id']]);
+        jsonResponse(['success' => true, 'data' => $result]);
+        break;
+
+    // ── Get single order ─────────────────────────────────────
+    case 'get':
+        $orderId = (int)get('order_id', 0);
+        if (!$orderId) {
+            jsonResponse(['success' => false, 'message' => 'order_id required'], 400);
+        }
+
+        if (isAdmin()) {
+            $order = getOrder($db, $orderId);
+        } elseif (isSupplier()) {
+            $order = getOrder($db, $orderId, $supplierId, 'supplier');
+        } else {
+            $order = getOrder($db, $orderId, $userId, 'buyer');
+        }
+
+        if (!$order) {
+            jsonResponse(['success' => false, 'message' => 'Order not found'], 404);
+        }
+
+        $order['status_history'] = getStatusHistory($db, $orderId);
+        $order['notes']          = getOrderNotes($db, $orderId, isAdmin() || isSupplier());
+
+        jsonResponse(['success' => true, 'data' => $order]);
+        break;
+
+    // ── Update status ─────────────────────────────────────────
+    case 'update_status':
+        if ($method !== 'POST') jsonResponse(['success' => false, 'message' => 'Method not allowed'], 405);
+        if (!verifyCsrf())      jsonResponse(['success' => false, 'message' => 'Invalid CSRF token'], 403);
+
+        $orderId   = (int)post('order_id', 0);
+        $newStatus = trim(post('status', ''));
+        $note      = trim(post('note', ''));
+
+        if (!$orderId || !$newStatus) {
+            jsonResponse(['success' => false, 'message' => 'order_id and status required'], 400);
+        }
+
+        $actorRole = isAdmin() ? 'admin' : (isSupplier() ? 'supplier' : 'buyer');
+        $actorId   = isAdmin() ? $userId : (isSupplier() ? $supplierId : $userId);
+
+        $result = updateOrderStatus($db, $orderId, $newStatus, $actorId, $actorRole, $note);
+        jsonResponse($result, $result['success'] ? 200 : 422);
+        break;
+
+    // ── Cancel order (buyer) ──────────────────────────────────
+    case 'cancel':
+        if ($method !== 'POST') jsonResponse(['success' => false, 'message' => 'Method not allowed'], 405);
+        if (!verifyCsrf())      jsonResponse(['success' => false, 'message' => 'Invalid CSRF token'], 403);
+
+        $orderId = (int)post('order_id', 0);
+        $reason  = trim(post('reason', ''));
+
+        if (!$orderId) {
+            jsonResponse(['success' => false, 'message' => 'order_id required'], 400);
+        }
+
+        // Verify ownership for buyers
+        if (!isAdmin()) {
+            $chk = $db->prepare('SELECT id FROM orders WHERE id = ? AND buyer_id = ?');
+            $chk->execute([$orderId, $userId]);
+            if (!$chk->fetch()) {
+                jsonResponse(['success' => false, 'message' => 'Order not found'], 404);
             }
         }
 
-        $subtotal    = array_sum(array_map(fn($i) => $i['price'] * $i['quantity'], $cartItems));
-        $shippingFee = (float)post('shipping_fee', 0);
-        $tax         = round($subtotal * 0.05, 2); // 5% tax
-        $total       = max(0, $subtotal + $shippingFee + $tax - $discount);
-
-        $orderNumber = 'GS-' . strtoupper(substr(md5(uniqid()), 0, 8));
-
-        $db->prepare('INSERT INTO orders (order_number, buyer_id, status, subtotal, shipping_fee, tax, discount, total, payment_method, shipping_address, coupon_code)
-            VALUES (?, ?, "pending", ?, ?, ?, ?, ?, ?, ?, ?)')
-            ->execute([$orderNumber, $_SESSION['user_id'], $subtotal, $shippingFee, $tax, $discount, $total,
-                post('payment_method', 'bank_transfer'), json_encode($shippingAddress), $couponCode ?: null]);
-
-        $orderId = (int)$db->lastInsertId();
-
-        // Insert order items
-        foreach ($cartItems as $item) {
-            $db->prepare('INSERT INTO order_items (order_id, product_id, variant_id, product_name, product_sku, quantity, unit_price, total_price)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-                ->execute([$orderId, $item['product_id'], $item['variant_id'] ?? null,
-                    $item['name'], $item['sku'] ?? '', $item['quantity'],
-                    $item['price'], $item['price'] * $item['quantity']]);
-        }
-
-        // Clear cart
-        $db->prepare('DELETE FROM cart_items WHERE user_id = ?')->execute([$_SESSION['user_id']]);
-
-        // Notify user
-        $db->prepare('INSERT INTO notifications (user_id, type, title, message) VALUES (?, "order_placed", ?, ?)')
-           ->execute([$_SESSION['user_id'], 'Order Placed', 'Your order ' . $orderNumber . ' has been placed successfully.']);
-
-        jsonResponse(['success' => true, 'order_id' => $orderId, 'order_number' => $orderNumber]);
+        $result = cancelOrder($db, $orderId, $userId, $reason);
+        jsonResponse($result, $result['success'] ? 200 : 422);
         break;
 
-    case 'cancel':
-        if ($method !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
-        if (!verifyCsrf())      jsonResponse(['error' => 'Invalid CSRF token'], 403);
+    // ── Add tracking (supplier only) ──────────────────────────
+    case 'add_tracking':
+        if ($method !== 'POST') jsonResponse(['success' => false, 'message' => 'Method not allowed'], 405);
+        if (!isSupplier())      jsonResponse(['success' => false, 'message' => 'Forbidden'], 403);
+        if (!verifyCsrf())      jsonResponse(['success' => false, 'message' => 'Invalid CSRF token'], 403);
 
-        $id = (int)post('order_id', 0);
-        $stmt = $db->prepare('SELECT id, status FROM orders WHERE id = ? AND buyer_id = ?');
-        $stmt->execute([$id, $_SESSION['user_id']]);
-        $order = $stmt->fetch();
+        $orderId        = (int)post('order_id', 0);
+        $carrier        = trim(post('carrier', ''));
+        $trackingNumber = trim(post('tracking_number', ''));
+        $trackingUrl    = trim(post('tracking_url', ''));
 
-        if (!$order) jsonResponse(['error' => 'Order not found'], 404);
-        if (!in_array($order['status'], ['pending', 'confirmed'])) {
-            jsonResponse(['error' => 'Order cannot be cancelled at this stage'], 400);
+        if (!$orderId || !$trackingNumber) {
+            jsonResponse(['success' => false, 'message' => 'order_id and tracking_number required'], 400);
         }
 
-        $db->prepare('UPDATE orders SET status = "cancelled", cancelled_at = NOW() WHERE id = ?')->execute([$id]);
-        jsonResponse(['success' => true]);
+        $result = addTrackingInfo($db, $orderId, $supplierId ?: $userId, $carrier, $trackingNumber, $trackingUrl);
+        jsonResponse($result, $result['success'] ? 200 : 422);
         break;
 
-    case 'update_status':
-        if ($method !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
-        if (!isAdmin())         jsonResponse(['error' => 'Forbidden'], 403);
-        if (!verifyCsrf())      jsonResponse(['error' => 'Invalid CSRF token'], 403);
+    // ── Buyer confirms delivery ───────────────────────────────
+    case 'confirm_delivery':
+        if ($method !== 'POST') jsonResponse(['success' => false, 'message' => 'Method not allowed'], 405);
+        if (!verifyCsrf())      jsonResponse(['success' => false, 'message' => 'Invalid CSRF token'], 403);
 
-        $id        = (int)post('order_id', 0);
-        $newStatus = post('status', '');
-        if (!$id) jsonResponse(['error' => 'Order ID required'], 400);
-        if (!in_array($newStatus, ['pending','confirmed','processing','shipped','delivered','cancelled','refunded'])) {
-            jsonResponse(['error' => 'Invalid status'], 422);
+        $orderId = (int)post('order_id', 0);
+        if (!$orderId) {
+            jsonResponse(['success' => false, 'message' => 'order_id required'], 400);
         }
-        $db->prepare('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?')->execute([$newStatus, $id]);
-        jsonResponse(['success' => true, 'order_id' => $id, 'status' => $newStatus]);
+
+        // Verify buyer ownership
+        $chk = $db->prepare('SELECT id, status FROM orders WHERE id = ? AND buyer_id = ?');
+        $chk->execute([$orderId, $userId]);
+        $order = $chk->fetch();
+        if (!$order) {
+            jsonResponse(['success' => false, 'message' => 'Order not found'], 404);
+        }
+
+        $result = updateOrderStatus($db, $orderId, 'delivered', $userId, 'buyer', 'Delivery confirmed by buyer');
+        jsonResponse($result, $result['success'] ? 200 : 422);
         break;
 
-    case 'track':
-        $id     = (int)get('id', 0);
-        $number = get('order_number', '');
-        if (!$id && !$number) jsonResponse(['error' => 'Order ID or order number required'], 400);
+    // ── Add note ─────────────────────────────────────────────
+    case 'add_note':
+        if ($method !== 'POST') jsonResponse(['success' => false, 'message' => 'Method not allowed'], 405);
+        if (!verifyCsrf())      jsonResponse(['success' => false, 'message' => 'Invalid CSRF token'], 403);
 
-        $col  = $id ? 'o.id' : 'o.order_number';
-        $val  = $id ?: $number;
-        $stmt = $db->prepare("SELECT o.id, o.order_number, o.status FROM orders o WHERE $col = ? AND o.buyer_id = ?");
-        $stmt->execute([$val, $_SESSION['user_id']]);
-        $order = $stmt->fetch();
-        if (!$order) jsonResponse(['error' => 'Order not found'], 404);
+        $orderId    = (int)post('order_id', 0);
+        $noteText   = trim(post('note', ''));
+        $isInternal = (bool)post('is_internal', false);
 
-        $sStmt = $db->prepare('SELECT * FROM shipments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1');
-        $sStmt->execute([$order['id']]);
-        $shipment = $sStmt->fetch() ?: null;
+        if (!$orderId || !$noteText) {
+            jsonResponse(['success' => false, 'message' => 'order_id and note required'], 400);
+        }
 
-        jsonResponse(['data' => ['order' => $order, 'shipment' => $shipment]]);
+        // Only admins/suppliers may add internal notes
+        if ($isInternal && !isAdmin() && !isSupplier()) {
+            $isInternal = false;
+        }
+
+        $noteId = addOrderNote($db, $orderId, $userId, $noteText, $isInternal);
+        jsonResponse(['success' => true, 'data' => ['note_id' => $noteId]]);
+        break;
+
+    // ── Dashboard stats ───────────────────────────────────────
+    case 'stats':
+        if (isAdmin()) {
+            $stats = getOrderStats($db, $userId, 'admin');
+        } elseif (isSupplier()) {
+            $stats = getOrderStats($db, $supplierId, 'supplier');
+        } else {
+            $stats = getOrderStats($db, $userId, 'buyer');
+        }
+        jsonResponse(['success' => true, 'data' => $stats]);
+        break;
+
+    // ── CSV export (supplier/admin) ───────────────────────────
+    case 'export':
+        if (!isAdmin() && !isSupplier()) {
+            jsonResponse(['success' => false, 'message' => 'Forbidden'], 403);
+        }
+
+        $filters = [
+            'status'    => get('status', ''),
+            'date_from' => get('date_from', ''),
+            'date_to'   => get('date_to', ''),
+        ];
+
+        if (isAdmin()) {
+            $result = getAdminOrders($db, $filters, 1, 5000);
+        } else {
+            $result = getSupplierOrders($db, $supplierId, $filters, 1, 5000);
+        }
+
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="orders.csv"');
+        $out = fopen('php://output', 'w');
+        fputcsv($out, ['Order #', 'Date', 'Status', 'Payment', 'Total', 'Buyer']);
+        foreach ($result['data'] as $row) {
+            fputcsv($out, [
+                $row['order_number'],
+                $row['placed_at'],
+                $row['status'],
+                $row['payment_status'],
+                $row['total'],
+                trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? '')),
+            ]);
+        }
+        fclose($out);
+        exit;
+
+    // ── Bulk update (admin only) ──────────────────────────────
+    case 'bulk_update':
+        if ($method !== 'POST') jsonResponse(['success' => false, 'message' => 'Method not allowed'], 405);
+        if (!isAdmin())         jsonResponse(['success' => false, 'message' => 'Forbidden'], 403);
+        if (!verifyCsrf())      jsonResponse(['success' => false, 'message' => 'Invalid CSRF token'], 403);
+
+        $rawIds    = post('order_ids', '');
+        $newStatus = trim(post('status', ''));
+
+        // Accept JSON array or regular POST array
+        if (is_string($rawIds)) {
+            $orderIds = json_decode($rawIds, true);
+        } elseif (is_array($rawIds)) {
+            $orderIds = $rawIds;
+        } else {
+            $orderIds = [];
+        }
+
+        if (empty($orderIds) || !$newStatus) {
+            jsonResponse(['success' => false, 'message' => 'order_ids and status required'], 400);
+        }
+
+        $updated = 0;
+        $errors  = [];
+        foreach ($orderIds as $oid) {
+            $oid = (int)$oid;
+            if (!$oid) continue;
+            $res = updateOrderStatus($db, $oid, $newStatus, $userId, 'admin');
+            if ($res['success']) {
+                $updated++;
+            } else {
+                $errors[] = "Order #$oid: " . $res['message'];
+            }
+        }
+
+        jsonResponse([
+            'success' => true,
+            'data'    => ['updated' => $updated, 'errors' => $errors],
+            'message' => "$updated order(s) updated.",
+        ]);
         break;
 
     default:
-        jsonResponse(['error' => 'Unknown action'], 400);
+        jsonResponse(['success' => false, 'message' => 'Unknown action'], 400);
 }
