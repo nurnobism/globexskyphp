@@ -289,7 +289,7 @@ switch ($action) {
             "UPDATE orders SET payment_status='paid', confirmed_at=NOW(), updated_at=NOW() WHERE id = ?"
         )->execute([$orderId]);
 
-        _recordPayment($db, $orderId, $paymentIntentId,
+        _stripeRecordPayment($db, $orderId, $paymentIntentId,
             (int)($intent['amount'] ?? 0), $intent['currency'] ?? 'usd', 'success');
 
         _notifyOrderPaid($db, $orderId);

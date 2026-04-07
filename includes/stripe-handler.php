@@ -322,21 +322,15 @@ function handleWebhook(array $event): array
             $orderId  = (int)($object['metadata']['order_id'] ?? 0);
 
             if ($intentId && $orderId) {
+                // Update order status — match by payment_intent_id (v14 column)
                 $db->prepare(
                     "UPDATE orders SET status='confirmed', payment_status='paid',
                      confirmed_at=NOW(), updated_at=NOW()
-                     WHERE id = ? AND stripe_payment_intent_id = ?"
+                     WHERE id = ? AND payment_intent_id = ?"
                 )->execute([$orderId, $intentId]);
 
-                // Also match by payment_intent_id column added in v14
-                $db->prepare(
-                    "UPDATE orders SET status='confirmed', payment_status='paid',
-                     confirmed_at=NOW(), updated_at=NOW()
-                     WHERE id = ? AND (payment_intent_id = ? OR stripe_payment_intent_id = ?)"
-                )->execute([$orderId, $intentId, $intentId]);
-
                 // Record payment
-                _recordPayment($db, $orderId, $intentId, (int)($object['amount'] ?? 0),
+                _stripeRecordPayment($db, $orderId, $intentId, (int)($object['amount'] ?? 0),
                                $object['currency'] ?? 'usd', 'success');
 
                 // Notifications
@@ -353,10 +347,10 @@ function handleWebhook(array $event): array
             if ($intentId && $orderId) {
                 $db->prepare(
                     "UPDATE orders SET payment_status='failed', updated_at=NOW()
-                     WHERE id = ? AND (payment_intent_id = ? OR stripe_payment_intent_id = ?)"
-                )->execute([$orderId, $intentId, $intentId]);
+                     WHERE id = ? AND payment_intent_id = ?"
+                )->execute([$orderId, $intentId]);
 
-                _recordPayment($db, $orderId, $intentId, (int)($object['amount'] ?? 0),
+                _stripeRecordPayment($db, $orderId, $intentId, (int)($object['amount'] ?? 0),
                                $object['currency'] ?? 'usd', 'failed');
 
                 _notifyPaymentFailed($db, $orderId);
@@ -369,10 +363,9 @@ function handleWebhook(array $event): array
             $paymentIntentId = $object['payment_intent'] ?? '';
             if ($paymentIntentId) {
                 $oStmt = $db->prepare(
-                    'SELECT id FROM orders WHERE payment_intent_id = ?
-                     OR stripe_payment_intent_id = ? LIMIT 1'
+                    'SELECT id FROM orders WHERE payment_intent_id = ? LIMIT 1'
                 );
-                $oStmt->execute([$paymentIntentId, $paymentIntentId]);
+                $oStmt->execute([$paymentIntentId]);
                 $row = $oStmt->fetch();
                 if ($row) {
                     $db->prepare(
@@ -391,10 +384,9 @@ function handleWebhook(array $event): array
             $paymentIntentId = $object['payment_intent'] ?? '';
             if ($paymentIntentId) {
                 $oStmt = $db->prepare(
-                    'SELECT id, buyer_id FROM orders WHERE payment_intent_id = ?
-                     OR stripe_payment_intent_id = ? LIMIT 1'
+                    'SELECT id, buyer_id FROM orders WHERE payment_intent_id = ? LIMIT 1'
                 );
-                $oStmt->execute([$paymentIntentId, $paymentIntentId]);
+                $oStmt->execute([$paymentIntentId]);
                 $row = $oStmt->fetch();
                 if ($row) {
                     _notifyDispute($db, (int)$row['id']);
@@ -535,7 +527,7 @@ function _markWebhookProcessed(PDO $db, int $logId, bool $success): void
     }
 }
 
-function _recordPayment(PDO $db, int $orderId, string $intentId, int $amountCents, string $currency, string $status): void
+function _stripeRecordPayment(PDO $db, int $orderId, string $intentId, int $amountCents, string $currency, string $status): void
 {
     try {
         $amount = $amountCents / 100.0;
