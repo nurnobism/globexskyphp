@@ -170,7 +170,20 @@ include __DIR__ . '/../../includes/header.php';
                         <button type="submit" class="btn btn-primary w-100 mb-2">
                             <i class="bi bi-check-circle me-1"></i> Update Product
                         </button>
-                        <a href="/pages/supplier/products.php" class="btn btn-outline-secondary w-100 mb-3">Cancel</a>
+                        <a href="/pages/supplier/products.php" class="btn btn-outline-secondary w-100 mb-2">Cancel</a>
+                        <a href="/pages/supplier/products/variations.php?product_id=<?= $product['id'] ?>" class="btn btn-outline-primary w-100 mb-3">
+                            <i class="bi bi-layers me-1"></i> Manage Variations
+                            <?php
+                            $varCountStmt = $db->prepare('SELECT COUNT(*) FROM product_variations WHERE product_id = ?');
+                            $varCountStmt->execute([$product['id']]);
+                            $varCount = (int)$varCountStmt->fetchColumn();
+                            $skuCountStmt = $db->prepare('SELECT COUNT(*) FROM product_skus WHERE product_id = ?');
+                            $skuCountStmt->execute([$product['id']]);
+                            $skuCount = (int)$skuCountStmt->fetchColumn();
+                            if ($varCount > 0): ?>
+                            <span class="badge bg-primary ms-1"><?= $varCount ?> type<?= $varCount != 1 ? 's' : '' ?>, <?= $skuCount ?> SKU<?= $skuCount != 1 ? 's' : '' ?></span>
+                            <?php endif; ?>
+                        </a>
                         <?php if ($product['status'] === 'active'): ?>
                         <a href="/pages/product/detail.php?slug=<?= urlencode($product['slug']) ?>" class="btn btn-outline-info w-100" target="_blank">
                             <i class="bi bi-eye me-1"></i> Preview

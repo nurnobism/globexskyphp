@@ -644,6 +644,22 @@ assertFile("$root/manifest.json");
 assertFile("$root/sw.js");
 assertFile("$root/assets/js/pwa.js");
 
+// ── PR #3: Product Variations & SKU Matrix ───────────────────
+echo "\nPR #3 Variation system:\n";
+assertFile("$root/database/schema_v12_variations.sql");
+assertFile("$root/includes/variations.php");
+assertSyntax("$root/includes/variations.php");
+assertFile("$root/pages/supplier/products/variations.php");
+assertSyntax("$root/pages/supplier/products/variations.php");
+assertFile("$root/api/products.php");
+assertSyntax("$root/api/products.php");
+assertFile("$root/pages/supplier/product-add.php");
+assertSyntax("$root/pages/supplier/product-add.php");
+assertFile("$root/pages/supplier/product-edit.php");
+assertSyntax("$root/pages/supplier/product-edit.php");
+assertFile("$root/pages/product/detail.php");
+assertSyntax("$root/pages/product/detail.php");
+
 
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);

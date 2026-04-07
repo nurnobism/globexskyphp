@@ -3,18 +3,26 @@
  * api/products.php — Products API
  *
  * Public (GET):
- *   action=list          — Browse/filter products
- *   action=get           — Single product detail (alias: detail)
- *   action=featured      — Featured products
- *   action=categories    — Category list with product counts
+ *   action=list              — Browse/filter products
+ *   action=get               — Single product detail (alias: detail)
+ *   action=featured          — Featured products
+ *   action=categories        — Category list with product counts
+ *   action=get_variations    — Variation types + values for a product (buyer page)
+ *   action=get_skus          — SKU matrix for a product
  *
  * Supplier (POST, auth required):
- *   action=create        — Create product (plan limit checked)
- *   action=update        — Update own product
- *   action=delete        — Soft-delete own product (status → archived)
- *   action=my_products   — Supplier's own product list (alias: list_mine)
- *   action=upload_image  — Upload product image (plan limit checked)
- *   action=delete_image  — Delete product image
+ *   action=create            — Create product (plan limit checked)
+ *   action=update            — Update own product
+ *   action=delete            — Soft-delete own product (status → archived)
+ *   action=my_products       — Supplier's own product list (alias: list_mine)
+ *   action=upload_image      — Upload product image (plan limit checked)
+ *   action=delete_image      — Delete product image
+ *   action=add_variation_type    — Add a variation type + values (max 3 per product)
+ *   action=update_variation_type — Update variation type name/values
+ *   action=delete_variation_type — Delete variation type (cascades to SKUs)
+ *   action=generate_skus         — Auto-generate SKU matrix
+ *   action=update_sku            — Update individual SKU fields
+ *   action=bulk_update_skus      — Bulk-update all SKUs
  *
  * Admin (POST, admin auth required):
  *   action=update_status — Approve / reject / suspend products
@@ -25,6 +33,7 @@ require_once __DIR__ . '/../includes/middleware.php';
 require_once __DIR__ . '/../includes/plan_limits.php';
 require_once __DIR__ . '/../includes/feature_toggles.php';
 require_once __DIR__ . '/../includes/products.php';
+require_once __DIR__ . '/../includes/variations.php';
 
 $action = $_GET['action'] ?? 'list';
 $method = $_SERVER['REQUEST_METHOD'];
@@ -367,6 +376,190 @@ switch ($action) {
             jsonResponse(['success' => true]);
         } catch (RuntimeException $e) {
             jsonResponse(['error' => $e->getMessage()], 403);
+        }
+        break;
+
+    // ── public: get variation types + values for a product ─────────────
+    case 'get_variations':
+        $productId = (int)get('product_id', 0) ?: (int)get('id', 0);
+        if (!$productId) jsonResponse(['error' => 'product_id required'], 400);
+        try {
+            $variations = getAvailableVariations($productId);
+            jsonResponse(['success' => true, 'data' => $variations]);
+        } catch (RuntimeException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+        break;
+
+    // ── public/supplier: get SKU matrix for a product ──────────────────
+    case 'get_skus':
+        $productId = (int)get('product_id', 0) ?: (int)get('id', 0);
+        if (!$productId) jsonResponse(['error' => 'product_id required'], 400);
+        try {
+            $skus = getSkuMatrix($productId);
+            jsonResponse(['success' => true, 'data' => $skus]);
+        } catch (RuntimeException $e) {
+            jsonResponse(['error' => $e->getMessage()], 400);
+        }
+        break;
+
+    // ── supplier: add variation type + values ───────────────────────────
+    case 'add_variation_type':
+        if (!isLoggedIn()) jsonResponse(['error' => 'Unauthorized'], 401);
+        if (!verifyCsrf()) jsonResponse(['error' => 'Invalid CSRF token'], 403);
+        if ($method !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
+
+        $suppStmt = $db->prepare('SELECT id FROM suppliers WHERE user_id = ?');
+        $suppStmt->execute([$_SESSION['user_id']]);
+        $supplier = $suppStmt->fetch();
+        if (!$supplier && !isAdmin()) jsonResponse(['error' => 'Supplier account required'], 403);
+        $supplierId = isAdmin() ? 0 : (int)$supplier['id'];
+
+        $productId = (int)post('product_id', 0);
+        $typeName  = trim(post('type_name', ''));
+        $rawValues = post('values', []);
+        if (is_string($rawValues)) $rawValues = json_decode($rawValues, true) ?: explode(',', $rawValues);
+
+        $errors = validateVariationData(['type_name' => $typeName, 'values' => (array)$rawValues]);
+        if ($errors) jsonResponse(['error' => implode(' ', $errors)], 422);
+
+        try {
+            $typeId = addVariationType($productId, $supplierId, $typeName, (array)$rawValues);
+            jsonResponse(['success' => true, 'type_id' => $typeId, 'message' => 'Variation type added.']);
+        } catch (RuntimeException $e) {
+            jsonResponse(['error' => $e->getMessage()], 422);
+        }
+        break;
+
+    // ── supplier: update variation type ─────────────────────────────────
+    case 'update_variation_type':
+        if (!isLoggedIn()) jsonResponse(['error' => 'Unauthorized'], 401);
+        if (!verifyCsrf()) jsonResponse(['error' => 'Invalid CSRF token'], 403);
+        if ($method !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
+
+        $suppStmt = $db->prepare('SELECT id FROM suppliers WHERE user_id = ?');
+        $suppStmt->execute([$_SESSION['user_id']]);
+        $supplier = $suppStmt->fetch();
+        if (!$supplier && !isAdmin()) jsonResponse(['error' => 'Supplier account required'], 403);
+        $supplierId = isAdmin() ? 0 : (int)$supplier['id'];
+
+        $typeId    = (int)post('type_id', 0);
+        $typeName  = trim(post('type_name', ''));
+        $rawValues = post('values', []);
+        if (is_string($rawValues)) $rawValues = json_decode($rawValues, true) ?: explode(',', $rawValues);
+
+        if (!$typeId) jsonResponse(['error' => 'type_id required'], 400);
+
+        $errors = validateVariationData(['type_name' => $typeName, 'values' => (array)$rawValues]);
+        if ($errors) jsonResponse(['error' => implode(' ', $errors)], 422);
+
+        try {
+            updateVariationType($typeId, $supplierId, $typeName, (array)$rawValues);
+            jsonResponse(['success' => true, 'message' => 'Variation type updated.']);
+        } catch (RuntimeException $e) {
+            jsonResponse(['error' => $e->getMessage()], 422);
+        }
+        break;
+
+    // ── supplier: delete variation type ─────────────────────────────────
+    case 'delete_variation_type':
+        if (!isLoggedIn()) jsonResponse(['error' => 'Unauthorized'], 401);
+        if (!verifyCsrf()) jsonResponse(['error' => 'Invalid CSRF token'], 403);
+        if ($method !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
+
+        $suppStmt = $db->prepare('SELECT id FROM suppliers WHERE user_id = ?');
+        $suppStmt->execute([$_SESSION['user_id']]);
+        $supplier = $suppStmt->fetch();
+        if (!$supplier && !isAdmin()) jsonResponse(['error' => 'Supplier account required'], 403);
+        $supplierId = isAdmin() ? 0 : (int)$supplier['id'];
+
+        $typeId = (int)post('type_id', 0);
+        if (!$typeId) jsonResponse(['error' => 'type_id required'], 400);
+
+        try {
+            deleteVariationType($typeId, $supplierId);
+            jsonResponse(['success' => true, 'message' => 'Variation type deleted.']);
+        } catch (RuntimeException $e) {
+            jsonResponse(['error' => $e->getMessage()], 422);
+        }
+        break;
+
+    // ── supplier: generate SKU matrix ───────────────────────────────────
+    case 'generate_skus':
+        if (!isLoggedIn()) jsonResponse(['error' => 'Unauthorized'], 401);
+        if (!verifyCsrf()) jsonResponse(['error' => 'Invalid CSRF token'], 403);
+        if ($method !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
+
+        $suppStmt = $db->prepare('SELECT id FROM suppliers WHERE user_id = ?');
+        $suppStmt->execute([$_SESSION['user_id']]);
+        $supplier = $suppStmt->fetch();
+        if (!$supplier && !isAdmin()) jsonResponse(['error' => 'Supplier account required'], 403);
+        $supplierId = isAdmin() ? 0 : (int)$supplier['id'];
+
+        $productId = (int)post('product_id', 0);
+        if (!$productId) jsonResponse(['error' => 'product_id required'], 400);
+
+        try {
+            $skus = generateSkuMatrix($productId, $supplierId);
+            jsonResponse(['success' => true, 'data' => $skus, 'count' => count($skus),
+                          'message' => count($skus) . ' SKUs generated.']);
+        } catch (RuntimeException $e) {
+            jsonResponse(['error' => $e->getMessage()], 422);
+        }
+        break;
+
+    // ── supplier: update a single SKU ───────────────────────────────────
+    case 'update_sku':
+        if (!isLoggedIn()) jsonResponse(['error' => 'Unauthorized'], 401);
+        if (!verifyCsrf()) jsonResponse(['error' => 'Invalid CSRF token'], 403);
+        if ($method !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
+
+        $suppStmt = $db->prepare('SELECT id FROM suppliers WHERE user_id = ?');
+        $suppStmt->execute([$_SESSION['user_id']]);
+        $supplier = $suppStmt->fetch();
+        if (!$supplier && !isAdmin()) jsonResponse(['error' => 'Supplier account required'], 403);
+        $supplierId = isAdmin() ? 0 : (int)$supplier['id'];
+
+        $skuId = (int)post('sku_id', 0);
+        if (!$skuId) jsonResponse(['error' => 'sku_id required'], 400);
+
+        $data = [];
+        foreach (['sku_code', 'price', 'stock', 'weight_override', 'image_url', 'is_active'] as $field) {
+            if (isset($_POST[$field])) $data[$field] = $_POST[$field];
+        }
+
+        try {
+            updateSku($skuId, $supplierId, $data);
+            jsonResponse(['success' => true, 'message' => 'SKU updated.']);
+        } catch (RuntimeException $e) {
+            jsonResponse(['error' => $e->getMessage()], 422);
+        }
+        break;
+
+    // ── supplier: bulk-update all SKUs ──────────────────────────────────
+    case 'bulk_update_skus':
+        if (!isLoggedIn()) jsonResponse(['error' => 'Unauthorized'], 401);
+        if (!verifyCsrf()) jsonResponse(['error' => 'Invalid CSRF token'], 403);
+        if ($method !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
+
+        $suppStmt = $db->prepare('SELECT id FROM suppliers WHERE user_id = ?');
+        $suppStmt->execute([$_SESSION['user_id']]);
+        $supplier = $suppStmt->fetch();
+        if (!$supplier && !isAdmin()) jsonResponse(['error' => 'Supplier account required'], 403);
+        $supplierId = isAdmin() ? 0 : (int)$supplier['id'];
+
+        $productId = (int)post('product_id', 0);
+        if (!$productId) jsonResponse(['error' => 'product_id required'], 400);
+
+        $rawSkus = post('skus', []);
+        if (is_string($rawSkus)) $rawSkus = json_decode($rawSkus, true) ?: [];
+        if (!is_array($rawSkus)) jsonResponse(['error' => 'skus must be an array'], 422);
+
+        try {
+            $updated = bulkUpdateSkus($productId, $supplierId, $rawSkus);
+            jsonResponse(['success' => true, 'updated' => $updated, 'message' => "$updated SKUs updated."]);
+        } catch (RuntimeException $e) {
+            jsonResponse(['error' => $e->getMessage()], 422);
         }
         break;
 

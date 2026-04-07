@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/middleware.php';
+require_once __DIR__ . '/../../includes/variations.php';
 
 $slug = get('slug', '');
 $id   = (int)get('id', 0);
@@ -17,7 +18,11 @@ if (!$product) { http_response_code(404); flashMessage('danger', 'Product not fo
 // Increment view count
 $db->prepare('UPDATE products SET view_count=view_count+1 WHERE id=?')->execute([$product['id']]);
 
-// Variants
+// Variation types + options (for buyer selector)
+$variationTypes = getAvailableVariations($product['id']);
+$hasVariations  = !empty($variationTypes);
+
+// Variants (legacy product_variants table, fallback if no variation types)
 $vStmt = $db->prepare('SELECT * FROM product_variants WHERE product_id=?');
 $vStmt->execute([$product['id']]);
 $variants = $vStmt->fetchAll();
@@ -132,8 +137,38 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
             </div>
 
-            <!-- Variants -->
-            <?php if (!empty($variants)): ?>
+            <!-- Variation Selector (product_variations system) -->
+            <?php if ($hasVariations): ?>
+            <div class="mb-3" id="variationSelector">
+                <?php foreach ($variationTypes as $vt): ?>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold"><?= e($vt['name']) ?></label>
+                    <div class="d-flex flex-wrap gap-2" data-type-id="<?= $vt['id'] ?>">
+                        <?php foreach ($vt['options'] as $opt): ?>
+                        <button type="button"
+                                class="btn btn-sm variation-option <?= $opt['is_available'] ? 'btn-outline-secondary' : 'btn-outline-secondary opacity-50' ?>"
+                                data-type-id="<?= $vt['id'] ?>"
+                                data-option-id="<?= $opt['id'] ?>"
+                                data-value="<?= e($opt['value']) ?>"
+                                <?= !$opt['is_available'] ? 'title="Out of stock"' : '' ?>>
+                            <?= e($opt['value']) ?>
+                            <?php if (!$opt['is_available']): ?>
+                            <i class="bi bi-x-circle text-danger ms-1"></i>
+                            <?php endif; ?>
+                        </button>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                <div id="skuInfo" class="mt-2" style="display:none">
+                    <div class="alert alert-info py-2 small">
+                        <span id="skuStockInfo"></span>
+                        <span id="skuCodeInfo" class="ms-2 text-muted"></span>
+                    </div>
+                </div>
+            </div>
+            <!-- Legacy Variants fallback when no variation types -->
+            <?php elseif (!empty($variants)): ?>
             <div class="mb-3">
                 <label class="form-label fw-semibold">Options</label>
                 <select id="variantSelect" class="form-select w-auto">
@@ -141,7 +176,7 @@ include __DIR__ . '/../../includes/header.php';
                     <?php foreach ($variants as $v): ?>
                     <?php $attrs = json_decode($v['attributes'] ?? '{}', true); ?>
                     <option value="<?= $v['id'] ?>" data-price="<?= $v['price'] ?>">
-                        <?= e(implode(', ', array_map(fn($k,$v)=>"$k: $v", array_keys($attrs), $attrs))) ?>
+                        <?= e(implode(', ', array_map(fn($k, $attrValue) => "$k: $attrValue", array_keys($attrs), $attrs))) ?>
                         <?php if ($v['price']): ?> — <?= formatMoney($v['price']) ?><?php endif; ?>
                     </option>
                     <?php endforeach; ?>
@@ -150,17 +185,19 @@ include __DIR__ . '/../../includes/header.php';
             <?php endif; ?>
 
             <!-- Add to Cart -->
-            <?php if ($product['stock_qty'] > 0): ?>
-            <form method="POST" action="/api/cart.php?action=add" class="d-flex align-items-center gap-3 mb-3">
+            <?php if ($product['stock_qty'] > 0 || $hasVariations): ?>
+            <form method="POST" action="/api/cart.php?action=add" class="d-flex align-items-center gap-3 mb-3" id="addToCartForm">
                 <?= csrfField() ?>
                 <input type="hidden" name="product_id" value="<?= $product['id'] ?>">
                 <input type="hidden" name="variant_id" id="variantId" value="">
+                <input type="hidden" name="sku_id" id="skuId" value="">
                 <div class="input-group" style="width:130px">
                     <button type="button" class="btn btn-outline-secondary" onclick="changeQty(-1)">-</button>
                     <input type="number" name="quantity" id="qtyInput" class="form-control text-center" value="<?= $product['min_order_qty'] ?>" min="<?= $product['min_order_qty'] ?>">
                     <button type="button" class="btn btn-outline-secondary" onclick="changeQty(1)">+</button>
                 </div>
-                <button type="submit" class="btn btn-primary btn-lg px-4">
+                <button type="submit" class="btn btn-primary btn-lg px-4" id="addToCartBtn"
+                        <?= $hasVariations ? 'disabled title="Please select all options first"' : '' ?>>
                     <i class="bi bi-cart-plus me-1"></i> Add to Cart
                 </button>
             </form>
@@ -276,5 +313,94 @@ function changeQty(delta) {
 document.getElementById('variantSelect')?.addEventListener('change', function() {
     document.getElementById('variantId').value = this.value;
 });
+
+// ── Variation Selector (product_variations SKU system) ─────────────────────
+(function() {
+    const hasVariations = <?= json_encode($hasVariations) ?>;
+    if (!hasVariations) return;
+
+    const productId   = <?= (int)$product['id'] ?>;
+    const selected    = {}; // typeId => optionId
+    const addCartBtn  = document.getElementById('addToCartBtn');
+    const skuIdInput  = document.getElementById('skuId');
+    const skuInfo     = document.getElementById('skuInfo');
+    const skuStockEl  = document.getElementById('skuStockInfo');
+    const skuCodeEl   = document.getElementById('skuCodeInfo');
+    const priceEl     = document.querySelector('.fs-2.fw-bold.text-primary');
+    const basePriceFmt= priceEl ? priceEl.textContent : '';
+
+    document.querySelectorAll('.variation-option').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const typeId   = this.dataset.typeId;
+            const optionId = this.dataset.optionId;
+
+            // Toggle selection within this type
+            document.querySelectorAll(`.variation-option[data-type-id="${typeId}"]`).forEach(b => {
+                b.classList.remove('btn-primary');
+                b.classList.add('btn-outline-secondary');
+            });
+            this.classList.remove('btn-outline-secondary');
+            this.classList.add('btn-primary');
+            selected[typeId] = optionId;
+
+            // Check if all types have been selected
+            const allTypeIds = <?= json_encode(array_column($variationTypes, 'id')) ?>;
+            const allSelected = allTypeIds.every(id => selected[String(id)] !== undefined);
+
+            if (!allSelected) {
+                addCartBtn.disabled = true;
+                addCartBtn.title = 'Please select all options first';
+                skuInfo.style.display = 'none';
+                skuIdInput.value = '';
+                return;
+            }
+
+            // Look up the SKU via API
+            const optionIds = Object.values(selected).join(',');
+            fetch(`/api/products.php?action=get_skus&product_id=${productId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success) return;
+                    const targetOpts = new Set(Object.values(selected).map(String));
+                    const sku = (data.data || []).find(s => {
+                        const opts = new Set((s.variation_options || []).map(o => String(o.option_id)));
+                        if (opts.size !== targetOpts.size) return false;
+                        for (const id of targetOpts) if (!opts.has(id)) return false;
+                        return true;
+                    });
+
+                    if (sku && sku.is_active) {
+                        skuIdInput.value = sku.id;
+                        const inStock = sku.stock > 0;
+                        skuInfo.style.display = '';
+                        skuStockEl.innerHTML = inStock
+                            ? `<span class="text-success"><i class="bi bi-check-circle me-1"></i>In Stock (${sku.stock} units)</span>`
+                            : `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Out of Stock</span>`;
+                        skuCodeEl.textContent = sku.sku_code ? `SKU: ${sku.sku_code}` : '';
+
+                        // Update displayed price if SKU has a price override
+                        if (sku.price && priceEl) {
+                            priceEl.textContent = '$' + parseFloat(sku.price).toFixed(2);
+                        } else if (priceEl) {
+                            priceEl.textContent = basePriceFmt;
+                        }
+
+                        addCartBtn.disabled = !inStock;
+                        addCartBtn.title = inStock ? '' : 'This combination is out of stock';
+                    } else {
+                        skuIdInput.value = '';
+                        skuInfo.style.display = '';
+                        skuStockEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>This combination is unavailable</span>`;
+                        skuCodeEl.textContent = '';
+                        addCartBtn.disabled = true;
+                        addCartBtn.title = 'Combination unavailable';
+                    }
+                })
+                .catch(() => {
+                    addCartBtn.disabled = false;
+                });
+        });
+    });
+})();
 </script>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
