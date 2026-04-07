@@ -153,8 +153,9 @@ include __DIR__ . '/../../../includes/header.php';
                 </thead>
                 <tbody>
                 <?php foreach ($orders as $o):
-                    $commission = (float)($o['supplier_subtotal'] ?? $o['total']) * $commRate / 100;
-                    $netEarnings = (float)($o['supplier_subtotal'] ?? $o['total']) - $commission;
+                    $orderBase = (float)($o['supplier_subtotal'] ?? $o['total']);
+                    $commission = $orderBase * $commRate / 100;
+                    $netEarnings = $orderBase - $commission;
                 ?>
                 <tr>
                     <td class="fw-semibold"><?= e($o['order_number']) ?></td>

@@ -557,14 +557,14 @@ function addOrderNote(PDO $db, int $orderId, int $userId, string $note, bool $is
  */
 function getOrderNotes(PDO $db, int $orderId, bool $includeInternal = false): array
 {
-    $sql = "SELECT on2.*, u.first_name, u.last_name, u.role AS user_role
-            FROM order_notes on2
-            LEFT JOIN users u ON u.id = on2.user_id
-            WHERE on2.order_id = ?";
+    $sql = "SELECT n.*, u.first_name, u.last_name, u.role AS user_role
+            FROM order_notes n
+            LEFT JOIN users u ON u.id = n.user_id
+            WHERE n.order_id = ?";
     if (!$includeInternal) {
-        $sql .= ' AND on2.is_internal = 0';
+        $sql .= ' AND n.is_internal = 0';
     }
-    $sql .= ' ORDER BY on2.created_at ASC';
+    $sql .= ' ORDER BY n.created_at ASC';
 
     $stmt = $db->prepare($sql);
     $stmt->execute([$orderId]);

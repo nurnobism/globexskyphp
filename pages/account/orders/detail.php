@@ -95,7 +95,7 @@ include __DIR__ . '/../../../includes/header.php';
                         <thead class="table-light">
                             <tr>
                                 <th>Product</th>
-                                <th>SKU</th>
+                                <th>Product SKU</th>
                                 <th class="text-center">Qty</th>
                                 <th class="text-end">Unit Price</th>
                                 <th class="text-end">Total</th>
