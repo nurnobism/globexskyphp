@@ -423,8 +423,6 @@ function deleteCategory(int $categoryId, bool $force = false): array
     }
 
     // Check for active children
-    $childCount = (int)$db->prepare('SELECT COUNT(*) FROM categories WHERE parent_id = ? AND is_active = 1')
-                           ->execute([$categoryId]) ?: 0;
     $stmt = $db->prepare('SELECT COUNT(*) FROM categories WHERE parent_id = ? AND is_active = 1');
     $stmt->execute([$categoryId]);
     $childCount = (int)$stmt->fetchColumn();
