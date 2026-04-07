@@ -34,9 +34,9 @@ switch ($action) {
         requireAdmin();
         $orderId = (int)($_REQUEST['order_id'] ?? 0);
         if ($orderId <= 0) commJson(['error' => 'order_id required'], 400);
-        $amount = calculateCommission($orderId);
-        if ($amount === false) commJson(['error' => 'Order not found or invalid'], 404);
-        commJson(['success' => true, 'commission_amount' => $amount]);
+        $result = calculateCommission($orderId);
+        if ($result === false) commJson(['error' => 'Order not found or invalid'], 404);
+        commJson(['success' => true, 'commission_amount' => $result['commission_amount'], 'data' => $result]);
 
     // ── List commission logs ───────────────────────────────────────────
     case 'list':

@@ -184,11 +184,11 @@ function createOrder(int $userId, int $addressId, string $paymentMethod, array $
 
             // Calculate and store commission
             try {
-                $commission = calculateCommission($orderId);
-                if ($commission !== false && $commission > 0) {
+                $commResult = calculateCommission($orderId);
+                if ($commResult !== false) {
                     $db->prepare(
                         'UPDATE orders SET commission_amount = ? WHERE id = ?'
-                    )->execute([$commission, $orderId]);
+                    )->execute([$commResult['commission_amount'], $orderId]);
                 }
             } catch (Throwable $e) {
                 error_log('checkout createOrder commission error: ' . $e->getMessage());
