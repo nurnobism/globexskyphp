@@ -64,7 +64,7 @@ if ($showTaxOnProduct) {
 // Shipping estimate feature
 $showShippingEstimate = function_exists('isFeatureEnabled') && isFeatureEnabled('shipping_calculator')
     && function_exists('_getShippingSettingFloat')
-    && (getTaxSetting('shipping_show_estimate', '1') === '1' || _getShippingSettingFloat('shipping_show_estimate', 1.0) > 0);
+    && _getShippingSettingFloat('shipping_show_estimate', 1.0) > 0;
 
 // Pre-fill country from user's default address
 $estimateCountry = '';

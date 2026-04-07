@@ -329,10 +329,11 @@ switch ($action) {
             $cost = calculateMethodCost($m, $weightKg, $subtotal, 1);
             if ($cost < 0) continue;
             $options[] = [
-                'id'               => (int)$m['id'],
-                'name'             => $m['name'],
-                'cost'             => round($cost, 2),
-                'delivery_estimate'=> getEstimatedDeliveryLabel((int)$m['estimated_days_min'], (int)$m['estimated_days_max']),
+                'id'                 => (int)$m['id'],
+                'name'               => $m['name'],
+                'cost'               => round($cost, 2),
+                'estimated_days_min' => (int)$m['estimated_days_min'],
+                'delivery_estimate'  => getEstimatedDeliveryLabel((int)$m['estimated_days_min'], (int)$m['estimated_days_max']),
             ];
         }
 
@@ -343,7 +344,7 @@ switch ($action) {
             if ($cheapest === null || $opt['cost'] < $cheapest['cost']) $cheapest = $opt;
         }
         foreach ($options as $opt) {
-            if ($fastest === null || $opt['delivery_estimate'] < $fastest['delivery_estimate']) $fastest = $opt;
+            if ($fastest === null || $opt['estimated_days_min'] < $fastest['estimated_days_min']) $fastest = $opt;
         }
 
         // Handling time

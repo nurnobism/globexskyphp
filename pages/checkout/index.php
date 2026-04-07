@@ -658,13 +658,13 @@ async function fetchShippingMethods(addrId) {
         const methods = data.data.methods;
         let html = '<div class="list-group list-group-flush">';
         methods.forEach((m, idx) => {
-            const checked = idx === 0 ? 'checked' : '';
+            const checkedAttr = idx === 0 ? 'checked' : '';
             const fmtCost = m.cost === 0 ? '<span class="text-success fw-bold">Free</span>' : `$${parseFloat(m.cost).toFixed(2)}`;
             html += `<label class="list-group-item list-group-item-action py-2 px-0 cursor-pointer" style="cursor:pointer">
                 <div class="d-flex align-items-center gap-2">
                     <input class="form-check-input me-1 shipping-method-radio" type="radio"
                            name="shipping_method_radio" value="${m.id}"
-                           data-cost="${m.cost}" ${checked} style="flex-shrink:0">
+                           data-cost="${m.cost}" ${checkedAttr} style="flex-shrink:0">
                     <div class="flex-grow-1">
                         <span class="fw-semibold">${m.name}</span>
                         <span class="text-muted small ms-2">${m.delivery_estimate}</span>
