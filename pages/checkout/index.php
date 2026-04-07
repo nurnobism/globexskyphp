@@ -10,6 +10,7 @@
 
 require_once __DIR__ . '/../../includes/middleware.php';
 require_once __DIR__ . '/../../includes/checkout.php';
+require_once __DIR__ . '/../../includes/addresses.php';
 require_once __DIR__ . '/../../includes/stripe-handler.php';
 require_once __DIR__ . '/../../includes/tax_engine.php';
 require_once __DIR__ . '/../../config/stripe.php';
@@ -31,11 +32,24 @@ if (empty($cartItems)) {
 }
 
 $addresses      = getShippingAddresses($userId);
+$checkoutAddrs  = getCheckoutAddresses($userId);
 $supplierGroups = getCartGroupedBySupplier($userId);
 
 $defaultAddr = null;
 foreach ($addresses as $addr) {
     if ($addr['is_default']) { $defaultAddr = $addr; break; }
+}
+// Fallback: try default shipping from user_addresses
+if (!$defaultAddr) {
+    $defShipping = getDefaultAddress($userId, 'shipping');
+    if ($defShipping) {
+        $defaultAddr = $defShipping;
+        // Map to addresses table columns for compatibility
+        $defaultAddr['address_line1'] = $defShipping['address_line_1'] ?? $defShipping['address_line1'] ?? '';
+        $defaultAddr['address_line2'] = $defShipping['address_line_2'] ?? $defShipping['address_line2'] ?? '';
+        $defaultAddr['state'] = $defShipping['state_province'] ?? $defShipping['state'] ?? '';
+        $defaultAddr['country'] = $defShipping['country_name'] ?? $defShipping['country'] ?? '';
+    }
 }
 if (!$defaultAddr && !empty($addresses)) {
     $defaultAddr = $addresses[0];
@@ -109,22 +123,32 @@ include __DIR__ . '/../../includes/header.php';
                                      onclick="selectAddress(<?= (int)$addr['id'] ?>)">
                                     <div class="d-flex justify-content-between align-items-start">
                                         <strong><?= e($addr['full_name'] ?? '') ?></strong>
-                                        <?php if ($addr['is_default']): ?>
-                                        <span class="badge bg-primary">Default</span>
+                                        <div>
+                                        <?php if ($addr['is_default'] || !empty($addr['is_default_shipping'])): ?>
+                                        <span class="badge bg-success me-1"><i class="bi bi-truck me-1"></i>Default Shipping ✓</span>
                                         <?php endif; ?>
+                                        <?php if (!empty($addr['is_default_billing'])): ?>
+                                        <span class="badge bg-info text-dark"><i class="bi bi-credit-card me-1"></i>Default Billing ✓</span>
+                                        <?php endif; ?>
+                                        </div>
                                     </div>
                                     <small class="text-muted d-block mt-1">
-                                        <?= e($addr['address_line1']) ?><?= $addr['address_line2'] ? ', '.e($addr['address_line2']) : '' ?><br>
-                                        <?= e($addr['city']) ?><?= $addr['state'] ? ', '.e($addr['state']) : '' ?> <?= e($addr['postal_code'] ?? '') ?><br>
-                                        <?= e($addr['country']) ?><?= $addr['phone'] ? ' · '.e($addr['phone']) : '' ?>
+                                        <?= e($addr['address_line1'] ?? $addr['address_line_1'] ?? '') ?><?= ($addr['address_line2'] ?? $addr['address_line_2'] ?? '') ? ', '.e($addr['address_line2'] ?? $addr['address_line_2'] ?? '') : '' ?><br>
+                                        <?= e($addr['city']) ?><?= ($addr['state'] ?? $addr['state_province'] ?? '') ? ', '.e($addr['state'] ?? $addr['state_province'] ?? '') : '' ?> <?= e($addr['postal_code'] ?? '') ?><br>
+                                        <?= e($addr['country'] ?? $addr['country_name'] ?? '') ?><?= ($addr['phone'] ?? '') ? ' · '.e($addr['phone']) : '' ?>
                                     </small>
                                 </div>
                             </div>
                             <?php endforeach; ?>
                         </div>
-                        <button type="button" class="btn btn-outline-secondary btn-sm mb-3" onclick="toggleNewAddressForm()">
-                            <i class="bi bi-plus-circle me-1"></i> Add New Address
-                        </button>
+                        <div class="d-flex gap-2 mb-3">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleNewAddressForm()">
+                                <i class="bi bi-plus-circle me-1"></i> Use Different Address
+                            </button>
+                            <a href="/pages/account/addresses/form.php" class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-geo-alt me-1"></i> Manage Addresses
+                            </a>
+                        </div>
                         <?php endif; ?>
 
                         <div id="newAddressForm" <?= empty($addresses) ? '' : 'style="display:none"' ?>>
@@ -136,7 +160,7 @@ include __DIR__ . '/../../includes/header.php';
                                     <input type="text" id="na_full_name" class="form-control" placeholder="John Doe">
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Phone *</label>
+                                    <label class="form-label">Phone</label>
                                     <input type="tel" id="na_phone" class="form-control" placeholder="+1 555 000 0000">
                                 </div>
                                 <div class="col-12">
@@ -162,24 +186,28 @@ include __DIR__ . '/../../includes/header.php';
                                 <div class="col-12">
                                     <label class="form-label">Country *</label>
                                     <select id="na_country" class="form-select">
-                                        <option value="US">United States</option>
-                                        <option value="GB">United Kingdom</option>
-                                        <option value="CA">Canada</option>
-                                        <option value="AU">Australia</option>
-                                        <option value="DE">Germany</option>
-                                        <option value="FR">France</option>
-                                        <option value="JP">Japan</option>
-                                        <option value="SG">Singapore</option>
-                                        <option value="BD">Bangladesh</option>
-                                        <option value="IN">India</option>
-                                        <option value="AE">UAE</option>
-                                        <option value="SA">Saudi Arabia</option>
+                                        <?php
+                                        $allCountries = getCountries();
+                                        foreach ($allCountries as $c):
+                                        ?>
+                                        <option value="<?= htmlspecialchars($c['code'], ENT_QUOTES, 'UTF-8') ?>">
+                                            <?= htmlspecialchars($c['flag'] . ' ' . $c['name'], ENT_QUOTES, 'UTF-8') ?>
+                                        </option>
+                                        <?php endforeach; ?>
                                     </select>
                                 </div>
                                 <div class="col-12">
+                                    <div class="form-check mb-1">
+                                        <input class="form-check-input" type="checkbox" id="na_is_default" checked>
+                                        <label class="form-check-label" for="na_is_default">
+                                            <i class="bi bi-truck me-1 text-success"></i>Set as default shipping address
+                                        </label>
+                                    </div>
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="na_is_default">
-                                        <label class="form-check-label" for="na_is_default">Set as default address</label>
+                                        <input class="form-check-input" type="checkbox" id="na_billing_same" checked>
+                                        <label class="form-check-label" for="na_billing_same">
+                                            <i class="bi bi-credit-card me-1 text-info"></i>Billing same as shipping address
+                                        </label>
                                     </div>
                                 </div>
                             </div>
@@ -566,26 +594,27 @@ function toggleNewAddressForm() {
 
 async function saveNewAddress() {
     const formData = new FormData();
-    formData.append('_csrf_token',   CSRF_TOKEN);
-    formData.append('full_name',     document.getElementById('na_full_name').value.trim());
-    formData.append('phone',         document.getElementById('na_phone').value.trim());
-    formData.append('address_line1', document.getElementById('na_address_line1').value.trim());
-    formData.append('address_line2', document.getElementById('na_address_line2').value.trim());
-    formData.append('city',          document.getElementById('na_city').value.trim());
-    formData.append('state',         document.getElementById('na_state').value.trim());
-    formData.append('postal_code',   document.getElementById('na_postal_code').value.trim());
-    formData.append('country',       document.getElementById('na_country').value);
-    formData.append('is_default',    document.getElementById('na_is_default').checked ? '1' : '0');
+    formData.append('_csrf_token',        CSRF_TOKEN);
+    formData.append('full_name',          document.getElementById('na_full_name').value.trim());
+    formData.append('phone',              document.getElementById('na_phone').value.trim());
+    formData.append('address_line_1',     document.getElementById('na_address_line1').value.trim());
+    formData.append('address_line_2',     document.getElementById('na_address_line2').value.trim());
+    formData.append('city',               document.getElementById('na_city').value.trim());
+    formData.append('state_province',     document.getElementById('na_state').value.trim());
+    formData.append('postal_code',        document.getElementById('na_postal_code').value.trim());
+    formData.append('country_code',       document.getElementById('na_country').value);
+    formData.append('is_default_shipping',document.getElementById('na_is_default').checked ? '1' : '0');
+    formData.append('is_default_billing', document.getElementById('na_billing_same').checked ? '1' : '0');
 
     const errEl = document.getElementById('newAddrError');
     errEl.textContent = '';
     try {
-        const res  = await fetch('/api/checkout.php?action=add_address', { method: 'POST', body: formData });
+        const res  = await fetch('/api/addresses.php?action=create', { method: 'POST', body: formData });
         const data = await res.json();
         if (data.success) {
             window.location.reload();
         } else {
-            errEl.textContent = data.errors ? Object.values(data.errors).join(' ') : (data.error || 'Failed to save address.');
+            errEl.textContent = data.message || 'Failed to save address.';
         }
     } catch (e) {
         errEl.textContent = 'Network error. Please try again.';
