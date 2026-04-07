@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/middleware.php';
 require_once __DIR__ . '/../../includes/variations.php';
+require_once __DIR__ . '/../../includes/tax_engine.php';
 
 $slug = get('slug', '');
 $id   = (int)get('id', 0);
@@ -42,6 +43,16 @@ $related = $relStmt->fetchAll();
 
 $images  = json_decode($product['images'] ?? '[]', true) ?: [];
 $specs   = json_decode($product['specifications'] ?? '{}', true) ?: [];
+
+// Tax display data
+$showTaxOnProduct = getTaxSetting('show_tax_on_product', '1') === '1' && isFeatureEnabled('tax_calculation');
+$taxMode          = getTaxMode();
+$taxLabel         = getTaxSetting('tax_label', 'Tax');
+$taxInclusive     = getTaxSetting('tax_inclusive', '0') === '1';
+$productTaxRate   = 0.0;
+if ($showTaxOnProduct) {
+    $productTaxRate = getDefaultTaxRate();
+}
 
 $pageTitle = $product['name'];
 $pageDesc  = $product['short_desc'] ?? $product['name'];
@@ -118,6 +129,19 @@ include __DIR__ . '/../../includes/header.php';
                 <?php endif; ?>
                 <span class="text-muted small">/ <?= e($product['unit'] ?? 'piece') ?></span>
             </div>
+            <?php if ($showTaxOnProduct && $productTaxRate > 0): ?>
+            <div class="mb-2">
+                <?php if ($taxInclusive): ?>
+                <small class="text-muted"><i class="bi bi-info-circle me-1"></i>Price includes <?= $productTaxRate ?>% <?= e($taxLabel) ?> (incl. <?= e($taxLabel) ?>)</small>
+                <?php else: ?>
+                <small class="text-muted"><i class="bi bi-receipt me-1"></i>Plus <?= $productTaxRate ?>% <?= e($taxLabel) ?> at checkout
+                    (<strong><?= formatMoney(round($product['price'] * $productTaxRate / 100, 2)) ?></strong>)
+                </small>
+                <?php endif; ?>
+            </div>
+            <?php elseif ($showTaxOnProduct && $productTaxRate == 0): ?>
+            <div class="mb-2"><small class="text-success"><i class="bi bi-check-circle me-1"></i>Tax-free product</small></div>
+            <?php endif; ?>
 
             <?php if ($product['short_desc']): ?>
             <p class="text-muted mb-3"><?= nl2br(e($product['short_desc'])) ?></p>

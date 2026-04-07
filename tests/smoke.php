@@ -819,6 +819,39 @@ echo "\nPR #9 Plan limit enforcement:\n";
 assertFile("$root/pages/supplier/product-add.php");
 assertSyntax("$root/pages/supplier/product-add.php");
 
+// ── PR #12: Tax Calculation Engine ───────────────────────────
+echo "\nPR #12 Tax Engine database:\n";
+assertFile("$root/database/schema_v16_tax.sql");
+
+echo "\nPR #12 Tax Engine includes:\n";
+$pr12Includes = [
+    'includes/tax_engine.php',
+    'includes/countries.php',
+];
+foreach ($pr12Includes as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #12 Tax API:\n";
+assertFile("$root/api/tax.php");
+assertSyntax("$root/api/tax.php");
+
+echo "\nPR #12 Admin tax pages:\n";
+$pr12AdminPages = [
+    'pages/admin/tax/index.php',
+    'pages/admin/tax/rates.php',
+    'pages/admin/tax/report.php',
+];
+foreach ($pr12AdminPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #12 Checkout & product integration:\n";
+assertSyntax("$root/pages/checkout/index.php");
+assertSyntax("$root/pages/product/detail.php");
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
