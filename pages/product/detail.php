@@ -186,7 +186,7 @@ include __DIR__ . '/../../includes/header.php';
 
             <!-- Add to Cart -->
             <?php if ($product['stock_qty'] > 0 || $hasVariations): ?>
-            <form method="POST" action="/api/cart.php?action=add" class="d-flex align-items-center gap-3 mb-3" id="addToCartForm">
+            <form id="addToCartForm" class="d-flex align-items-center gap-3 mb-3">
                 <?= csrfField() ?>
                 <input type="hidden" name="product_id" value="<?= $product['id'] ?>">
                 <input type="hidden" name="variant_id" id="variantId" value="">
@@ -203,12 +203,37 @@ include __DIR__ . '/../../includes/header.php';
             </form>
             <?php endif; ?>
 
-            <div class="d-flex gap-2 mb-4">
-                <a href="/pages/rfq/create.php?product_id=<?= $product['id'] ?>" class="btn btn-outline-primary">
+            <div class="d-flex gap-2 mb-4 flex-wrap">
+                <!-- Wishlist toggle -->
+                <?php if (isLoggedIn()):
+                    $wlStatus = (function() use ($product) {
+                        try {
+                            $s = getDB()->prepare('SELECT id FROM wishlist_items WHERE user_id = ? AND product_id = ?');
+                            $s->execute([$_SESSION['user_id'], $product['id']]);
+                            return (bool)$s->fetch();
+                        } catch (\Exception $e) { return false; }
+                    })();
+                ?>
+                <button type="button"
+                        id="wishlistBtn"
+                        class="btn btn-<?= $wlStatus ? 'danger' : 'outline-danger' ?>"
+                        onclick="toggleWishlist(<?= $product['id'] ?>)"
+                        title="<?= $wlStatus ? 'Remove from wishlist' : 'Add to wishlist' ?>">
+                    <i class="bi bi-heart<?= $wlStatus ? '-fill' : '' ?> me-1"></i>
+                    <span id="wishlistBtnText"><?= $wlStatus ? 'Saved' : 'Wishlist' ?></span>
+                </button>
+                <?php else: ?>
+                <a href="<?= APP_URL ?>/pages/auth/login.php" class="btn btn-outline-secondary"
+                   title="Login to save to wishlist">
+                    <i class="bi bi-heart me-1"></i> Login to Save
+                </a>
+                <?php endif; ?>
+
+                <a href="<?= APP_URL ?>/pages/rfq/create.php?product_id=<?= $product['id'] ?>" class="btn btn-outline-primary">
                     <i class="bi bi-file-text me-1"></i> Request Quote
                 </a>
                 <?php if ($product['supplier_slug']): ?>
-                <a href="/pages/supplier/profile.php?slug=<?= urlencode($product['supplier_slug']) ?>" class="btn btn-outline-secondary">
+                <a href="<?= APP_URL ?>/pages/supplier/profile.php?slug=<?= urlencode($product['supplier_slug']) ?>" class="btn btn-outline-secondary">
                     <i class="bi bi-shop me-1"></i> <?= e(mb_strimwidth($product['supplier_name'], 0, 25, '…')) ?>
                 </a>
                 <?php endif; ?>
@@ -305,6 +330,10 @@ include __DIR__ . '/../../includes/header.php';
 </div>
 
 <script>
+const _CSRF = '<?= e(csrfToken()) ?>';
+const _CART_API = '<?= APP_URL ?>/api/cart.php';
+const _WISH_API = '<?= APP_URL ?>/api/wishlist.php';
+
 function changeQty(delta) {
     const input = document.getElementById('qtyInput');
     const min = parseInt(input.min) || 1;
@@ -313,6 +342,77 @@ function changeQty(delta) {
 document.getElementById('variantSelect')?.addEventListener('change', function() {
     document.getElementById('variantId').value = this.value;
 });
+
+// AJAX Add to Cart
+document.getElementById('addToCartForm')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('addToCartBtn');
+    const data = new URLSearchParams({
+        _csrf_token: _CSRF,
+        product_id:  document.querySelector('[name=product_id]').value,
+        variant_id:  document.getElementById('variantId')?.value || '',
+        quantity:    document.getElementById('qtyInput')?.value || 1,
+    });
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Adding…';
+
+    fetch(`${_CART_API}?action=add`, { method: 'POST', body: data })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Added!';
+                btn.classList.replace('btn-primary', 'btn-success');
+                if (typeof updateCartBadge === 'function') updateCartBadge(res.count);
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="bi bi-cart-plus me-1"></i> Add to Cart';
+                    btn.classList.replace('btn-success', 'btn-primary');
+                    btn.disabled = false;
+                }, 2000);
+            } else {
+                alert(res.message || 'Could not add to cart.');
+                btn.innerHTML = '<i class="bi bi-cart-plus me-1"></i> Add to Cart';
+                btn.disabled = false;
+            }
+        })
+        .catch(() => {
+            alert('Network error. Please try again.');
+            btn.innerHTML = '<i class="bi bi-cart-plus me-1"></i> Add to Cart';
+            btn.disabled = false;
+        });
+});
+
+// Wishlist toggle
+function toggleWishlist(productId) {
+    const btn       = document.getElementById('wishlistBtn');
+    const btnText   = document.getElementById('wishlistBtnText');
+    const isInList  = btn.classList.contains('btn-danger');
+    const action    = isInList ? 'remove' : 'add';
+    const body      = new URLSearchParams({ _csrf_token: _CSRF, product_id: productId });
+
+    btn.disabled = true;
+    fetch(`${_WISH_API}?action=${action}`, { method: 'POST', body })
+        .then(r => r.json())
+        .then(res => {
+            btn.disabled = false;
+            if (res.success) {
+                if (action === 'add') {
+                    btn.classList.replace('btn-outline-danger', 'btn-danger');
+                    btnText.textContent = 'Saved';
+                    btn.querySelector('i').className = 'bi bi-heart-fill me-1';
+                } else {
+                    btn.classList.replace('btn-danger', 'btn-outline-danger');
+                    btnText.textContent = 'Wishlist';
+                    btn.querySelector('i').className = 'bi bi-heart me-1';
+                }
+                if (typeof updateWishlistBadge === 'function' && res.count !== undefined) {
+                    updateWishlistBadge(res.count);
+                }
+            } else {
+                alert(res.message || 'Could not update wishlist.');
+            }
+        })
+        .catch(() => { btn.disabled = false; alert('Network error.'); });
+}
 
 // ── Variation Selector (product_variations SKU system) ─────────────────────
 (function() {
@@ -356,8 +456,7 @@ document.getElementById('variantSelect')?.addEventListener('change', function() 
             }
 
             // Look up the SKU via API
-            const optionIds = Object.values(selected).join(',');
-            fetch(`/api/products.php?action=get_skus&product_id=${productId}`)
+            fetch(`<?= APP_URL ?>/api/products.php?action=get_skus&product_id=${encodeURIComponent(productId)}`)
                 .then(r => r.json())
                 .then(data => {
                     if (!data.success) return;
