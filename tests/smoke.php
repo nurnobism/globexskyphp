@@ -230,6 +230,7 @@ $phase2Files = [
     'pages/supplier/products.php',
     'pages/supplier/product-add.php',
     'pages/supplier/product-edit.php',
+    'pages/supplier/products/create.php',
     'pages/supplier/orders.php',
     'pages/order/confirmation.php',
 ];
