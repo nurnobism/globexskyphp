@@ -11,8 +11,11 @@
 
 -- -----------------------------------------------------------
 -- tax_rates — Country / state-level tax rate configuration
+-- Drop and recreate to upgrade from the v3 schema which
+-- lacked state_code / state_name / tax_name columns.
 -- -----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS tax_rates (
+DROP TABLE IF EXISTS tax_rates;
+CREATE TABLE tax_rates (
     id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     country_code VARCHAR(2)  NOT NULL,
     country_name VARCHAR(100) NOT NULL DEFAULT '',
