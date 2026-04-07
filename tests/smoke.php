@@ -973,6 +973,30 @@ echo "\nPR #13 Promotion banner component:\n";
 assertFile("$root/pages/components/promotion-banner.php");
 assertSyntax("$root/pages/components/promotion-banner.php");
 
+// ── PR #15: Parcel Tracking Integration ──────────────────────
+echo "\nPR #15 Tracking database:\n";
+assertFile("$root/database/schema_v17_tracking.sql");
+
+echo "\nPR #15 Tracking includes:\n";
+assertFile("$root/includes/tracking.php");
+assertSyntax("$root/includes/tracking.php");
+
+echo "\nPR #15 Tracking API:\n";
+assertFile("$root/api/tracking.php");
+assertSyntax("$root/api/tracking.php");
+
+echo "\nPR #15 Buyer tracking page:\n";
+assertFile("$root/pages/account/orders/tracking.php");
+assertSyntax("$root/pages/account/orders/tracking.php");
+
+echo "\nPR #15 Supplier ship form:\n";
+assertFile("$root/pages/supplier/orders/ship.php");
+assertSyntax("$root/pages/supplier/orders/ship.php");
+
+echo "\nPR #15 Admin tracking dashboard:\n";
+assertFile("$root/pages/admin/logistics/tracking.php");
+assertSyntax("$root/pages/admin/logistics/tracking.php");
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
