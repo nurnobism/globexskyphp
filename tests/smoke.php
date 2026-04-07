@@ -756,6 +756,39 @@ foreach ($pr7AdminPages as $f) {
     assertSyntax("$root/$f");
 }
 
+// ── PR #9: Supplier Plans — Free / Pro / Enterprise ──────────
+echo "\nPR #9 Supplier Plans database:\n";
+assertFile("$root/database/schema_v15_plans.sql");
+
+echo "\nPR #9 Plans includes:\n";
+assertFile("$root/includes/plans.php");
+assertSyntax("$root/includes/plans.php");
+
+echo "\nPR #9 Plans API:\n";
+assertFile("$root/api/plans.php");
+assertSyntax("$root/api/plans.php");
+
+echo "\nPR #9 Supplier plan pages:\n";
+$pr9SupplierPages = [
+    'pages/supplier/plans.php',
+    'pages/supplier/billing/index.php',
+    'pages/supplier/billing/invoices.php',
+];
+foreach ($pr9SupplierPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #9 Admin plan pages:\n";
+$pr9AdminPages = [
+    'pages/admin/plans/index.php',
+    'pages/admin/plans/subscribers.php',
+];
+foreach ($pr9AdminPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
