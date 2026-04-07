@@ -1,153 +1,223 @@
 <?php
+/**
+ * pages/supplier/plans.php — Supplier Plan Selection Page (PR #9)
+ *
+ * Beautiful pricing page with:
+ *  - 3-column plan cards (Free / Pro / Enterprise)
+ *  - Duration toggle (Monthly / Quarterly / Semi-Annual / Annual)
+ *  - Feature comparison table
+ *  - Current plan badge + expiry
+ *  - FAQ section
+ */
+
 require_once __DIR__ . '/../../includes/middleware.php';
-require_once __DIR__ . '/../../includes/plan_limits.php';
+require_once __DIR__ . '/../../includes/plans.php';
 requireRole(['supplier', 'admin', 'super_admin']);
 
-$db          = getDB();
-$supplierId  = $_SESSION['user_id'];
-$currentPlan = getSupplierPlan($supplierId);
-$remaining   = getRemainingLimits($supplierId);
-
-// Load all plans
-$plans = [];
-try {
-    $stmt  = $db->query('SELECT * FROM supplier_plans WHERE is_active = 1 ORDER BY sort_order ASC');
-    $plans = $stmt->fetchAll();
-    foreach ($plans as &$p) {
-        $p['features_decoded'] = json_decode($p['features'] ?? '{}', true) ?: [];
-        $p['limits_decoded']   = json_decode($p['limits'] ?? '{}', true) ?: [];
-        // Subscriber count
-        $cStmt = $db->prepare('SELECT COUNT(*) FROM plan_subscriptions WHERE plan_id = ? AND status = "active"');
-        $cStmt->execute([$p['id']]);
-        $p['subscriber_count'] = (int)$cStmt->fetchColumn();
-    }
-    unset($p);
-} catch (PDOException $e) {
-    // No plans table yet; use defaults
-    $plans = [
-        ['id'=>1,'name'=>'Free','slug'=>'free','price'=>0,'commission_discount'=>0,'sort_order'=>1,'limits_decoded'=>['products'=>10,'images_per_product'=>3,'featured_per_month'=>0,'livestream_per_week'=>0,'dropshipping'=>false,'api_access'=>false],'features_decoded'=>['badge'=>'none','analytics'=>'basic','support'=>'community'],'subscriber_count'=>0],
-        ['id'=>2,'name'=>'Pro','slug'=>'pro','price'=>299,'commission_discount'=>15,'sort_order'=>2,'limits_decoded'=>['products'=>500,'images_per_product'=>10,'featured_per_month'=>2,'livestream_per_week'=>2,'dropshipping'=>true,'api_access'=>'basic'],'features_decoded'=>['badge'=>'pro','analytics'=>'advanced','support'=>'email','custom_store'=>true],'subscriber_count'=>0],
-        ['id'=>3,'name'=>'Enterprise','slug'=>'enterprise','price'=>999,'commission_discount'=>30,'sort_order'=>3,'limits_decoded'=>['products'=>-1,'images_per_product'=>20,'featured_per_month'=>-1,'livestream_per_week'=>-1,'dropshipping'=>true,'api_access'=>'full'],'features_decoded'=>['badge'=>'enterprise','analytics'=>'full_ai','support'=>'phone_email','custom_store'=>true,'custom_domain'=>true],'subscriber_count'=>0],
-    ];
-}
+$supplierId  = (int)$_SESSION['user_id'];
+$currentPlan = getCurrentPlan($supplierId);
+$usage       = getPlanUsage($supplierId);
+$expiry      = getPlanExpiry($supplierId);
+$plans       = getPlans();
 
 $pageTitle = 'Supplier Plans';
 include __DIR__ . '/../../includes/header.php';
 
+function fmtPrice(float $price, string $duration = 'monthly'): string {
+    if ($price == 0) return '$0';
+    return '$' . number_format($price, 0) . '/mo';
+}
+
 function limitLabel(mixed $val): string {
-    if ($val === -1 || $val === '-1') return 'Unlimited';
-    if ($val === false || $val === null || $val === 0 || $val === '0') return '❌';
-    if ($val === true || $val === 1)  return '✅';
-    if (is_string($val) && in_array(strtolower($val), ['basic','full'])) return '✅ ' . ucfirst($val);
-    return (string)$val;
+    if ($val === -1 || $val === '-1')                     return '<span class="text-success fw-bold">Unlimited</span>';
+    if ($val === false || $val === null || $val === 0)     return '<span class="text-muted">—</span>';
+    if ($val === true || $val === 1)                       return '<span class="text-success">✓</span>';
+    if (is_string($val) && in_array(strtolower($val), ['basic', 'full', 'advanced'])) {
+        return '<span class="text-success">✓ ' . ucfirst($val) . '</span>';
+    }
+    return '<span class="fw-semibold">' . htmlspecialchars((string)$val) . '</span>';
 }
 ?>
 <div class="container py-5">
+
+    <!-- Header -->
     <div class="text-center mb-5">
-        <h2 class="fw-bold">Supplier Plans</h2>
-        <p class="text-muted">Choose the plan that fits your business — upgrade anytime</p>
+        <h2 class="fw-bold display-6">Choose Your Supplier Plan</h2>
+        <p class="lead text-muted">Scale your business with the right tools — upgrade or downgrade anytime.</p>
+
         <?php if (!empty($currentPlan['name'])): ?>
-        <span class="badge bg-primary fs-6">
-            Your current plan: <strong><?= e($currentPlan['name']) ?></strong>
-        </span>
+        <div class="d-inline-flex align-items-center gap-2 bg-light border rounded px-4 py-2 mt-2">
+            <i class="bi bi-check-circle-fill text-success"></i>
+            <span>Current plan: <strong><?= htmlspecialchars($currentPlan['name']) ?></strong></span>
+            <?php if ($expiry): ?>
+            <span class="text-muted small">· expires <?= htmlspecialchars(date('M j, Y', strtotime($expiry))) ?></span>
+            <?php endif; ?>
+        </div>
         <?php endif; ?>
     </div>
 
-    <?php if (isset($_GET['success'])): ?>
-    <div class="alert alert-success"><?= e($_GET['success']) ?></div>
-    <?php endif; ?>
-    <?php if (isset($_GET['error'])): ?>
-    <div class="alert alert-danger"><?= e($_GET['error']) ?></div>
-    <?php endif; ?>
+    <!-- Duration Toggle -->
+    <div class="d-flex justify-content-center mb-5">
+        <div class="btn-group" role="group" id="durationToggle">
+            <input type="radio" class="btn-check" name="duration" id="dur-monthly"     value="monthly"     checked autocomplete="off">
+            <label class="btn btn-outline-primary" for="dur-monthly">Monthly</label>
 
-    <div class="row g-4 justify-content-center">
+            <input type="radio" class="btn-check" name="duration" id="dur-quarterly"   value="quarterly"   autocomplete="off">
+            <label class="btn btn-outline-primary" for="dur-quarterly">
+                Quarterly <span class="badge bg-success ms-1">–10%</span>
+            </label>
+
+            <input type="radio" class="btn-check" name="duration" id="dur-semi-annual" value="semi-annual" autocomplete="off">
+            <label class="btn btn-outline-primary" for="dur-semi-annual">
+                6 Months <span class="badge bg-success ms-1">–15%</span>
+            </label>
+
+            <input type="radio" class="btn-check" name="duration" id="dur-annual"      value="annual"      autocomplete="off">
+            <label class="btn btn-outline-primary" for="dur-annual">
+                Annual <span class="badge bg-warning text-dark ms-1">–25%</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- Plan Cards -->
+    <div class="row g-4 mb-5">
         <?php foreach ($plans as $plan):
-            $isCurrent = ($currentPlan['slug'] ?? 'free') === $plan['slug'];
-            $lim       = $plan['limits_decoded'] ?? [];
-            $feat      = $plan['features_decoded'] ?? [];
-            $cardClass = $isCurrent ? 'border-primary shadow-lg' : 'border-0 shadow-sm';
-            $badgeHtml = match ($feat['badge'] ?? 'none') {
-                'pro'        => '<span class="badge bg-primary ms-2">⭐ Pro Seller</span>',
-                'enterprise' => '<span class="badge bg-warning text-dark ms-2">💎 Enterprise</span>',
-                default      => '',
-            };
+            $isCurrent = ($currentPlan['slug'] ?? '') === $plan['slug'];
+            $isPro     = $plan['slug'] === 'pro';
         ?>
         <div class="col-md-4">
-            <div class="card <?= $cardClass ?> h-100 <?= $isCurrent ? 'border-3' : '' ?>">
-                <?php if ($isCurrent): ?>
-                <div class="card-header bg-primary text-white text-center py-2 small fw-semibold">
-                    ✓ Your Current Plan
+            <div class="card h-100 border<?= $isPro ? ' border-primary border-2 shadow-lg' : '' ?> position-relative">
+                <?php if ($isPro): ?>
+                <div class="position-absolute top-0 start-50 translate-middle">
+                    <span class="badge bg-primary px-3 py-2 fs-6">⭐ Most Popular</span>
                 </div>
                 <?php endif; ?>
-                <div class="card-body text-center p-4">
-                    <h4 class="fw-bold"><?= e($plan['name']) ?> <?= $badgeHtml ?></h4>
-                    <div class="my-3">
-                        <?php if ((float)$plan['price'] == 0): ?>
-                        <span class="display-5 fw-bold">Free</span>
-                        <?php else: ?>
-                        <span class="display-5 fw-bold">$<?= number_format((float)$plan['price']) ?></span>
-                        <span class="text-muted">/month</span>
-                        <?php endif; ?>
-                    </div>
-                    <?php if ($plan['commission_discount'] > 0): ?>
-                    <p class="text-success fw-semibold mb-2">
-                        <i class="bi bi-tag-fill"></i> <?= $plan['commission_discount'] ?>% Commission Discount
-                    </p>
-                    <?php else: ?>
-                    <p class="text-muted mb-2 small">Standard commission rates</p>
-                    <?php endif; ?>
 
-                    <hr>
-                    <ul class="list-unstyled text-start small">
-                        <li class="mb-2"><i class="bi bi-box-seam text-primary me-2"></i>
-                            <strong>Products:</strong> <?= limitLabel($lim['products'] ?? 10) ?>
+                <div class="card-header text-center py-4 <?= $isPro ? 'bg-primary text-white' : 'bg-light' ?>">
+                    <?php if ($plan['slug'] === 'enterprise'): ?>
+                        <i class="bi bi-gem fs-1 text-warning"></i>
+                    <?php elseif ($isPro): ?>
+                        <i class="bi bi-star-fill fs-1 text-white"></i>
+                    <?php else: ?>
+                        <i class="bi bi-shop fs-1 text-secondary"></i>
+                    <?php endif; ?>
+                    <h4 class="fw-bold mt-2 mb-0"><?= htmlspecialchars($plan['name']) ?></h4>
+                </div>
+
+                <div class="card-body text-center">
+                    <!-- Price display (updated by JS) -->
+                    <div class="my-3">
+                        <span class="display-5 fw-bold"
+                              data-plan-prices='<?= htmlspecialchars(json_encode([
+                                  "monthly"     => '$' . number_format((float)($plan['price_monthly']    ?? $plan['price'] ?? 0), 0),
+                                  "quarterly"   => '$' . number_format((float)($plan['price_quarterly']  ?? 0), 0),
+                                  "semi-annual" => '$' . number_format((float)($plan['price_semi_annual']?? 0), 0),
+                                  "annual"      => '$' . number_format((float)($plan['price_annual']     ?? 0), 0),
+                              ]), ENT_QUOTES) ?>'
+                              id="price-<?= $plan['id'] ?>">
+                            $<?= number_format((float)($plan['price_monthly'] ?? $plan['price'] ?? 0), 0) ?>
+                        </span>
+                        <span class="text-muted">/mo</span>
+                    </div>
+
+                    <!-- Savings badge (shown when non-monthly) -->
+                    <div id="savings-<?= $plan['id'] ?>" class="mb-2 d-none">
+                        <span class="badge bg-success fs-6 px-3">
+                            You save <span class="savings-pct"></span>% vs monthly
+                        </span>
+                    </div>
+
+                    <!-- Features list -->
+                    <ul class="list-unstyled text-start mt-3">
+                        <?php
+                        $maxProd  = (int)($plan['max_products']           ?? 10);
+                        $maxImg   = (int)($plan['max_images_per_product'] ?? 3);
+                        $maxShip  = (int)($plan['max_shipping_templates'] ?? 1);
+                        $maxDrop  = (int)($plan['max_dropship_imports']   ?? 0);
+                        $commDisc = (float)($plan['commission_discount']  ?? 0);
+                        ?>
+                        <li class="mb-2">
+                            <i class="bi bi-box-seam text-primary me-2"></i>
+                            <strong><?= $maxProd < 0 ? 'Unlimited' : number_format($maxProd) ?></strong> products
                         </li>
-                        <li class="mb-2"><i class="bi bi-images text-primary me-2"></i>
-                            <strong>Images/product:</strong> <?= limitLabel($lim['images_per_product'] ?? 3) ?>
+                        <li class="mb-2">
+                            <i class="bi bi-images text-primary me-2"></i>
+                            <strong><?= $maxImg < 0 ? 'Unlimited' : $maxImg ?></strong> images/product
                         </li>
-                        <li class="mb-2"><i class="bi bi-headset text-primary me-2"></i>
-                            <strong>Support:</strong> <?= match($feat['support']??'community'){'community'=>'Community','email'=>'✅ Email','phone_email'=>'✅ Phone + Email',default=>ucfirst($feat['support']??'')} ?>
+                        <li class="mb-2">
+                            <i class="bi bi-truck text-primary me-2"></i>
+                            <strong><?= $maxShip < 0 ? 'Unlimited' : $maxShip ?></strong> shipping template<?= $maxShip !== 1 ? 's' : '' ?>
                         </li>
-                        <li class="mb-2"><i class="bi bi-bar-chart text-primary me-2"></i>
-                            <strong>Analytics:</strong> <?= match($feat['analytics']??'basic'){'basic'=>'Basic','advanced'=>'Advanced','full_ai'=>'Full + AI',default=>ucfirst($feat['analytics']??'')} ?>
-                        </li>
-                        <li class="mb-2"><i class="bi bi-star text-primary me-2"></i>
-                            <strong>Featured/month:</strong> <?= limitLabel($lim['featured_per_month'] ?? 0) ?>
-                        </li>
-                        <li class="mb-2"><i class="bi bi-camera-video text-primary me-2"></i>
-                            <strong>Live sessions/week:</strong> <?= limitLabel($lim['livestream_per_week'] ?? 0) ?>
-                        </li>
-                        <li class="mb-2"><i class="bi bi-truck text-primary me-2"></i>
-                            <strong>Dropshipping:</strong> <?= limitLabel($lim['dropshipping'] ?? false) ?>
-                        </li>
-                        <li class="mb-2"><i class="bi bi-code-slash text-primary me-2"></i>
-                            <strong>API Access:</strong> <?= limitLabel($lim['api_access'] ?? false) ?>
-                        </li>
-                        <?php if (!empty($feat['custom_store'])): ?>
-                        <li class="mb-2"><i class="bi bi-shop text-success me-2"></i>
-                            <strong>Custom Store:</strong> ✅
+                        <?php if ($maxDrop > 0 || $maxDrop < 0): ?>
+                        <li class="mb-2">
+                            <i class="bi bi-arrow-left-right text-primary me-2"></i>
+                            <strong><?= $maxDrop < 0 ? 'Unlimited' : number_format($maxDrop) ?></strong> dropship imports/mo
                         </li>
                         <?php endif; ?>
-                        <?php if (!empty($feat['custom_domain'])): ?>
-                        <li class="mb-2"><i class="bi bi-globe text-success me-2"></i>
-                            <strong>Custom Domain:</strong> ✅
+                        <?php if ($commDisc > 0): ?>
+                        <li class="mb-2">
+                            <i class="bi bi-percent text-success me-2"></i>
+                            <strong><?= $commDisc ?>% off</strong> commission
+                        </li>
+                        <?php endif; ?>
+                        <?php
+                        $feat = $plan['features_decoded'] ?? [];
+                        $analyticsLabel = ['basic' => 'Basic Analytics', 'advanced' => 'Advanced Analytics', 'full_ai' => 'Full AI Analytics'][$feat['analytics'] ?? 'basic'] ?? 'Analytics';
+                        $supportLabel   = ['community' => 'Community Support', 'priority_email' => 'Priority Email', 'dedicated_phone_email' => 'Dedicated Support'][$feat['support'] ?? 'community'] ?? 'Support';
+                        ?>
+                        <li class="mb-2">
+                            <i class="bi bi-bar-chart text-primary me-2"></i>
+                            <?= htmlspecialchars($analyticsLabel) ?>
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-headset text-primary me-2"></i>
+                            <?= htmlspecialchars($supportLabel) ?>
+                        </li>
+                        <?php if (!empty($feat['api_access']) && $feat['api_access'] !== false): ?>
+                        <li class="mb-2">
+                            <i class="bi bi-code-slash text-primary me-2"></i>
+                            API Access (<?= htmlspecialchars((string)$feat['api_access']) ?>)
+                        </li>
+                        <?php endif; ?>
+                        <?php if (!empty($feat['dedicated_manager'])): ?>
+                        <li class="mb-2">
+                            <i class="bi bi-person-check text-primary me-2"></i>
+                            Dedicated Account Manager
                         </li>
                         <?php endif; ?>
                     </ul>
+                </div>
 
+                <div class="card-footer text-center py-3">
                     <?php if ($isCurrent): ?>
-                    <button class="btn btn-outline-primary w-100 mt-3" disabled>Current Plan</button>
-                    <?php elseif ((float)$plan['price'] == 0): ?>
-                    <form method="POST" action="/api/plans.php?action=upgrade">
-                        <?= csrfField() ?>
-                        <input type="hidden" name="plan_id" value="<?= (int)$plan['id'] ?>">
-                        <button type="submit" class="btn btn-outline-secondary w-100 mt-3">Downgrade to Free</button>
-                    </form>
+                        <button class="btn btn-secondary w-100" disabled>
+                            <i class="bi bi-check-circle me-1"></i> Current Plan
+                        </button>
+                    <?php elseif ($plan['slug'] === 'free'): ?>
+                        <button class="btn btn-outline-secondary w-100 plan-action-btn"
+                                data-plan-id="<?= $plan['id'] ?>"
+                                data-plan-slug="<?= $plan['slug'] ?>"
+                                data-plan-name="<?= htmlspecialchars($plan['name']) ?>">
+                            Downgrade to Free
+                        </button>
+                    <?php elseif ($plan['slug'] === 'enterprise'): ?>
+                        <a href="/pages/contact.php?subject=Enterprise+Plan" class="btn btn-warning w-100">
+                            <i class="bi bi-telephone me-1"></i> Contact Sales
+                        </a>
+                        <button class="btn btn-outline-warning w-100 mt-2 plan-action-btn"
+                                data-plan-id="<?= $plan['id'] ?>"
+                                data-plan-slug="<?= $plan['slug'] ?>"
+                                data-plan-name="<?= htmlspecialchars($plan['name']) ?>">
+                            Upgrade to Enterprise
+                        </button>
                     <?php else: ?>
-                    <a href="/pages/supplier/plan-upgrade.php?plan_id=<?= (int)$plan['id'] ?>"
-                       class="btn btn-primary w-100 mt-3">
-                        Upgrade to <?= e($plan['name']) ?>
-                    </a>
+                        <button class="btn btn-primary w-100 plan-action-btn"
+                                data-plan-id="<?= $plan['id'] ?>"
+                                data-plan-slug="<?= $plan['slug'] ?>"
+                                data-plan-name="<?= htmlspecialchars($plan['name']) ?>">
+                            <?= ($currentPlan['id'] ?? 0) > ($plan['id'] ?? 0) ? 'Downgrade to ' : 'Upgrade to ' ?>
+                            <?= htmlspecialchars($plan['name']) ?>
+                        </button>
                     <?php endif; ?>
                 </div>
             </div>
@@ -155,51 +225,287 @@ function limitLabel(mixed $val): string {
         <?php endforeach; ?>
     </div>
 
-    <!-- FAQ Accordion -->
-    <div class="mt-5">
-        <h4 class="fw-bold mb-4 text-center">Frequently Asked Questions</h4>
-        <div class="accordion" id="planFaq">
-            <div class="accordion-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
-                        When does the commission discount take effect?
-                    </button>
-                </h2>
-                <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#planFaq">
-                    <div class="accordion-body">The commission discount takes effect immediately upon upgrading. It applies to all new orders placed after the upgrade.</div>
+    <!-- Feature Comparison Table -->
+    <div class="card mb-5">
+        <div class="card-header bg-light">
+            <h5 class="mb-0 fw-bold"><i class="bi bi-table me-2"></i>Full Feature Comparison</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th width="40%">Feature</th>
+                        <?php foreach ($plans as $p): ?>
+                        <th class="text-center"><?= htmlspecialchars($p['name']) ?></th>
+                        <?php endforeach; ?>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                    $featureRows = [
+                        ['label' => 'Product Slots',          'key' => 'max_products',           'type' => 'limit'],
+                        ['label' => 'Images per Product',     'key' => 'max_images_per_product', 'type' => 'limit'],
+                        ['label' => 'Shipping Templates',     'key' => 'max_shipping_templates', 'type' => 'limit'],
+                        ['label' => 'Dropship Imports/month', 'key' => 'max_dropship_imports',   'type' => 'limit'],
+                        ['label' => 'Featured Listings/month','key' => 'max_featured_listings',  'type' => 'limit'],
+                        ['label' => 'Livestreams/week',       'key' => 'max_livestreams',        'type' => 'limit'],
+                        ['label' => 'Commission Discount',    'key' => 'commission_discount',    'type' => 'pct'],
+                        ['label' => 'Analytics',              'key' => 'analytics',              'type' => 'feat'],
+                        ['label' => 'Support',                'key' => 'support',                'type' => 'feat'],
+                        ['label' => 'API Access',             'key' => 'api_access',             'type' => 'feat'],
+                        ['label' => 'Custom Store',           'key' => 'custom_store',           'type' => 'feat'],
+                        ['label' => 'Custom Domain',          'key' => 'custom_domain',          'type' => 'feat'],
+                        ['label' => 'Dedicated Manager',      'key' => 'dedicated_manager',      'type' => 'feat'],
+                        ['label' => 'Custom Integrations',    'key' => 'custom_integrations',    'type' => 'feat'],
+                    ];
+                    foreach ($featureRows as $row):
+                    ?>
+                    <tr>
+                        <td><?= htmlspecialchars($row['label']) ?></td>
+                        <?php foreach ($plans as $p):
+                            $val = '';
+                            if ($row['type'] === 'limit') {
+                                $v = (int)($p[$row['key']] ?? ($p['limits_decoded'][$row['key']] ?? 0));
+                                $val = $v < 0 ? '<span class="text-success fw-bold">Unlimited</span>' : ($v === 0 ? '<span class="text-muted">—</span>' : '<span class="fw-semibold">' . number_format($v) . '</span>');
+                            } elseif ($row['type'] === 'pct') {
+                                $v = (float)($p['commission_discount'] ?? 0);
+                                $val = $v > 0 ? '<span class="text-success fw-bold">-' . $v . '%</span>' : '<span class="text-muted">0%</span>';
+                            } else {
+                                $feat = $p['features_decoded'] ?? [];
+                                $fv   = $feat[$row['key']] ?? false;
+                                if ($fv === false || $fv === null) {
+                                    $val = '<span class="text-muted">—</span>';
+                                } elseif ($fv === true) {
+                                    $val = '<span class="text-success"><i class="bi bi-check-lg"></i></span>';
+                                } else {
+                                    $labels = [
+                                        'basic'       => 'Basic',
+                                        'advanced'    => 'Advanced',
+                                        'full_ai'     => 'Full AI',
+                                        'community'   => 'Community',
+                                        'priority_email' => 'Priority Email',
+                                        'dedicated_phone_email' => 'Dedicated',
+                                        'basic_api'   => 'Basic',
+                                        'full'        => 'Full',
+                                    ];
+                                    $val = '<span class="text-success"><i class="bi bi-check-lg"></i> ' . htmlspecialchars($labels[$fv] ?? ucfirst((string)$fv)) . '</span>';
+                                }
+                            }
+                        ?>
+                        <td class="text-center"><?= $val ?></td>
+                        <?php endforeach; ?>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Current Usage Summary -->
+    <?php if (($currentPlan['slug'] ?? 'free') !== 'free'): ?>
+    <div class="card mb-5">
+        <div class="card-header bg-light">
+            <h5 class="mb-0 fw-bold"><i class="bi bi-speedometer2 me-2"></i>Your Current Usage</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-4">
+                <?php
+                $usageItems = [
+                    ['label' => 'Products',           'used' => $usage['used_products'],           'max' => $usage['max_products']],
+                    ['label' => 'Shipping Templates',  'used' => $usage['used_shipping_templates'], 'max' => $usage['max_shipping_templates']],
+                    ['label' => 'Dropship Imports',    'used' => $usage['used_dropship_imports'],   'max' => $usage['max_dropship_imports']],
+                    ['label' => 'Featured Listings',   'used' => $usage['used_featured_listings'],  'max' => $usage['max_featured_listings']],
+                ];
+                foreach ($usageItems as $item):
+                    $max  = (int)$item['max'];
+                    $used = (int)$item['used'];
+                    if ($max === 0) continue;
+                    $pct   = $max < 0 ? 0 : min(100, round($used / max(1, $max) * 100));
+                    $color = $pct >= 90 ? 'danger' : ($pct >= 75 ? 'warning' : 'success');
+                ?>
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-between mb-1">
+                        <small class="fw-semibold"><?= htmlspecialchars($item['label']) ?></small>
+                        <small><?= $used ?> / <?= $max < 0 ? '∞' : $max ?></small>
+                    </div>
+                    <div class="progress" style="height:8px">
+                        <div class="progress-bar bg-<?= $color ?>"
+                             role="progressbar"
+                             style="width:<?= $max < 0 ? 10 : $pct ?>%"
+                             aria-valuenow="<?= $used ?>"
+                             aria-valuemin="0"
+                             aria-valuemax="<?= $max < 0 ? $used : $max ?>">
+                        </div>
+                    </div>
                 </div>
+                <?php endforeach; ?>
             </div>
-            <div class="accordion-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
-                        Can I cancel my plan at any time?
-                    </button>
-                </h2>
-                <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#planFaq">
-                    <div class="accordion-body">Yes. You can cancel at any time from the <a href="/pages/supplier/billing.php">billing page</a>. You retain access until the end of the current billing cycle.</div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- FAQ -->
+    <div class="card mb-5">
+        <div class="card-header bg-light">
+            <h5 class="mb-0 fw-bold"><i class="bi bi-question-circle me-2"></i>Frequently Asked Questions</h5>
+        </div>
+        <div class="card-body">
+            <div class="accordion accordion-flush" id="faqAccordion">
+                <?php
+                $faqs = [
+                    ['q' => 'Can I upgrade or downgrade anytime?',
+                     'a' => 'Yes! You can upgrade instantly and the change takes effect immediately. Downgrades take effect at the end of your current billing cycle.'],
+                    ['q' => 'What happens when I upgrade mid-cycle?',
+                     'a' => 'We calculate a prorated credit for the remaining time on your current plan and apply it toward your new plan cost.'],
+                    ['q' => 'What payment methods are accepted?',
+                     'a' => 'We accept all major credit cards (Visa, Mastercard, Amex) via Stripe. Your payment information is handled securely by Stripe.'],
+                    ['q' => 'Can I cancel my subscription?',
+                     'a' => 'Yes. You can cancel anytime. Your plan stays active until the end of the current billing period, then downgrades to Free.'],
+                    ['q' => 'Do duration discounts apply automatically?',
+                     'a' => 'Yes! Choose Quarterly, Semi-Annual, or Annual billing to save 10%, 15%, or 25% respectively. The discount is applied immediately.'],
+                    ['q' => 'Is there a free trial for Pro or Enterprise?',
+                     'a' => 'Contact our sales team about trial options for the Enterprise plan. Pro plan subscribers get full access from day one.'],
+                ];
+                foreach ($faqs as $i => $faq):
+                ?>
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed fw-semibold" type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#faq<?= $i ?>">
+                            <?= htmlspecialchars($faq['q']) ?>
+                        </button>
+                    </h2>
+                    <div id="faq<?= $i ?>" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-muted"><?= htmlspecialchars($faq['a']) ?></div>
+                    </div>
                 </div>
-            </div>
-            <div class="accordion-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
-                        What happens if I exceed my product limit?
-                    </button>
-                </h2>
-                <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#planFaq">
-                    <div class="accordion-body">You won't be able to add new products until you upgrade to a higher plan or remove existing ones.</div>
-                </div>
-            </div>
-            <div class="accordion-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
-                        Is there a free trial for Pro or Enterprise?
-                    </button>
-                </h2>
-                <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#planFaq">
-                    <div class="accordion-body">Contact our support team to discuss trial options for Pro and Enterprise plans.</div>
-                </div>
+                <?php endforeach; ?>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Confirm Plan Modal -->
+<div class="modal fade" id="planConfirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Plan Change</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="planConfirmBody">
+                Loading…
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" action="/api/plans.php" id="planConfirmForm">
+                    <input type="hidden" name="action"   id="planConfirmAction" value="subscribe">
+                    <input type="hidden" name="plan_id"  id="planConfirmPlanId">
+                    <input type="hidden" name="duration" id="planConfirmDuration" value="monthly">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generateCsrfToken()) ?>">
+                    <button type="submit" class="btn btn-primary" id="planConfirmBtn">Confirm</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const currentSlug = <?= json_encode($currentPlan['slug'] ?? 'free') ?>;
+    const pricingData = <?= json_encode(array_map(function($p) {
+        return [
+            'id'           => $p['id'],
+            'slug'         => $p['slug'],
+            'name'         => $p['name'],
+            'price_monthly'=> (float)($p['price_monthly'] ?? $p['price'] ?? 0),
+            'prices'       => [
+                'monthly'     => (float)($p['price_monthly']    ?? $p['price'] ?? 0),
+                'quarterly'   => (float)($p['price_quarterly']  ?? 0),
+                'semi-annual' => (float)($p['price_semi_annual']?? 0),
+                'annual'      => (float)($p['price_annual']     ?? 0),
+            ],
+        ];
+    }, $plans)) ?>;
+
+    const discounts = {
+        'monthly': 0, 'quarterly': 10, 'semi-annual': 15, 'annual': 25
+    };
+
+    // Duration toggle — update prices
+    document.querySelectorAll('input[name="duration"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            const dur = this.value;
+            pricingData.forEach(function (plan) {
+                const priceEl = document.getElementById('price-' + plan.id);
+                const saveEl  = document.getElementById('savings-' + plan.id);
+                if (!priceEl) return;
+                const price = plan.prices[dur] || 0;
+                priceEl.textContent = price === 0 ? '$0' : '$' + price.toFixed(0);
+                if (saveEl) {
+                    if (discounts[dur] > 0 && plan.price_monthly > 0) {
+                        saveEl.classList.remove('d-none');
+                        saveEl.querySelector('.savings-pct').textContent = discounts[dur];
+                    } else {
+                        saveEl.classList.add('d-none');
+                    }
+                }
+            });
+            document.querySelectorAll('.plan-action-btn').forEach(function (btn) {
+                btn.dataset.duration = dur;
+            });
+            document.getElementById('planConfirmDuration').value = dur;
+        });
+    });
+
+    // Plan action buttons
+    document.querySelectorAll('.plan-action-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const planId   = this.dataset.planId;
+            const planSlug = this.dataset.planSlug;
+            const planName = this.dataset.planName;
+            const duration = document.querySelector('input[name="duration"]:checked').value;
+            const disc     = discounts[duration] || 0;
+            const planData = pricingData.find(p => p.id == planId);
+            const price    = planData ? planData.prices[duration] : 0;
+            const total    = planData ? price * ({monthly:1,quarterly:3,'semi-annual':6,annual:12}[duration] || 1) : 0;
+
+            let action = 'subscribe';
+            if (planSlug === 'free') action = 'downgrade';
+            else if (currentSlug !== 'free') action = 'upgrade';
+
+            let bodyHtml = '<p>You are about to <strong>' + (action === 'downgrade' ? 'downgrade to' : 'subscribe to') + '</strong> the <strong>' + planName + '</strong> plan.</p>';
+            if (price > 0) {
+                bodyHtml += '<ul class="list-group list-group-flush">';
+                bodyHtml += '<li class="list-group-item d-flex justify-content-between"><span>Duration</span><strong>' + duration.charAt(0).toUpperCase() + duration.slice(1) + '</strong></li>';
+                bodyHtml += '<li class="list-group-item d-flex justify-content-between"><span>Monthly rate</span><strong>$' + price.toFixed(0) + '/mo</strong></li>';
+                if (disc > 0) bodyHtml += '<li class="list-group-item d-flex justify-content-between text-success"><span>Discount</span><strong>–' + disc + '%</strong></li>';
+                bodyHtml += '<li class="list-group-item d-flex justify-content-between fw-bold"><span>Total charged now</span><span>$' + total.toFixed(2) + '</span></li>';
+                bodyHtml += '</ul>';
+                bodyHtml += '<p class="mt-3 text-muted small">You will be redirected to complete payment securely via Stripe.</p>';
+            } else {
+                bodyHtml += '<p class="text-success">No payment required — Free plan is always $0.</p>';
+            }
+
+            document.getElementById('planConfirmBody').innerHTML  = bodyHtml;
+            document.getElementById('planConfirmAction').value    = action;
+            document.getElementById('planConfirmPlanId').value    = planId;
+            document.getElementById('planConfirmDuration').value  = duration;
+            document.getElementById('planConfirmBtn').textContent = action === 'downgrade' ? 'Confirm Downgrade' : (price > 0 ? 'Proceed to Payment' : 'Confirm');
+
+            const modal = new bootstrap.Modal(document.getElementById('planConfirmModal'));
+            modal.show();
+        });
+    });
+
+    // Handle form submit — redirect to stripe checkout if needed
+    document.getElementById('planConfirmForm').addEventListener('submit', function (e) {
+        const btn  = document.getElementById('planConfirmBtn');
+        btn.disabled = true;
+        btn.textContent = 'Processing…';
+    });
+})();
+</script>
+
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

@@ -756,6 +756,69 @@ foreach ($pr7AdminPages as $f) {
     assertSyntax("$root/$f");
 }
 
+// ── PR #8: Commission Engine ──────────────────────────────────
+echo "\nPR #8 Commission Engine database:\n";
+assertFile("$root/database/schema_v15_commission.sql");
+
+echo "\nPR #8 Commission Engine includes:\n";
+assertFile("$root/includes/commission.php");
+assertSyntax("$root/includes/commission.php");
+
+echo "\nPR #8 Commission API:\n";
+assertFile("$root/api/commission.php");
+assertSyntax("$root/api/commission.php");
+
+echo "\nPR #8 Admin commission pages:\n";
+$pr8AdminPages = [
+    'pages/admin/commission/index.php',
+    'pages/admin/commission/tiers.php',
+    'pages/admin/commission/categories.php',
+];
+foreach ($pr8AdminPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #8 Supplier commission page:\n";
+assertFile("$root/pages/supplier/earnings/commission.php");
+assertSyntax("$root/pages/supplier/earnings/commission.php");
+
+// ── PR #9: Supplier Plans — Free / Pro / Enterprise ──────────
+echo "\nPR #9 Plans database:\n";
+assertFile("$root/database/schema_v15_plans.sql");
+
+echo "\nPR #9 Plans includes:\n";
+$pr9Includes = [
+    'includes/plans.php',
+];
+foreach ($pr9Includes as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #9 Plans API:\n";
+assertFile("$root/api/plans.php");
+assertSyntax("$root/api/plans.php");
+
+echo "\nPR #9 Supplier plan pages:\n";
+$pr9SupplierPages = [
+    'pages/supplier/plans/index.php',
+    'pages/supplier/plans/billing.php',
+    'pages/supplier/plans/upgrade.php',
+];
+foreach ($pr9SupplierPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #9 Admin plan pages:\n";
+assertFile("$root/pages/admin/plans/index.php");
+assertSyntax("$root/pages/admin/plans/index.php");
+
+echo "\nPR #9 Plan limit enforcement:\n";
+assertFile("$root/pages/supplier/product-add.php");
+assertSyntax("$root/pages/supplier/product-add.php");
+
 // ── PR #10: Add-On Purchases & Invoice System ────────────────
 echo "\nPR #10 Add-On & Invoice database:\n";
 assertFile("$root/database/schema_v15_addons.sql");

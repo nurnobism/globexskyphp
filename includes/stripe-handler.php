@@ -14,8 +14,11 @@
  */
 
 // Stripe API version used for all requests
-define('STRIPE_API_VERSION', '2023-10-16');
-define('STRIPE_API_BASE',    'https://api.stripe.com/v1');
+define('STRIPE_API_VERSION',          '2023-10-16');
+define('STRIPE_API_BASE',             'https://api.stripe.com/v1');
+
+// Grace period in days after a subscription payment fails before downgrading
+define('PLAN_PAYMENT_GRACE_PERIOD_DAYS', 3);
 
 // ---------------------------------------------------------------------------
 // Key Management
@@ -392,6 +395,110 @@ function handleWebhook(array $event): array
                     _notifyDispute($db, (int)$row['id']);
                     $result = ['handled' => true, 'action' => 'dispute_flagged', 'order_id' => $row['id']];
                 }
+            }
+            break;
+
+        // ── Subscription Events (PR #9) ──────────────────────────────────
+
+        case 'customer.subscription.created':
+        case 'customer.subscription.updated':
+            $stripeSubId    = $object['id']       ?? '';
+            $stripeStatus   = $object['status']   ?? 'active';
+            $periodEnd      = $object['current_period_end'] ?? null;
+            $cancelAtEnd    = !empty($object['cancel_at_period_end']) ? 1 : 0;
+
+            if ($stripeSubId) {
+                $statusMap = ['active' => 'active', 'trialing' => 'trialing', 'past_due' => 'past_due', 'canceled' => 'cancelled'];
+                $dbStatus  = $statusMap[$stripeStatus] ?? 'active';
+                $endDate   = $periodEnd ? date('Y-m-d H:i:s', $periodEnd) : null;
+
+                try {
+                    $db->prepare(
+                        'UPDATE plan_subscriptions
+                         SET status = ?, cancel_at_period_end = ?, ends_at = ?, current_period_end = ?, updated_at = NOW()
+                         WHERE stripe_subscription_id = ?'
+                    )->execute([$dbStatus, $cancelAtEnd, $endDate, $endDate, $stripeSubId]);
+                } catch (\PDOException $e) { /* ignore */ }
+
+                $result = ['handled' => true, 'action' => $eventType, 'stripe_sub_id' => $stripeSubId];
+            }
+            break;
+
+        case 'customer.subscription.deleted':
+            $stripeSubId = $object['id'] ?? '';
+            if ($stripeSubId) {
+                try {
+                    // Find supplier and downgrade to free
+                    $subStmt = $db->prepare(
+                        'SELECT supplier_id FROM plan_subscriptions WHERE stripe_subscription_id = ? LIMIT 1'
+                    );
+                    $subStmt->execute([$stripeSubId]);
+                    $subRow = $subStmt->fetch();
+
+                    $db->prepare(
+                        'UPDATE plan_subscriptions SET status = "cancelled", cancelled_at = NOW(), updated_at = NOW()
+                         WHERE stripe_subscription_id = ?'
+                    )->execute([$stripeSubId]);
+
+                    if ($subRow) {
+                        // Activate Free plan for supplier
+                        require_once __DIR__ . '/plans.php';
+                        $freePlan = getPlanBySlug('free');
+                        if ($freePlan) {
+                            subscribeToPlan((int)$subRow['supplier_id'], (int)$freePlan['id'], 'monthly');
+                        }
+                    }
+                } catch (\PDOException $e) { /* ignore */ }
+
+                $result = ['handled' => true, 'action' => 'subscription_cancelled', 'stripe_sub_id' => $stripeSubId];
+            }
+            break;
+
+        case 'invoice.payment_succeeded':
+            $stripeInvoiceId = $object['id']           ?? '';
+            $stripeSubId     = $object['subscription'] ?? '';
+            $amountPaid      = (int)($object['amount_paid'] ?? 0);
+            $currency        = strtoupper($object['currency'] ?? 'USD');
+
+            if ($stripeSubId) {
+                try {
+                    $subStmt = $db->prepare(
+                        'SELECT id, supplier_id, plan_id FROM plan_subscriptions
+                         WHERE stripe_subscription_id = ? LIMIT 1'
+                    );
+                    $subStmt->execute([$stripeSubId]);
+                    $subRow = $subStmt->fetch();
+
+                    if ($subRow) {
+                        require_once __DIR__ . '/plans.php';
+                        renewPlan((int)$subRow['supplier_id'], $stripeInvoiceId);
+                    }
+                } catch (\PDOException $e) { /* ignore */ }
+
+                $result = ['handled' => true, 'action' => 'subscription_renewed', 'stripe_invoice_id' => $stripeInvoiceId];
+            }
+            break;
+
+        case 'invoice.payment_failed':
+            $stripeSubId = $object['subscription'] ?? '';
+            if ($stripeSubId) {
+                try {
+                    $db->prepare(
+                        'UPDATE plan_subscriptions SET status = "past_due", updated_at = NOW()
+                         WHERE stripe_subscription_id = ?'
+                    )->execute([$stripeSubId]);
+
+                    // Notify supplier — grace period before downgrade
+                    $graceDays = defined('PLAN_PAYMENT_GRACE_PERIOD_DAYS') ? (int)PLAN_PAYMENT_GRACE_PERIOD_DAYS : 3;
+                    $subStmt = $db->prepare(
+                        "UPDATE plan_subscriptions
+                         SET grace_period_ends_at = DATE_ADD(NOW(), INTERVAL $graceDays DAY)
+                         WHERE stripe_subscription_id = ?"
+                    );
+                    $subStmt->execute([$stripeSubId]);
+                } catch (\PDOException $e) { /* ignore */ }
+
+                $result = ['handled' => true, 'action' => 'payment_failed_subscription', 'stripe_sub_id' => $stripeSubId];
             }
             break;
     }

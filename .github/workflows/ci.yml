@@ -140,6 +140,12 @@ jobs:
           if [ -f database/schema_v14_orders.sql ]; then
             mysql -h 127.0.0.1 -u root -proot globexsky_test < database/schema_v14_orders.sql
           fi
+          if [ -f database/schema_v15_commission.sql ]; then
+            mysql -h 127.0.0.1 -u root -proot globexsky_test < database/schema_v15_commission.sql
+          fi
+          if [ -f database/schema_v15_plans.sql ]; then
+            mysql -h 127.0.0.1 -u root -proot globexsky_test < database/schema_v15_plans.sql
+          fi
           if [ -f database/schema_v15_addons.sql ]; then
             mysql -h 127.0.0.1 -u root -proot globexsky_test < database/schema_v15_addons.sql
           fi
