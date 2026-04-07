@@ -79,5 +79,32 @@ GlobexNotifications.init({
 });
 </script>
 <?php endif; ?>
+<script>
+/**
+ * Global cart & wishlist badge update helpers.
+ * Called after any cart/wishlist AJAX action to keep badges in sync.
+ */
+function updateCartBadge(count) {
+    if (count !== undefined) {
+        document.querySelectorAll('[data-cart-badge]').forEach(function(el) {
+            el.textContent = count > 99 ? '99+' : count;
+            el.setAttribute('aria-label', 'Cart items: ' + (count > 99 ? '99+' : count));
+        });
+        return;
+    }
+    // Fetch current count from API
+    fetch('<?= APP_URL ?>/api/cart.php?action=count')
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (res.count !== undefined) updateCartBadge(res.count);
+        }).catch(function() {});
+}
+function updateWishlistBadge(count) {
+    document.querySelectorAll('[data-wishlist-badge]').forEach(function(el) {
+        el.textContent = count > 99 ? '99+' : count;
+        el.setAttribute('aria-label', 'Wishlist items: ' + (count > 99 ? '99+' : count));
+    });
+}
+</script>
 </body>
 </html>

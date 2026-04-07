@@ -5,6 +5,7 @@ $pageTitle    = $pageTitle ?? APP_NAME;
 $pageDesc     = $pageDesc ?? 'GlobexSky — Global B2B Trade Platform';
 $currentUser  = isLoggedIn() ? getCurrentUser() : null;
 $cartCount    = 0;
+$wishlistCount = 0;
 $notifCount   = 0;
 $chatUnread   = 0;
 if (isLoggedIn()) {
@@ -12,6 +13,11 @@ if (isLoggedIn()) {
         $stmt = getDB()->prepare('SELECT COALESCE(SUM(quantity),0) FROM cart_items WHERE user_id = ?');
         $stmt->execute([$_SESSION['user_id']]);
         $cartCount = (int)$stmt->fetchColumn();
+    } catch (PDOException $e) { /* ignore */ }
+    try {
+        $stmt = getDB()->prepare('SELECT COUNT(*) FROM wishlist_items WHERE user_id = ?');
+        $stmt->execute([$_SESSION['user_id']]);
+        $wishlistCount = (int)$stmt->fetchColumn();
     } catch (PDOException $e) { /* ignore */ }
     try {
         $stmt = getDB()->prepare('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0');
@@ -353,10 +359,23 @@ $fallbackCurrencies = [
                         </a>
                     <?php endif; ?>
 
+                    <!-- Wishlist (logged-in only) -->
+                    <?php if (isLoggedIn()): ?>
+                    <a href="<?= APP_URL ?>/pages/wishlist/index.php" class="gs-icon-btn position-relative" title="Wishlist">
+                        <i class="bi bi-heart fs-5"></i>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                              data-wishlist-badge
+                              aria-label="Wishlist items: <?= $wishlistCount > 99 ? '99+' : $wishlistCount ?>">
+                            <?= $wishlistCount > 99 ? '99+' : $wishlistCount ?>
+                        </span>
+                    </a>
+                    <?php endif; ?>
+
                     <!-- Cart -->
                     <a href="<?= APP_URL ?>/pages/cart/index.php" class="gs-icon-btn position-relative" title="Cart">
                         <i class="bi bi-cart3 fs-5"></i>
                         <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                              data-cart-badge
                               aria-label="Cart items: <?= $cartCount > 99 ? '99+' : $cartCount ?>">
                             <?= $cartCount > 99 ? '99+' : $cartCount ?>
                         </span>

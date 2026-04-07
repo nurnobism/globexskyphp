@@ -71,7 +71,7 @@ assertFile("$root/.htaccess");
 
 // ── Includes ────────────────────────────────────────────────
 echo "\nIncludes:\n";
-foreach (['middleware.php', 'header.php', 'footer.php', 'auth.php', 'functions.php', 'auth_guard.php'] as $f) {
+foreach (['middleware.php', 'header.php', 'footer.php', 'auth.php', 'functions.php', 'auth_guard.php', 'cart.php', 'wishlist.php'] as $f) {
     assertFile("$root/includes/$f");
 }
 

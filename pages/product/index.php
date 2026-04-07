@@ -93,17 +93,32 @@ include __DIR__ . '/../../includes/header.php';
             <?php else: ?>
             <div class="row row-cols-2 row-cols-md-3 g-3">
                 <?php foreach ($products as $p): ?>
+                <?php
+                $images_arr = json_decode($p['images'] ?? '[]', true);
+                $img_src    = !empty($images_arr[0]) ? APP_URL . '/' . $images_arr[0] : 'https://via.placeholder.com/300x200?text=' . urlencode($p['name']);
+                $hasVars    = !empty($p['has_variations']);
+                $inStock    = (int)($p['stock_qty'] ?? 0) > 0;
+                ?>
                 <div class="col">
-                    <div class="card h-100 border-0 shadow-sm product-card">
-                        <a href="/pages/product/detail.php?slug=<?= urlencode($p['slug']) ?>">
-                            <?php $images = json_decode($p['images'] ?? '[]', true); $img = $images[0] ?? null; ?>
-                            <img src="<?= $img ? e(APP_URL . '/' . $img) : 'https://via.placeholder.com/300x200?text=' . urlencode($p['name']) ?>"
+                    <div class="card h-100 border-0 shadow-sm product-card position-relative">
+                        <!-- Wishlist heart icon -->
+                        <?php if (isLoggedIn()): ?>
+                        <button class="btn btn-sm position-absolute top-0 end-0 m-2 p-1 rounded-circle bg-white border wishlist-toggle"
+                                style="width:32px;height:32px;z-index:2"
+                                onclick="quickWishlist(event, <?= (int)$p['id'] ?>, this)"
+                                title="Save to wishlist">
+                            <i class="bi bi-heart text-danger"></i>
+                        </button>
+                        <?php endif; ?>
+
+                        <a href="<?= APP_URL ?>/pages/product/detail.php?slug=<?= urlencode($p['slug']) ?>">
+                            <img src="<?= e($img_src) ?>"
                                  class="card-img-top" style="height:180px;object-fit:cover;" alt="<?= e($p['name']) ?>">
                         </a>
                         <div class="card-body d-flex flex-column">
                             <small class="text-muted"><?= e($p['category_name'] ?? '') ?></small>
                             <h6 class="card-title mt-1 mb-1">
-                                <a href="/pages/product/detail.php?slug=<?= urlencode($p['slug']) ?>" class="text-decoration-none text-dark">
+                                <a href="<?= APP_URL ?>/pages/product/detail.php?slug=<?= urlencode($p['slug']) ?>" class="text-decoration-none text-dark">
                                     <?= e(mb_strimwidth($p['name'], 0, 60, '…')) ?>
                                 </a>
                             </h6>
@@ -119,13 +134,19 @@ include __DIR__ . '/../../includes/header.php';
                                     <span class="fw-bold text-primary fs-5"><?= formatMoney($p['price']) ?></span>
                                     <small class="text-muted">/ <?= e($p['unit'] ?? 'pc') ?></small>
                                 </div>
-                                <form method="POST" action="/api/cart.php?action=add">
-                                    <?= csrfField() ?>
-                                    <input type="hidden" name="product_id" value="<?= $p['id'] ?>">
-                                    <button type="submit" class="btn btn-sm btn-primary">
-                                        <i class="bi bi-cart-plus"></i>
-                                    </button>
-                                </form>
+                                <?php if ($hasVars || !$inStock): ?>
+                                <a href="<?= APP_URL ?>/pages/product/detail.php?slug=<?= urlencode($p['slug']) ?>"
+                                   class="btn btn-sm btn-outline-primary" title="View options">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <?php else: ?>
+                                <button class="btn btn-sm btn-primary quick-add-cart"
+                                        onclick="quickCart(event, <?= (int)$p['id'] ?>, this)"
+                                        title="Quick add to cart"
+                                        <?= $inStock ? '' : 'disabled' ?>>
+                                    <i class="bi bi-cart-plus"></i>
+                                </button>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -149,4 +170,62 @@ include __DIR__ . '/../../includes/header.php';
         </div>
     </div>
 </div>
+
+<script>
+const _BROWSE_CSRF     = '<?= e(csrfToken()) ?>';
+const _BROWSE_CART_API = '<?= APP_URL ?>/api/cart.php';
+const _BROWSE_WISH_API = '<?= APP_URL ?>/api/wishlist.php';
+
+function quickCart(e, productId, btn) {
+    e.preventDefault();
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    const body = new URLSearchParams({ _csrf_token: _BROWSE_CSRF, product_id: productId, quantity: 1 });
+    fetch(`${_BROWSE_CART_API}?action=add`, { method: 'POST', body })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                btn.innerHTML = '<i class="bi bi-check-circle"></i>';
+                btn.classList.replace('btn-primary', 'btn-success');
+                if (typeof updateCartBadge === 'function') updateCartBadge(res.count);
+                setTimeout(() => { btn.innerHTML = orig; btn.classList.replace('btn-success', 'btn-primary'); btn.disabled = false; }, 1500);
+            } else {
+                alert(res.message || 'Could not add to cart.');
+                btn.innerHTML = orig;
+                btn.disabled = false;
+            }
+        })
+        .catch(() => { btn.innerHTML = orig; btn.disabled = false; alert('Network error.'); });
+}
+
+function quickWishlist(e, productId, btn) {
+    e.preventDefault();
+    const icon = btn.querySelector('i');
+    const inList = icon.classList.contains('bi-heart-fill');
+    const action = inList ? 'remove' : 'add';
+    const body   = new URLSearchParams({ _csrf_token: _BROWSE_CSRF, product_id: productId });
+
+    btn.disabled = true;
+    fetch(`${_BROWSE_WISH_API}?action=${action}`, { method: 'POST', body })
+        .then(r => r.json())
+        .then(res => {
+            btn.disabled = false;
+            if (res.success) {
+                if (action === 'add') {
+                    icon.classList.replace('bi-heart', 'bi-heart-fill');
+                } else {
+                    icon.classList.replace('bi-heart-fill', 'bi-heart');
+                }
+                if (typeof updateWishlistBadge === 'function' && res.count !== undefined) {
+                    updateWishlistBadge(res.count);
+                }
+            } else {
+                alert(res.message || 'Could not update wishlist.');
+            }
+        })
+        .catch(() => { btn.disabled = false; });
+}
+</script>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
