@@ -42,7 +42,7 @@ if ($downloadId > 0) {
 
     if ($inv) {
         header('Content-Type: text/plain');
-        header('Content-Disposition: attachment; filename="invoice-' . htmlspecialchars($inv['invoice_number']) . '.txt"');
+        header('Content-Disposition: attachment; filename="invoice-' . preg_replace('/[^A-Za-z0-9\-]/', '', $inv['invoice_number']) . '.txt"');
         echo "GlobexSky Invoice\n";
         echo str_repeat('=', 40) . "\n";
         echo "Invoice #: " . $inv['invoice_number'] . "\n";

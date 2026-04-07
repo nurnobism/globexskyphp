@@ -25,8 +25,6 @@ include __DIR__ . '/../../includes/header.php';
 
 function fmtPrice(float $price, string $duration = 'monthly'): string {
     if ($price == 0) return '$0';
-    $months = PLAN_DURATION_MONTHS[$duration] ?? 1;
-    $total  = round($price * $months, 2);
     return '$' . number_format($price, 0) . '/mo';
 }
 

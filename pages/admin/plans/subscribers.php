@@ -149,7 +149,11 @@ include __DIR__ . '/../../../includes/header.php';
                             <div class="text-muted small"><?= htmlspecialchars($sub['email'] ?? '') ?></div>
                         </td>
                         <td>
-                            <span class="badge bg-<?= ['free' => 'secondary', 'pro' => 'primary', 'enterprise' => 'warning text-dark'][$sub['plan_slug'] ?? ''] ?? 'info' ?>">
+                            <?php
+                            $planBadgeMap = ['free' => ['bg' => 'secondary', 'extra' => ''], 'pro' => ['bg' => 'primary', 'extra' => ''], 'enterprise' => ['bg' => 'warning', 'extra' => ' text-dark']];
+                            $planBadge = $planBadgeMap[$sub['plan_slug'] ?? ''] ?? ['bg' => 'info', 'extra' => ''];
+                            ?>
+                            <span class="badge bg-<?= $planBadge['bg'] ?><?= $planBadge['extra'] ?>">
                                 <?= htmlspecialchars($sub['plan_name'] ?? '') ?>
                             </span>
                         </td>

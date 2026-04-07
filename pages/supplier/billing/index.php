@@ -146,11 +146,11 @@ function usageColor(int $pct): string {
                 <div class="card-body">
                     <?php
                     $meters = [
-                        ['label' => 'Products',            'used' => $usage['used_products'],           'max' => $usage['max_products'],           'icon' => 'bi-box-seam'],
-                        ['label' => 'Shipping Templates',  'used' => $usage['used_shipping_templates'], 'max' => $usage['max_shipping_templates'],  'icon' => 'bi-truck'],
-                        ['label' => 'Dropship Imports/mo', 'used' => $usage['used_dropship_imports'],   'max' => $usage['max_dropship_imports'],    'icon' => 'bi-arrow-left-right'],
-                        ['label' => 'Featured Listings/mo','used' => $usage['used_featured_listings'],  'max' => $usage['max_featured_listings'],   'icon' => 'bi-star'],
-                        ['label' => 'Livestreams/week',    'used' => $usage['used_livestreams'],        'max' => $usage['max_livestreams'],         'icon' => 'bi-camera-video'],
+                        ['label' => 'Products',            'used' => $usage['used_products'],           'max' => $usage['max_products'],           'icon' => 'bi-box-seam',        'limitKey' => 'max_products'],
+                        ['label' => 'Shipping Templates',  'used' => $usage['used_shipping_templates'], 'max' => $usage['max_shipping_templates'],  'icon' => 'bi-truck',           'limitKey' => 'max_shipping_templates'],
+                        ['label' => 'Dropship Imports/mo', 'used' => $usage['used_dropship_imports'],   'max' => $usage['max_dropship_imports'],    'icon' => 'bi-arrow-left-right','limitKey' => 'max_dropship_imports'],
+                        ['label' => 'Featured Listings/mo','used' => $usage['used_featured_listings'],  'max' => $usage['max_featured_listings'],   'icon' => 'bi-star',            'limitKey' => 'max_featured_listings'],
+                        ['label' => 'Livestreams/week',    'used' => $usage['used_livestreams'],        'max' => $usage['max_livestreams'],         'icon' => 'bi-camera-video',    'limitKey' => 'max_livestreams'],
                     ];
                     foreach ($meters as $m):
                         $max  = (int)$m['max'];
@@ -181,7 +181,7 @@ function usageColor(int $pct): string {
                         <?php if ($pct >= 90 && $max > 0): ?>
                         <small class="text-danger">
                             <i class="bi bi-exclamation-triangle me-1"></i>
-                            <?= htmlspecialchars(getUpgradePrompt($supplierId, 'max_' . strtolower(str_replace(['/mo', '/week', ' '], ['', '', '_'], $m['label'])))) ?>
+                            <?= htmlspecialchars(getUpgradePrompt($supplierId, $m['limitKey'])) ?>
                         </small>
                         <?php endif; ?>
                     </div>

@@ -286,7 +286,7 @@ function subscribeToPlan(int $supplierId, int $planId, string $duration = 'month
 
         $stripeSubId = null;
         if ($stripePaymentMethodId) {
-            $stripeSub   = _createStripeSubscription($stripeCustomerId, $plan, $duration, $stripePaymentMethodId);
+            $stripeSub   = _createStripeSubscription($stripeCustomerId, $plan, $duration, $stripePaymentMethodId, $supplierId);
             $stripeSubId = $stripeSub['id'] ?? null;
         }
 
@@ -586,7 +586,7 @@ function getPlanUsage(int $supplierId): array
 
     $usedDropshipImports = 0;
     try {
-        $stmt = $db->prepare('SELECT COUNT(*) FROM dropship_product_imports WHERE dropshipper_id = ? AND created_at >= DATE_FORMAT(NOW(), "%Y-%m-01")');
+        $stmt = $db->prepare("SELECT COUNT(*) FROM dropship_product_imports WHERE dropshipper_id = ? AND created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')");
         $stmt->execute([$supplierId]);
         $usedDropshipImports = (int)$stmt->fetchColumn();
     } catch (PDOException $e) { /* ignore */ }
@@ -924,7 +924,7 @@ function _getOrCreateStripeCustomer(int $supplierId, \PDO $db): string
 /**
  * Create a Stripe subscription (for direct API subscription flow).
  */
-function _createStripeSubscription(string $customerId, array $plan, string $duration, string $paymentMethodId): array
+function _createStripeSubscription(string $customerId, array $plan, string $duration, string $paymentMethodId, int $supplierId = 0): array
 {
     $priceIdKey = 'stripe_price_id';
     if ($duration === 'quarterly')    $priceIdKey = 'stripe_price_id_quarterly';
@@ -948,9 +948,9 @@ function _createStripeSubscription(string $customerId, array $plan, string $dura
 
     // Create subscription
     return _stripeCurl('POST', '/subscriptions', [
-        'customer'  => $customerId,
-        'items[0][price]' => $priceId,
-        'metadata[supplier_id]' => '',
+        'customer'              => $customerId,
+        'items[0][price]'       => $priceId,
+        'metadata[supplier_id]' => $supplierId,
     ]);
 }
 

@@ -14,8 +14,11 @@
  */
 
 // Stripe API version used for all requests
-define('STRIPE_API_VERSION', '2023-10-16');
-define('STRIPE_API_BASE',    'https://api.stripe.com/v1');
+define('STRIPE_API_VERSION',          '2023-10-16');
+define('STRIPE_API_BASE',             'https://api.stripe.com/v1');
+
+// Grace period in days after a subscription payment fails before downgrading
+define('PLAN_PAYMENT_GRACE_PERIOD_DAYS', 3);
 
 // ---------------------------------------------------------------------------
 // Key Management
@@ -485,11 +488,12 @@ function handleWebhook(array $event): array
                          WHERE stripe_subscription_id = ?'
                     )->execute([$stripeSubId]);
 
-                    // Notify supplier — grace period of 3 days before downgrade
+                    // Notify supplier — grace period before downgrade
+                    $graceDays = defined('PLAN_PAYMENT_GRACE_PERIOD_DAYS') ? (int)PLAN_PAYMENT_GRACE_PERIOD_DAYS : 3;
                     $subStmt = $db->prepare(
-                        'UPDATE plan_subscriptions
-                         SET grace_period_ends_at = DATE_ADD(NOW(), INTERVAL 3 DAY)
-                         WHERE stripe_subscription_id = ?'
+                        "UPDATE plan_subscriptions
+                         SET grace_period_ends_at = DATE_ADD(NOW(), INTERVAL $graceDays DAY)
+                         WHERE stripe_subscription_id = ?"
                     );
                     $subStmt->execute([$stripeSubId]);
                 } catch (\PDOException $e) { /* ignore */ }
