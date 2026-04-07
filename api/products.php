@@ -1,13 +1,30 @@
 <?php
 /**
  * api/products.php — Products API
- * GET  ?action=list|detail|search|featured|categories
- * POST ?action=create|update|delete (supplier/admin only)
+ *
+ * Public (GET):
+ *   action=list          — Browse/filter products
+ *   action=get           — Single product detail (alias: detail)
+ *   action=featured      — Featured products
+ *   action=categories    — Category list with product counts
+ *
+ * Supplier (POST, auth required):
+ *   action=create        — Create product (plan limit checked)
+ *   action=update        — Update own product
+ *   action=delete        — Soft-delete own product (status → archived)
+ *   action=my_products   — Supplier's own product list (alias: list_mine)
+ *   action=upload_image  — Upload product image (plan limit checked)
+ *   action=delete_image  — Delete product image
+ *
+ * Admin (POST, admin auth required):
+ *   action=update_status — Approve / reject / suspend products
+ *                          (alias: toggle_status)
  */
 
 require_once __DIR__ . '/../includes/middleware.php';
 require_once __DIR__ . '/../includes/plan_limits.php';
 require_once __DIR__ . '/../includes/feature_toggles.php';
+require_once __DIR__ . '/../includes/products.php';
 
 $action = $_GET['action'] ?? 'list';
 $method = $_SERVER['REQUEST_METHOD'];
@@ -16,6 +33,7 @@ $db = getDB();
 
 switch ($action) {
 
+    // ── public: list products ───────────────────────────────────────────
     case 'list':
         $page     = max(1, (int)get('page', 1));
         $category = get('category', '');
@@ -56,6 +74,8 @@ switch ($action) {
         jsonResponse($result);
         break;
 
+    // ── public: single product (alias: get) ────────────────────────────
+    case 'get':
     case 'detail':
         $id   = (int)get('id', 0);
         $slug = get('slug', '');
@@ -211,6 +231,14 @@ switch ($action) {
         } else {
             $id = (int)post('id', 0);
             if (!$id) jsonResponse(['error' => 'Product ID required'], 400);
+            // Ownership check — supplier may only edit own products
+            if (!isAdmin()) {
+                $ownerCheck = $db->prepare('SELECT id FROM products WHERE id = ? AND supplier_id = ?');
+                $ownerCheck->execute([$id, $supplierId]);
+                if (!$ownerCheck->fetch()) {
+                    jsonResponse(['error' => 'Product not found or access denied'], 403);
+                }
+            }
             $db->prepare(
                 'UPDATE products SET category_id=?, name=?, short_desc=?, description=?, price=?, min_order_qty=?, stock_qty=?, weight=?, tags=?, status=?, updated_at=NOW() WHERE id=?'
             )->execute([$category ?: null, $name, $shortDesc, $desc, $price, $minQty, $stock, $weight, $tags, $status, $id]);
@@ -218,17 +246,36 @@ switch ($action) {
         }
         break;
 
+    // ── supplier/admin: soft-delete a product ──────────────────────────
     case 'delete':
         if (!isLoggedIn()) jsonResponse(['error' => 'Unauthorized'], 401);
-        if (!isAdmin())    jsonResponse(['error' => 'Forbidden'], 403);
         if (!verifyCsrf()) jsonResponse(['error' => 'Invalid CSRF token'], 403);
+        if ($method !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
 
         $id = (int)post('id', 0);
         if (!$id) jsonResponse(['error' => 'Product ID required'], 400);
-        $db->prepare('UPDATE products SET status = "archived" WHERE id = ?')->execute([$id]);
+
+        if (isAdmin()) {
+            // Admin can delete any product
+            $db->prepare('UPDATE products SET status = "archived", updated_at = NOW() WHERE id = ?')->execute([$id]);
+        } else {
+            // Supplier can only delete their own product
+            $suppStmt = $db->prepare('SELECT id FROM suppliers WHERE user_id = ?');
+            $suppStmt->execute([$_SESSION['user_id']]);
+            $supplier = $suppStmt->fetch();
+            if (!$supplier) jsonResponse(['error' => 'Supplier account required'], 403);
+
+            $ownerCheck = $db->prepare('SELECT id FROM products WHERE id = ? AND supplier_id = ?');
+            $ownerCheck->execute([$id, $supplier['id']]);
+            if (!$ownerCheck->fetch()) jsonResponse(['error' => 'Product not found or access denied'], 403);
+
+            $db->prepare('UPDATE products SET status = "archived", updated_at = NOW() WHERE id = ?')->execute([$id]);
+        }
         jsonResponse(['success' => true]);
         break;
 
+    // ── supplier: own product list (alias: my_products) ────────────────
+    case 'my_products':
     case 'list_mine':
         if (!isLoggedIn()) jsonResponse(['error' => 'Unauthorized'], 401);
         $suppStmt = $db->prepare('SELECT id FROM suppliers WHERE user_id = ?');
@@ -278,6 +325,8 @@ switch ($action) {
         jsonResponse(['success' => true, 'url' => APP_URL . '/' . $path, 'path' => $path]);
         break;
 
+    // ── admin: update product status ────────────────────────────────────
+    case 'update_status':
     case 'toggle_status':
         if (!isLoggedIn()) jsonResponse(['error' => 'Unauthorized'], 401);
         if (!isAdmin())    jsonResponse(['error' => 'Forbidden'], 403);
@@ -293,6 +342,32 @@ switch ($action) {
 
         $db->prepare('UPDATE products SET status = ?, updated_at = NOW() WHERE id = ?')->execute([$newStatus, $id]);
         jsonResponse(['success' => true, 'id' => $id, 'status' => $newStatus]);
+        break;
+
+    // ── supplier/admin: delete a product image ──────────────────────────
+    case 'delete_image':
+        if (!isLoggedIn()) jsonResponse(['error' => 'Unauthorized'], 401);
+        if (!verifyCsrf()) jsonResponse(['error' => 'Invalid CSRF token'], 403);
+        if ($method !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
+
+        $imageId = (int)post('image_id', 0);
+        if (!$imageId) jsonResponse(['error' => 'Image ID required'], 400);
+
+        $supplierId = 0; // admin context by default
+        if (!isAdmin()) {
+            $suppStmt = $db->prepare('SELECT id FROM suppliers WHERE user_id = ?');
+            $suppStmt->execute([$_SESSION['user_id']]);
+            $supplier = $suppStmt->fetch();
+            if (!$supplier) jsonResponse(['error' => 'Supplier account required'], 403);
+            $supplierId = (int)$supplier['id'];
+        }
+
+        try {
+            deleteProductImage($imageId, $supplierId);
+            jsonResponse(['success' => true]);
+        } catch (RuntimeException $e) {
+            jsonResponse(['error' => $e->getMessage()], 403);
+        }
         break;
 
     default:
