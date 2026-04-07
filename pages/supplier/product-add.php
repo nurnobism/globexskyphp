@@ -119,8 +119,11 @@ include __DIR__ . '/../../includes/header.php';
             <div class="col-lg-4">
                 <div class="card border-0 shadow-sm sticky-top" style="top:80px">
                     <div class="card-body">
-                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                        <button type="submit" class="btn btn-primary w-100 mb-2" name="_redirect" value="edit">
                             <i class="bi bi-check-circle me-1"></i> Save Product
+                        </button>
+                        <button type="submit" class="btn btn-outline-primary w-100 mb-2" name="_redirect" value="variations">
+                            <i class="bi bi-layers me-1"></i> Save &amp; Add Variations
                         </button>
                         <a href="/pages/supplier/products.php" class="btn btn-outline-secondary w-100">Cancel</a>
                         <hr>
@@ -135,7 +138,8 @@ include __DIR__ . '/../../includes/header.php';
 <script>
 document.getElementById('productForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    const btn = this.querySelector('[type=submit]');
+    const btn = e.submitter || this.querySelector('[type=submit]');
+    const redirect = btn.value || 'edit';
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
     const formData = new FormData(this);
@@ -143,16 +147,24 @@ document.getElementById('productForm').addEventListener('submit', async function
         const res = await fetch(this.action, { method: 'POST', body: formData });
         const data = await res.json();
         if (data.success) {
-            window.location.href = '/pages/supplier/product-edit.php?id=' + data.id + '&created=1';
+            if (redirect === 'variations') {
+                window.location.href = '/pages/supplier/products/variations.php?product_id=' + data.id;
+            } else {
+                window.location.href = '/pages/supplier/product-edit.php?id=' + data.id + '&created=1';
+            }
         } else {
             document.getElementById('formAlert').innerHTML = '<div class="alert alert-danger">' + (data.error || 'Failed to save product.') + '</div>';
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save Product';
+            btn.innerHTML = btn.value === 'variations'
+                ? '<i class="bi bi-layers me-1"></i> Save &amp; Add Variations'
+                : '<i class="bi bi-check-circle me-1"></i> Save Product';
         }
     } catch (err) {
         document.getElementById('formAlert').innerHTML = '<div class="alert alert-danger">Network error. Please try again.</div>';
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save Product';
+        btn.innerHTML = btn.value === 'variations'
+            ? '<i class="bi bi-layers me-1"></i> Save &amp; Add Variations'
+            : '<i class="bi bi-check-circle me-1"></i> Save Product';
     }
 });
 </script>
