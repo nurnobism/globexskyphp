@@ -6,6 +6,8 @@
  */
 
 require_once __DIR__ . '/../includes/middleware.php';
+require_once __DIR__ . '/../includes/plan_limits.php';
+require_once __DIR__ . '/../includes/feature_toggles.php';
 
 $action = $_GET['action'] ?? 'list';
 $method = $_SERVER['REQUEST_METHOD'];
@@ -110,20 +112,46 @@ switch ($action) {
         if (!verifyCsrf())   jsonResponse(['error' => 'Invalid CSRF token'], 403);
         if ($method !== 'POST') jsonResponse(['error' => 'Method not allowed'], 405);
 
+        // Feature toggle check
+        if (!isFeatureEnabled('product_listing')) {
+            jsonResponse(['error' => 'Product listing is currently disabled by platform administrators.'], 503);
+        }
+
         // Supplier or admin
         $suppStmt = $db->prepare('SELECT id FROM suppliers WHERE user_id = ?');
         $suppStmt->execute([$_SESSION['user_id']]);
         $supplier = $suppStmt->fetch();
         if (!$supplier && !isAdmin()) jsonResponse(['error' => 'Supplier account required'], 403);
 
-        $name     = trim(post('name', ''));
-        $price    = (float)post('price', 0);
-        $category = (int)post('category_id', 0);
-        $desc     = post('description', '');
-        $shortDesc= post('short_desc', '');
-        $status   = in_array(post('status'), ['active','draft','inactive']) ? post('status') : 'draft';
-        $minQty   = max(1, (int)post('min_order_qty', 1));
-        $stock    = max(0, (int)post('stock_qty', 0));
+        $supplierId = (int)($supplier['id'] ?? 0);
+
+        // Plan limit check (create only)
+        if ($action === 'create' && !canAddProduct($supplierId)) {
+            $plan = getSupplierPlan($supplierId);
+            $limit = (int)($plan['limits_decoded']['products'] ?? 10);
+            jsonResponse(['error' => "Product limit reached ({$limit} products on {$plan['name']} plan). Please upgrade your plan."], 403);
+        }
+
+        $name      = trim(post('name', ''));
+        $price     = (float)post('price', 0);
+        $category  = (int)post('category_id', 0);
+        $desc      = post('description', '');
+        $shortDesc = post('short_desc', '');
+        $status    = in_array(post('status'), ['active','draft','inactive']) ? post('status') : 'draft';
+        $minQty    = max(1, (int)post('min_order_qty', 1));
+        $stock     = max(0, (int)post('stock_qty', 0));
+        $weight    = post('weight', null);
+        $weight    = ($weight !== null && $weight !== '') ? (float)$weight : null;
+
+        // Extra fields from multi-step form
+        $tagsJson       = post('tags', null);
+        $tags           = null;
+        if ($tagsJson !== null) {
+            $parsed = json_decode($tagsJson, true);
+            $tags   = is_array($parsed) ? json_encode(array_slice($parsed, 0, 10)) : null;
+        }
+        $variationsJson = post('variations', null);
+        $skusJson       = post('skus', null);
 
         if (empty($name) || $price < 0) jsonResponse(['error' => 'Name and valid price required'], 422);
 
@@ -139,16 +167,53 @@ switch ($action) {
                 if (!$s->fetch()) break;
                 $slug = $baseSlug . '-' . $i++;
             }
-            $db->prepare('INSERT INTO products (supplier_id, category_id, name, slug, short_desc, description, price, min_order_qty, stock_qty, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-                ->execute([$supplier['id'] ?? 0, $category ?: null, $name, $slug, $shortDesc, $desc, $price, $minQty, $stock, $status]);
-            $id = $db->lastInsertId();
+            $db->prepare(
+                'INSERT INTO products (supplier_id, category_id, name, slug, short_desc, description, price, min_order_qty, stock_qty, weight, tags, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            )->execute([$supplierId, $category ?: null, $name, $slug, $shortDesc, $desc, $price, $minQty, $stock, $weight, $tags, $status]);
+            $id = (int)$db->lastInsertId();
+
+            // Save variations and SKUs
+            if ($variationsJson) {
+                $variations = json_decode($variationsJson, true);
+                if (is_array($variations)) {
+                    foreach ($variations as $vi => $varType) {
+                        $vName = trim($varType['name'] ?? '');
+                        if (!$vName) continue;
+                        $db->prepare('INSERT INTO product_variations (product_id, name, sort_order) VALUES (?, ?, ?)')
+                           ->execute([$id, $vName, $vi]);
+                        $varId = (int)$db->lastInsertId();
+                        foreach (($varType['values'] ?? []) as $vj => $val) {
+                            $val = trim($val);
+                            if (!$val) continue;
+                            $db->prepare('INSERT INTO product_variation_options (variation_id, value, sort_order) VALUES (?, ?, ?)')
+                               ->execute([$varId, $val, $vj]);
+                        }
+                    }
+                }
+            }
+
+            if ($skusJson) {
+                $skus = json_decode($skusJson, true);
+                if (is_array($skus)) {
+                    foreach ($skus as $sku) {
+                        $skuCode  = trim($sku['sku_code'] ?? '');
+                        $skuPrice = (isset($sku['price']) && $sku['price'] !== null) ? (float)$sku['price'] : $price;
+                        $skuStock = max(0, (int)($sku['stock'] ?? 0));
+                        $attrs    = isset($sku['attributes']) ? json_encode($sku['attributes']) : null;
+                        $db->prepare('INSERT INTO product_variants (product_id, sku, attributes, price, stock_qty) VALUES (?, ?, ?, ?, ?)')
+                           ->execute([$id, $skuCode ?: null, $attrs, $skuPrice, $skuStock]);
+                    }
+                }
+            }
+
             jsonResponse(['success' => true, 'id' => $id, 'slug' => $slug]);
         } else {
             $id = (int)post('id', 0);
             if (!$id) jsonResponse(['error' => 'Product ID required'], 400);
-            $db->prepare('UPDATE products SET category_id=?, name=?, short_desc=?, description=?, price=?, min_order_qty=?, stock_qty=?, status=?, updated_at=NOW() WHERE id=?')
-               ->execute([$category ?: null, $name, $shortDesc, $desc, $price, $minQty, $stock, $status, $id]);
+            $db->prepare(
+                'UPDATE products SET category_id=?, name=?, short_desc=?, description=?, price=?, min_order_qty=?, stock_qty=?, weight=?, tags=?, status=?, updated_at=NOW() WHERE id=?'
+            )->execute([$category ?: null, $name, $shortDesc, $desc, $price, $minQty, $stock, $weight, $tags, $status, $id]);
             jsonResponse(['success' => true]);
         }
         break;
