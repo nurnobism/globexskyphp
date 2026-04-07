@@ -16,6 +16,7 @@
 
 require_once __DIR__ . '/../includes/middleware.php';
 require_once __DIR__ . '/../includes/plan_limits.php';
+require_once __DIR__ . '/../includes/plans.php';
 
 header('Content-Type: application/json');
 
@@ -225,6 +226,39 @@ switch ($action) {
         }
 
         plansJson(['success' => true, 'received' => $eventType]);
+
+    // ── Billing history ───────────────────────────────────────────────
+    case 'billing_history':
+        requireLogin();
+        $supplierId = isAdmin() ? (int)($_GET['supplier_id'] ?? $_SESSION['user_id']) : $_SESSION['user_id'];
+        $page   = max(1, (int)($_GET['page'] ?? 1));
+        $limit  = 20;
+        $offset = ($page - 1) * $limit;
+        $history = getPlanBillingHistory($supplierId, $limit, $offset);
+        plansJson(['success' => true, 'data' => $history]);
+
+    // ── Admin: manually set supplier plan ────────────────────────────
+    case 'admin_update':
+        requireLogin();
+        requireAdmin();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') plansJson(['error' => 'POST required'], 405);
+        if (!verifyCsrf()) plansJson(['error' => 'Invalid CSRF token'], 403);
+
+        $supplierId    = (int)($_POST['supplier_id'] ?? 0);
+        $planSlug      = $_POST['plan_slug'] ?? '';
+        $billingPeriod = in_array($_POST['billing_period'] ?? '', ['monthly','quarterly','semi_annual','annual'])
+            ? $_POST['billing_period']
+            : 'monthly';
+
+        if ($supplierId <= 0 || $planSlug === '') {
+            plansJson(['error' => 'supplier_id and plan_slug are required'], 400);
+        }
+
+        $result = adminSetSupplierPlan($supplierId, $planSlug, $billingPeriod);
+        if ($result['success']) {
+            plansJson(['success' => true, 'message' => $result['message']]);
+        }
+        plansJson(['error' => $result['message']], 500);
 
     default:
         plansJson(['error' => 'Invalid action'], 400);

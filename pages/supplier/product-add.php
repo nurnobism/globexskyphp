@@ -3,6 +3,7 @@
  * pages/supplier/product-add.php — Add New Product
  */
 require_once __DIR__ . '/../../includes/middleware.php';
+require_once __DIR__ . '/../../includes/plans.php';
 requireRole(['supplier', 'admin', 'super_admin']);
 
 $db = getDB();
@@ -16,6 +17,19 @@ if (!$supplier && !isAdmin()) {
     redirect('/pages/supplier/dashboard.php');
 }
 
+$supplierId  = (int)($supplier['id'] ?? 0);
+$planLimitOk = true;
+$planLimitMsg = '';
+
+// Check product plan limit before showing the form
+if ($supplierId > 0 && !isAdmin()) {
+    $limitCheck = checkPlanLimit($supplierId, 'max_products');
+    if (!$limitCheck['allowed']) {
+        $planLimitOk  = false;
+        $planLimitMsg = $limitCheck['upgrade_message'] ?? 'Product limit reached. Please upgrade your plan.';
+    }
+}
+
 $categories = $db->query('SELECT id, name FROM categories WHERE is_active = 1 ORDER BY sort_order, name')->fetchAll();
 
 $pageTitle = 'Add New Product';
@@ -27,8 +41,22 @@ include __DIR__ . '/../../includes/header.php';
         <a href="/pages/supplier/products.php" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i> Back to Products</a>
     </div>
 
+    <?php if (!$planLimitOk): ?>
+    <div class="alert alert-warning d-flex align-items-start gap-3">
+        <i class="bi bi-exclamation-triangle-fill fs-4 mt-1 flex-shrink-0"></i>
+        <div>
+            <strong>Product Limit Reached</strong><br>
+            <?= htmlspecialchars($planLimitMsg) ?><br>
+            <a href="/pages/supplier/plans/index.php" class="btn btn-primary btn-sm mt-2">
+                <i class="bi bi-arrow-up-circle me-1"></i> Upgrade Plan
+            </a>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <div id="formAlert"></div>
 
+    <?php if ($planLimitOk): ?>
     <form id="productForm" method="POST" action="/api/products.php?action=create" enctype="multipart/form-data">
         <?= csrfField() ?>
 
@@ -168,4 +196,5 @@ document.getElementById('productForm').addEventListener('submit', async function
     }
 });
 </script>
+<?php endif; // planLimitOk ?>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
