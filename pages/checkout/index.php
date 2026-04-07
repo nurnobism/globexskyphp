@@ -251,6 +251,34 @@ include __DIR__ . '/../../includes/header.php';
                     </div>
                 </div>
                 <p class="text-muted small"><i class="bi bi-pencil me-1"></i><a href="/pages/cart/index.php">Edit cart</a></p>
+
+                <!-- Coupon Input Section -->
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-body py-3">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <h6 class="mb-0 fw-semibold"><i class="bi bi-tag text-success me-1"></i>Coupon Code</h6>
+                            <button type="button" class="btn btn-link btn-sm p-0 text-muted" onclick="loadAvailableCoupons()" data-bs-toggle="modal" data-bs-target="#availableCouponsModal">
+                                View Available Coupons
+                            </button>
+                        </div>
+                        <div id="couponAppliedBadge" class="d-none mb-2">
+                            <span class="badge bg-success fs-6 py-2 px-3">
+                                <i class="bi bi-check-circle me-1"></i>
+                                <span id="couponAppliedCode"></span>
+                                <button type="button" class="btn-close btn-close-white btn-sm ms-2" aria-label="Remove" onclick="removeCoupon()"></button>
+                            </span>
+                        </div>
+                        <div id="couponInputRow" class="input-group">
+                            <input type="text" id="couponCodeInput" class="form-control text-uppercase"
+                                   placeholder="Enter coupon code" maxlength="50">
+                            <button type="button" class="btn btn-outline-success" id="couponApplyBtn" onclick="applyCouponCode()">
+                                Apply
+                            </button>
+                        </div>
+                        <div id="couponMsg" class="mt-2 small"></div>
+                    </div>
+                </div>
+
                 <div class="d-flex justify-content-between">
                     <button type="button" class="btn btn-outline-secondary" onclick="goToStep(1)">
                         <i class="bi bi-arrow-left me-1"></i> Back
@@ -416,6 +444,8 @@ include __DIR__ . '/../../includes/header.php';
                         <dl class="row mb-0 small">
                             <dt class="col-6">Subtotal</dt>
                             <dd class="col-6 text-end" id="sumSubtotal"><?= formatMoney($totals['subtotal']) ?></dd>
+                            <dt class="col-6 text-success d-none" id="couponLabelRow">Coupon (<span id="sumCouponCode"></span>) <button type="button" class="btn btn-link btn-sm p-0 text-danger" onclick="removeCoupon()"><i class="bi bi-x-circle"></i></button></dt>
+                            <dd class="col-6 text-end text-success d-none" id="sumCouponRow">-<span id="sumCouponAmt">$0.00</span></dd>
                             <dt class="col-6">Shipping</dt>
                             <dd class="col-6 text-end" id="sumShipping">
                                 <?= $totals['shipping'] > 0 ? formatMoney($totals['shipping']) : '<span class="text-success">Free</span>' ?>
@@ -440,6 +470,21 @@ include __DIR__ . '/../../includes/header.php';
 
     </div><!-- /row -->
 </div><!-- /container -->
+
+<!-- Available Coupons Modal -->
+<div class="modal fade" id="availableCouponsModal" tabindex="-1" aria-labelledby="availableCouponsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="availableCouponsModalLabel"><i class="bi bi-tags me-2 text-success"></i>Available Coupons</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="availableCouponsBody">
+                <div class="text-center py-4"><div class="spinner-border text-success" role="status"></div></div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <?php if ($stripePublishableKey): ?>
 <script src="https://js.stripe.com/v3/"></script>
@@ -810,6 +855,118 @@ function escHtml(s) {
 
 // Initialise
 onPaymentChange();
+
+// ── Coupon logic ──────────────────────────────────────────────
+let appliedCoupon = null;
+
+function applyCouponCode() {
+    const code = document.getElementById('couponCodeInput').value.trim().toUpperCase();
+    const msgEl = document.getElementById('couponMsg');
+    if (!code) { msgEl.innerHTML = '<span class="text-danger">Please enter a coupon code.</span>'; return; }
+
+    const btn = document.getElementById('couponApplyBtn');
+    btn.disabled = true;
+    btn.textContent = 'Applying…';
+    msgEl.innerHTML = '';
+
+    fetch('/api/coupons.php?action=apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'code=' + encodeURIComponent(code) + '&csrf_token=' + encodeURIComponent(CSRF_TOKEN),
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.textContent = 'Apply';
+        if (data.success) {
+            appliedCoupon = data;
+            showCouponApplied(data);
+            msgEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + escHtml(data.message) + '</span>';
+        } else {
+            msgEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + escHtml(data.message) + '</span>';
+        }
+    })
+    .catch(() => {
+        btn.disabled = false;
+        btn.textContent = 'Apply';
+        msgEl.innerHTML = '<span class="text-danger">Error applying coupon. Please try again.</span>';
+    });
+}
+
+function showCouponApplied(data) {
+    document.getElementById('couponAppliedCode').textContent = data.coupon_code;
+    document.getElementById('couponAppliedBadge').classList.remove('d-none');
+    document.getElementById('couponInputRow').classList.add('d-none');
+    // Update summary
+    document.getElementById('couponLabelRow').classList.remove('d-none');
+    document.getElementById('couponLabelRow').querySelector('#sumCouponCode').textContent = data.coupon_code;
+    document.getElementById('sumCouponRow').classList.remove('d-none');
+    document.getElementById('sumCouponAmt').textContent = '$' + parseFloat(data.discount_amount).toFixed(2);
+    if (data.free_shipping) {
+        document.getElementById('sumShipping').innerHTML = '<span class="text-success">Free</span>';
+    }
+    if (data.new_total !== undefined) {
+        document.getElementById('sumTotal').textContent = '$' + parseFloat(data.new_total).toFixed(2);
+    }
+}
+
+function removeCoupon() {
+    fetch('/api/coupons.php?action=remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'csrf_token=' + encodeURIComponent(CSRF_TOKEN),
+    })
+    .then(r => r.json())
+    .then(() => {
+        appliedCoupon = null;
+        document.getElementById('couponAppliedBadge').classList.add('d-none');
+        document.getElementById('couponInputRow').classList.remove('d-none');
+        document.getElementById('couponMsg').innerHTML = '';
+        document.getElementById('couponCodeInput').value = '';
+        document.getElementById('couponLabelRow').classList.add('d-none');
+        document.getElementById('sumCouponRow').classList.add('d-none');
+        // Reload page totals
+        location.reload();
+    });
+}
+
+function loadAvailableCoupons() {
+    const bodyEl = document.getElementById('availableCouponsBody');
+    bodyEl.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-success" role="status"></div></div>';
+    fetch('/api/coupons.php?action=available')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success || !data.data || data.data.length === 0) {
+                bodyEl.innerHTML = '<p class="text-muted text-center py-4"><i class="bi bi-tag-slash me-2"></i>No coupons available for your cart.</p>';
+                return;
+            }
+            let html = '<div class="list-group list-group-flush">';
+            data.data.forEach(c => {
+                const discount = c.type === 'percentage' ? c.value + '% off' :
+                                 c.type === 'fixed' ? '$' + parseFloat(c.value).toFixed(2) + ' off' :
+                                 c.type === 'free_shipping' ? 'Free Shipping' : 'Buy X Get Y';
+                html += `<div class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                    <div>
+                        <strong class="text-success">${escHtml(c.code)}</strong>
+                        <div class="small text-muted">${escHtml(c.description || discount)}</div>
+                        ${c.min_order_amount > 0 ? '<div class="small text-muted">Min order: $' + parseFloat(c.min_order_amount).toFixed(2) + '</div>' : ''}
+                        ${c.valid_to ? '<div class="small text-muted">Expires: ' + escHtml(c.valid_to.split(' ')[0]) + '</div>' : ''}
+                    </div>
+                    <button class="btn btn-sm btn-outline-success" data-code="${escHtml(c.code)}" onclick="selectCoupon(this.dataset.code)" data-bs-dismiss="modal">Apply</button>
+                </div>`;
+            });
+            html += '</div>';
+            bodyEl.innerHTML = html;
+        })
+        .catch(() => {
+            bodyEl.innerHTML = '<p class="text-danger text-center py-4">Failed to load coupons.</p>';
+        });
+}
+
+function selectCoupon(code) {
+    document.getElementById('couponCodeInput').value = code;
+    applyCouponCode();
+}
 </script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

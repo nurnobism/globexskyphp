@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/middleware.php';
 require_once __DIR__ . '/../../includes/variations.php';
+require_once __DIR__ . '/../../includes/coupons.php';
 require_once __DIR__ . '/../../includes/tax_engine.php';
 
 $slug = get('slug', '');
@@ -44,9 +45,12 @@ $related = $relStmt->fetchAll();
 $images  = json_decode($product['images'] ?? '[]', true) ?: [];
 $specs   = json_decode($product['specifications'] ?? '{}', true) ?: [];
 
+// Promotion check
+$activePromotion = getActivePromotionForProduct((int)$product['id']);
+$promoPrice = $activePromotion ? getPromotionPriceCalc((float)$product['price'], $activePromotion) : null;
+
 // Tax display data
 $showTaxOnProduct = getTaxSetting('show_tax_on_product', '1') === '1' && isFeatureEnabled('tax_calculation');
-$taxMode          = getTaxMode();
 $taxLabel         = getTaxSetting('tax_label', 'Tax');
 $taxInclusive     = getTaxSetting('tax_inclusive', '0') === '1';
 $productTaxRate   = 0.0;
@@ -121,14 +125,33 @@ include __DIR__ . '/../../includes/header.php';
             </div>
             <?php endif; ?>
 
-            <div class="d-flex align-items-end gap-3 mb-3">
+            <div class="d-flex align-items-end gap-3 mb-3 flex-wrap">
+                <?php if ($promoPrice !== null): ?>
+                <span class="fs-2 fw-bold text-danger"><?= formatMoney($promoPrice) ?></span>
+                <span class="fs-5 text-muted text-decoration-line-through"><?= formatMoney($product['price']) ?></span>
+                <?php
+                    $savePct = round((1 - $promoPrice / max(0.01, (float)$product['price'])) * 100);
+                ?>
+                <span class="badge bg-danger fs-6">🔥 <?= $savePct ?>% OFF</span>
+                <?php else: ?>
                 <span class="fs-2 fw-bold text-primary"><?= formatMoney($product['price']) ?></span>
                 <?php if ($product['compare_price'] && $product['compare_price'] > $product['price']): ?>
                 <span class="fs-5 text-muted text-decoration-line-through"><?= formatMoney($product['compare_price']) ?></span>
                 <span class="badge bg-danger">SAVE <?= round((1 - $product['price']/$product['compare_price'])*100) ?>%</span>
                 <?php endif; ?>
+                <?php endif; ?>
                 <span class="text-muted small">/ <?= e($product['unit'] ?? 'piece') ?></span>
             </div>
+            <?php if ($activePromotion): ?>
+            <div class="alert alert-warning py-2 px-3 mb-3 d-inline-flex align-items-center gap-2">
+                <i class="bi bi-lightning-charge-fill text-warning"></i>
+                <span>
+                    <strong><?= e($activePromotion['name']) ?></strong>
+                    — Sale ends
+                    <strong id="promoCountdown" data-end="<?= e($activePromotion['end_date']) ?>"></strong>
+                </span>
+            </div>
+            <?php endif; ?>
             <?php if ($showTaxOnProduct && $productTaxRate > 0): ?>
             <div class="mb-2">
                 <?php if ($taxInclusive): ?>
@@ -524,6 +547,24 @@ function toggleWishlist(productId) {
                 });
         });
     });
+})();
+
+// Promotion countdown timer
+(function() {
+    const el = document.getElementById('promoCountdown');
+    if (!el) return;
+    const endDate = new Date(el.dataset.end.replace(' ', 'T'));
+    function tick() {
+        const diff = endDate - Date.now();
+        if (diff <= 0) { el.textContent = 'Ended'; return; }
+        const d = Math.floor(diff / 86400000);
+        const h = Math.floor((diff % 86400000) / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        el.textContent = (d > 0 ? d + 'd ' : '') + h + 'h ' + m + 'm ' + s + 's';
+    }
+    tick();
+    setInterval(tick, 1000);
 })();
 </script>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>
