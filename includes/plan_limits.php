@@ -61,7 +61,7 @@ function canAddProduct(int $supplierId): bool
 
     $db   = getDB();
     try {
-        $stmt = $db->prepare('SELECT COUNT(*) FROM products WHERE supplier_id = ? AND status != "deleted"');
+        $stmt = $db->prepare('SELECT COUNT(*) FROM products WHERE supplier_id = ? AND status != "archived"');
         $stmt->execute([$supplierId]);
         return (int)$stmt->fetchColumn() < $limit;
     } catch (PDOException $e) {
@@ -165,7 +165,7 @@ function getRemainingLimits(int $supplierId): array
 
     $productCount = 0;
     try {
-        $stmt = $db->prepare('SELECT COUNT(*) FROM products WHERE supplier_id = ? AND status != "deleted"');
+        $stmt = $db->prepare('SELECT COUNT(*) FROM products WHERE supplier_id = ? AND status != "archived"');
         $stmt->execute([$supplierId]);
         $productCount = (int)$stmt->fetchColumn();
     } catch (PDOException $e) { /* ignore */ }
