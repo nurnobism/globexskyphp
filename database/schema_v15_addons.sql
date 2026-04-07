@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     supplier_id INT UNSIGNED NOT NULL,
     invoice_number VARCHAR(30) NOT NULL UNIQUE,
     type ENUM('plan_subscription','addon_purchase','refund') NOT NULL DEFAULT 'addon_purchase',
-    items_json TEXT NOT NULL DEFAULT '[]',
+    items_json TEXT NOT NULL,
     subtotal DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     tax_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
