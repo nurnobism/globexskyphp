@@ -661,6 +661,40 @@ assertFile("$root/pages/product/detail.php");
 assertSyntax("$root/pages/product/detail.php");
 
 
+// ── PR #4: 3-Level Hierarchical Category System ──────────────
+echo "\nPR #4 Category system database:\n";
+assertFile("$root/database/schema_v13_categories.sql");
+assertFile("$root/database/seed_categories.sql");
+
+echo "\nPR #4 Category includes:\n";
+assertFile("$root/includes/categories.php");
+assertSyntax("$root/includes/categories.php");
+
+echo "\nPR #4 Category API:\n";
+assertFile("$root/api/categories.php");
+assertSyntax("$root/api/categories.php");
+
+echo "\nPR #4 Admin category pages:\n";
+$pr4AdminPages = [
+    'pages/admin/categories/index.php',
+    'pages/admin/categories/add.php',
+    'pages/admin/categories/edit.php',
+];
+foreach ($pr4AdminPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #4 Category components:\n";
+$pr4Components = [
+    'pages/components/category-nav.php',
+    'pages/components/category-sidebar.php',
+];
+foreach ($pr4Components as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
