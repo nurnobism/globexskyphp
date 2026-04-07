@@ -756,6 +756,33 @@ foreach ($pr7AdminPages as $f) {
     assertSyntax("$root/$f");
 }
 
+// ── PR #8: Commission Engine ──────────────────────────────────
+echo "\nPR #8 Commission Engine database:\n";
+assertFile("$root/database/schema_v15_commission.sql");
+
+echo "\nPR #8 Commission Engine includes:\n";
+assertFile("$root/includes/commission.php");
+assertSyntax("$root/includes/commission.php");
+
+echo "\nPR #8 Commission API:\n";
+assertFile("$root/api/commission.php");
+assertSyntax("$root/api/commission.php");
+
+echo "\nPR #8 Admin commission pages:\n";
+$pr8AdminPages = [
+    'pages/admin/commission/index.php',
+    'pages/admin/commission/tiers.php',
+    'pages/admin/commission/categories.php',
+];
+foreach ($pr8AdminPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #8 Supplier commission page:\n";
+assertFile("$root/pages/supplier/earnings/commission.php");
+assertSyntax("$root/pages/supplier/earnings/commission.php");
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
