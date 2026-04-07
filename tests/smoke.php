@@ -819,6 +819,119 @@ echo "\nPR #9 Plan limit enforcement:\n";
 assertFile("$root/pages/supplier/product-add.php");
 assertSyntax("$root/pages/supplier/product-add.php");
 
+// ── PR #10: Add-On Purchases & Invoice System ────────────────
+echo "\nPR #10 Add-On & Invoice database:\n";
+assertFile("$root/database/schema_v15_addons.sql");
+
+echo "\nPR #10 includes:\n";
+$pr10Includes = [
+    'includes/addons.php',
+    'includes/invoices.php',
+];
+foreach ($pr10Includes as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #10 APIs:\n";
+$pr10Apis = [
+    'api/addons.php',
+    'api/invoices.php',
+];
+foreach ($pr10Apis as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #10 Supplier billing pages:\n";
+$pr10SupplierPages = [
+    'pages/supplier/billing/addons.php',
+    'pages/supplier/billing/invoices.php',
+    'pages/supplier/billing/invoice-detail.php',
+];
+foreach ($pr10SupplierPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #10 Admin billing pages:\n";
+$pr10AdminPages = [
+    'pages/admin/billing/addons.php',
+    'pages/admin/billing/invoices.php',
+];
+foreach ($pr10AdminPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+// ── PR #11: Payout System — Supplier Withdrawals ─────────────
+echo "\nPR #11 Payout System database:\n";
+assertFile("$root/database/schema_v16_payouts.sql");
+
+echo "\nPR #11 Payout includes:\n";
+assertFile("$root/includes/payouts.php");
+assertSyntax("$root/includes/payouts.php");
+
+echo "\nPR #11 Payout API:\n";
+assertFile("$root/api/payouts.php");
+assertSyntax("$root/api/payouts.php");
+
+echo "\nPR #11 Supplier earnings pages:\n";
+$pr11SupplierPages = [
+    'pages/supplier/earnings/index.php',
+    'pages/supplier/earnings/withdraw.php',
+    'pages/supplier/earnings/history.php',
+    'pages/supplier/earnings/methods.php',
+];
+foreach ($pr11SupplierPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #11 Admin payout pages:\n";
+$pr11AdminPages = [
+    'pages/admin/finance/payouts.php',
+    'pages/admin/finance/payout-detail.php',
+    'pages/admin/finance/index.php',
+];
+foreach ($pr11AdminPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+// ── PR #12: Tax Calculation Engine ───────────────────────────
+echo "\nPR #12 Tax Engine database:\n";
+assertFile("$root/database/schema_v16_tax.sql");
+
+echo "\nPR #12 Tax Engine includes:\n";
+$pr12Includes = [
+    'includes/tax_engine.php',
+    'includes/countries.php',
+];
+foreach ($pr12Includes as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #12 Tax API:\n";
+assertFile("$root/api/tax.php");
+assertSyntax("$root/api/tax.php");
+
+echo "\nPR #12 Admin tax pages:\n";
+$pr12AdminPages = [
+    'pages/admin/tax/index.php',
+    'pages/admin/tax/rates.php',
+    'pages/admin/tax/report.php',
+];
+foreach ($pr12AdminPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #12 Checkout & product integration:\n";
+assertSyntax("$root/pages/checkout/index.php");
+assertSyntax("$root/pages/product/detail.php");
+
 // ── PR #13: Coupon & Promotion System ────────────────────────
 echo "\nPR #13 Coupon database:\n";
 assertFile("$root/database/schema_v16_coupons.sql");

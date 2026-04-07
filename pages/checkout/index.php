@@ -11,6 +11,7 @@
 require_once __DIR__ . '/../../includes/middleware.php';
 require_once __DIR__ . '/../../includes/checkout.php';
 require_once __DIR__ . '/../../includes/stripe-handler.php';
+require_once __DIR__ . '/../../includes/tax_engine.php';
 require_once __DIR__ . '/../../config/stripe.php';
 
 requireLogin();
@@ -46,6 +47,10 @@ $stripePublishableKey = $stripeKeys['publishable_key'];
 
 $showCod          = isFeatureEnabled('cod_payment');
 $showBankTransfer = isFeatureEnabled('bank_transfer_payment');
+
+$taxMode      = getTaxMode();
+$taxLabel     = getTaxSetting('tax_label', 'Tax');
+$taxEnabled   = isFeatureEnabled('tax_calculation');
 
 $pageTitle = 'Checkout';
 include __DIR__ . '/../../includes/header.php';
@@ -190,6 +195,21 @@ include __DIR__ . '/../../includes/header.php';
                         Continue to Review <i class="bi bi-arrow-right ms-1"></i>
                     </button>
                 </div>
+                <?php if ($taxMode === 'vat'): ?>
+                <!-- VAT Number Input (for VAT mode B2B buyers) -->
+                <div class="card border-0 shadow-sm mt-3">
+                    <div class="card-body py-3">
+                        <label class="form-label fw-semibold small"><i class="bi bi-eu me-1 text-info"></i>VAT Number <span class="text-muted fw-normal">(optional — for B2B reverse charge)</span></label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" id="vatNumberInput" class="form-control" placeholder="e.g. DE123456789" maxlength="20">
+                            <button type="button" class="btn btn-outline-info" onclick="validateVat()">
+                                <i class="bi bi-check-circle me-1"></i>Validate
+                            </button>
+                        </div>
+                        <div id="vatValidationMsg" class="mt-1 small"></div>
+                    </div>
+                </div>
+                <?php endif; ?>
             </div>
 
             <!-- ===== STEP 2: Order Review ===== -->
@@ -430,8 +450,13 @@ include __DIR__ . '/../../includes/header.php';
                             <dd class="col-6 text-end" id="sumShipping">
                                 <?= $totals['shipping'] > 0 ? formatMoney($totals['shipping']) : '<span class="text-success">Free</span>' ?>
                             </dd>
+                            <?php if ($taxEnabled): ?>
+                            <dt class="col-6" id="taxLabel"><?= e($taxLabel) ?></dt>
+                            <dd class="col-6 text-end" id="sumTax"><?= formatMoney($totals['tax'] ?? 0) ?></dd>
+                            <?php else: ?>
                             <dt class="col-6">Tax</dt>
-                            <dd class="col-6 text-end" id="sumTax"><?= formatMoney($totals['tax']) ?></dd>
+                            <dd class="col-6 text-end" id="sumTax"><?= formatMoney($totals['tax'] ?? 0) ?></dd>
+                            <?php endif; ?>
                         </dl>
                         <hr class="my-2">
                         <div class="d-flex justify-content-between fw-bold">
@@ -470,6 +495,8 @@ const CSRF_TOKEN      = <?= json_encode(csrfToken()) ?>;
 const STRIPE_PUB_KEY  = <?= json_encode($stripePublishableKey) ?>;
 const SHOW_COD        = <?= json_encode($showCod) ?>;
 const SHOW_BANK       = <?= json_encode($showBankTransfer) ?>;
+const TAX_MODE        = <?= json_encode($taxMode) ?>;
+const TAX_ENABLED     = <?= json_encode($taxEnabled) ?>;
 
 let currentStep    = 1;
 let selectedAddrId = <?= $defaultAddr ? (int)$defaultAddr['id'] : 'null' ?>;
@@ -580,7 +607,76 @@ async function recalcTotals(addrId) {
             document.getElementById('sumTotal').textContent    = fmt(data.total);
             document.getElementById('confirmTotal').textContent = fmt(data.total);
         }
+        // Also recalculate tax via our tax engine if feature enabled
+        if (TAX_ENABLED && data.subtotal > 0) {
+            recalcTax(addrId, data.subtotal);
+        }
     } catch (e) { /* silent */ }
+}
+
+async function recalcTax(addrId, subtotal) {
+    try {
+        // Get country/state from selected address card
+        const addrCard = document.querySelector('.address-card.selected-addr');
+        if (!addrCard) return;
+        const addrText = addrCard.querySelector('small')?.textContent || '';
+        // We only need tax if mode != fixed (fixed is already in the server totals)
+        if (TAX_MODE === 'fixed') return;
+
+        const vatInput = document.getElementById('vatNumberInput');
+        const vatNumber = vatInput ? vatInput.value.trim() : '';
+
+        const fd = new FormData();
+        fd.append('_csrf_token',  CSRF_TOKEN);
+        fd.append('subtotal',     subtotal);
+        fd.append('address_id',   addrId);
+        fd.append('vat_number',   vatNumber);
+        const res  = await fetch('/api/tax.php?action=calculate', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.success && data.data) {
+            const t = data.data;
+            const fmt = v => '$' + parseFloat(v).toFixed(2);
+            document.getElementById('sumTax').textContent = fmt(t.tax_amount);
+            // Update total
+            const sub = parseFloat(document.getElementById('sumSubtotal').textContent.replace('$','')) || 0;
+            const sh  = parseFloat(document.getElementById('sumShipping').textContent.replace('$','').replace('Free','0')) || 0;
+            document.getElementById('sumTotal').textContent = fmt(sub + sh + parseFloat(t.tax_amount));
+            document.getElementById('confirmTotal').textContent = document.getElementById('sumTotal').textContent;
+
+            // Show reverse charge message if applicable
+            const vatMsg = document.getElementById('vatValidationMsg');
+            if (vatMsg && t.is_reverse_charge) {
+                vatMsg.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>VAT reverse charge applied — 0% VAT</span>';
+            }
+        }
+    } catch (e) { /* silent */ }
+}
+
+async function validateVat() {
+    const vatInput = document.getElementById('vatNumberInput');
+    const msgEl    = document.getElementById('vatValidationMsg');
+    if (!vatInput || !msgEl) return;
+    const vatNumber = vatInput.value.trim();
+    if (!vatNumber) { msgEl.innerHTML = '<span class="text-muted">Enter a VAT number to validate.</span>'; return; }
+
+    msgEl.innerHTML = '<span class="text-muted"><span class="spinner-border spinner-border-sm me-1"></span>Validating…</span>';
+    try {
+        const fd = new FormData();
+        fd.append('_csrf_token',  CSRF_TOKEN);
+        fd.append('vat_number',   vatNumber);
+        const res  = await fetch('/api/tax.php?action=validate_vat', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.success && data.data) {
+            if (data.data.valid) {
+                msgEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>Valid VAT number — reverse charge may apply</span>';
+                if (selectedAddrId) recalcTax(selectedAddrId, parseFloat(document.getElementById('sumSubtotal').textContent.replace('$','')) || 0);
+            } else {
+                msgEl.innerHTML = '<span class="text-warning"><i class="bi bi-exclamation-circle me-1"></i>Invalid VAT number format</span>';
+            }
+        }
+    } catch (e) {
+        msgEl.innerHTML = '<span class="text-danger">Validation failed. Please try again.</span>';
+    }
 }
 
 // ---------- Payment method ----------
