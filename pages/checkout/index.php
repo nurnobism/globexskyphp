@@ -856,7 +856,7 @@ function loadAvailableCoupons() {
                         ${c.min_order_amount > 0 ? '<div class="small text-muted">Min order: $' + parseFloat(c.min_order_amount).toFixed(2) + '</div>' : ''}
                         ${c.valid_to ? '<div class="small text-muted">Expires: ' + escHtml(c.valid_to.split(' ')[0]) + '</div>' : ''}
                     </div>
-                    <button class="btn btn-sm btn-outline-success" onclick="selectCoupon('${escHtml(c.code)}')" data-bs-dismiss="modal">Apply</button>
+                    <button class="btn btn-sm btn-outline-success" data-code="${escHtml(c.code)}" onclick="selectCoupon(this.dataset.code)" data-bs-dismiss="modal">Apply</button>
                 </div>`;
             });
             html += '</div>';

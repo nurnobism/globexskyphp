@@ -530,7 +530,7 @@ function toggleWishlist(productId) {
 (function() {
     const el = document.getElementById('promoCountdown');
     if (!el) return;
-    const endDate = new Date(el.dataset.end + (el.dataset.end.includes('T') ? '' : 'T00:00:00'));
+    const endDate = new Date(el.dataset.end.replace(' ', 'T'));
     function tick() {
         const diff = endDate - Date.now();
         if (diff <= 0) { el.textContent = 'Ended'; return; }

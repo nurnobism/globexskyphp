@@ -150,11 +150,7 @@ switch ($action) {
 
         // Supplier: scope coupon to their products
         if ($role === 'supplier') {
-            $supplierProductIds = array_column(
-                $db->prepare("SELECT id FROM products WHERE supplier_id = ? AND status = 'active'")
-                    ->execute([(int)$user['id']]) ? [] : [],
-                'id'
-            );
+            $supplierProductIds = [];
             try {
                 $pStmt = $db->prepare("SELECT id FROM products WHERE supplier_id = ? AND status = 'active'");
                 $pStmt->execute([(int)$user['id']]);

@@ -178,7 +178,7 @@ include __DIR__ . '/../../../includes/header.php';
     <script>
     (function() {
         const labels = <?= json_encode(array_column($usageTrend, 'd')) ?>;
-        const counts = <?= json_encode(array_map(fn($r) => (int)$r['cnt'], $usageTrend)) ?>;
+        const counts = <?= json_encode(array_map(function($r) { return (int)$r['cnt']; }, $usageTrend)) ?>;
         new Chart(document.getElementById('usageTrendChart'), {
             type: 'bar',
             data: {

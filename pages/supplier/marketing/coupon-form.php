@@ -242,7 +242,7 @@ function checkCodeUnique() {
     fetch('/api/coupons.php?action=get&code=' + encodeURIComponent(code))
         .then(r => r.json())
         .then(d => {
-            if (d.success && (!IS_EDIT || d.data.id != <?= $couponId ?>)) {
+            if (d.success && (!IS_EDIT || d.data.id !== <?= $couponId ?>)) {
                 msgEl.className = 'form-text text-danger';
                 msgEl.textContent = '✕ Code already in use';
             } else {

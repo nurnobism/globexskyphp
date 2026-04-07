@@ -107,12 +107,17 @@ function updateCoupon(int $couponId, array $data): bool
 
     $sets = [];
     $vals = [];
+    $boolFields = ['is_active'];
     $allowed = ['code','type','value','min_order_amount','max_discount_amount','usage_limit',
                 'per_user_limit','valid_from','valid_to','is_active','description','buy_x','get_y'];
     foreach ($allowed as $f) {
         if (array_key_exists($f, $data)) {
             $sets[] = "$f = ?";
-            $vals[] = $data[$f] === '' ? null : $data[$f];
+            if (in_array($f, $boolFields, true)) {
+                $vals[] = (int)(bool)$data[$f];
+            } else {
+                $vals[] = $data[$f] === '' ? null : $data[$f];
+            }
         }
     }
     if (array_key_exists('applicable_categories', $data)) {
