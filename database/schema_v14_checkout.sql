@@ -39,15 +39,65 @@ CREATE TABLE IF NOT EXISTS payment_intents (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------
--- ALTER orders — add commission_amount & payment_intent_id
+-- ALTER orders — add commission_amount (if missing)
 -- -----------------------------------------------------------
-ALTER TABLE orders
-    ADD COLUMN IF NOT EXISTS commission_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-    ADD COLUMN IF NOT EXISTS payment_intent_id VARCHAR(255) DEFAULT NULL;
+SET @col_exists = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME   = 'orders'
+      AND COLUMN_NAME  = 'commission_amount'
+);
+SET @sql = IF(
+    @col_exists = 0,
+    'ALTER TABLE `orders` ADD COLUMN `commission_amount` DECIMAL(12,2) NOT NULL DEFAULT 0.00',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- -----------------------------------------------------------
--- ALTER order_items — add product_image & variation_info
+-- ALTER orders — add payment_intent_id (if missing)
 -- -----------------------------------------------------------
-ALTER TABLE order_items
-    ADD COLUMN IF NOT EXISTS product_image VARCHAR(500) DEFAULT NULL,
-    ADD COLUMN IF NOT EXISTS variation_info VARCHAR(500) DEFAULT NULL;
+SET @col_exists = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME   = 'orders'
+      AND COLUMN_NAME  = 'payment_intent_id'
+);
+SET @sql = IF(
+    @col_exists = 0,
+    'ALTER TABLE `orders` ADD COLUMN `payment_intent_id` VARCHAR(255) DEFAULT NULL',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- -----------------------------------------------------------
+-- ALTER order_items — add product_image (if missing)
+-- -----------------------------------------------------------
+SET @col_exists = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME   = 'order_items'
+      AND COLUMN_NAME  = 'product_image'
+);
+SET @sql = IF(
+    @col_exists = 0,
+    'ALTER TABLE `order_items` ADD COLUMN `product_image` VARCHAR(500) DEFAULT NULL',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- -----------------------------------------------------------
+-- ALTER order_items — add variation_info (if missing)
+-- -----------------------------------------------------------
+SET @col_exists = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME   = 'order_items'
+      AND COLUMN_NAME  = 'variation_info'
+);
+SET @sql = IF(
+    @col_exists = 0,
+    'ALTER TABLE `order_items` ADD COLUMN `variation_info` VARCHAR(500) DEFAULT NULL',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
