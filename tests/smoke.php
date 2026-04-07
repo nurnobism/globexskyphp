@@ -241,6 +241,25 @@ foreach ($phase2Files as $f) {
     if (str_ends_with($f, '.php')) assertSyntax("$root/$f");
 }
 
+// ── PR #6: Checkout & Stripe Payment ─────────────────────────
+echo "\nPR #6 Checkout & Stripe files:\n";
+$pr6Files = [
+    'includes/checkout.php',
+    'includes/stripe-handler.php',
+    'api/stripe-webhook.php',
+    'pages/checkout/index.php',
+    'pages/checkout/confirmation.php',
+    'pages/checkout/payment-success.php',
+    'pages/checkout/payment-failed.php',
+    'database/schema_v14_checkout.sql',
+];
+foreach ($pr6Files as $f) {
+    assertFile("$root/$f");
+}
+foreach ($pr6Files as $f) {
+    if (str_ends_with($f, '.php')) assertSyntax("$root/$f");
+}
+
 // ── Phase 5: Real-Time Chat + Notifications + Webmail ────────
 echo "\nPhase 5 database:\n";
 assertFile("$root/database/schema_v5.sql");
