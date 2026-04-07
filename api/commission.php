@@ -182,7 +182,6 @@ switch ($action) {
                 }
             }
         }
-        // Bust cached tier config
         commissionApiResponse(['success' => true, 'updated' => $updated]);
 
     // ── supplier_tier ──────────────────────────────────────────────────

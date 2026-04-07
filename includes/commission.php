@@ -70,19 +70,21 @@ function calculateCommission(int $orderId): array|false
     $baseRate  = $tierInfo['base_rate'];   // fraction, e.g. 0.12
     $tierName  = $tierInfo['tier_name'];
 
-    // 2. Category override
-    $categoryRate  = 0.0;
+    // 2. Category override — when active, the override rate replaces the base rate.
+    //    category_rate is stored for logging; effectiveRate is what we actually use.
+    $categoryRate  = 0.0;   // 0 means "no override applied"
     $effectiveRate = $baseRate;
     if ($categoryId > 0) {
         $catOverride = getCategoryCommissionRate($categoryId);
         if ($catOverride !== null) {
-            $categoryRate  = $catOverride;   // fraction
-            $effectiveRate = $catOverride;
+            $categoryRate  = $catOverride;  // store override fraction for log
+            $effectiveRate = $catOverride;  // use override in place of base rate
         }
     }
 
-    // category_adjustment = 1 − (effective_rate / base_rate)
-    $categoryAdj = ($baseRate > 0 && $categoryRate > 0)
+    // category_adjustment translates the override into the formula's (1 − adj) factor:
+    //   baseRate × (1 − categoryAdj) = effectiveRate  →  categoryAdj = 1 − effectiveRate/baseRate
+    $categoryAdj = ($baseRate > 0 && $effectiveRate !== $baseRate)
         ? (1 - $effectiveRate / $baseRate)
         : 0.0;
 

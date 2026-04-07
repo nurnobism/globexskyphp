@@ -167,7 +167,7 @@ include __DIR__ . '/../../../includes/header.php';
         <i class="bi bi-info-circle-fill fs-5 flex-shrink-0 mt-1"></i>
         <div>
             <strong>How tiers work:</strong> The supplier's 90-day rolling GMV (Gross Merchandise Value)
-            determines their tier. A higher GMV earns a lower commission rate, incentivising volume.
+            determines their tier. A higher GMV earns a lower commission rate, incentivizing volume.
             Category overrides and plan discounts are applied on top of the tier base rate.
         </div>
     </div>

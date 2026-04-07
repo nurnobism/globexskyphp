@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS commission_logs (
     supplier_id         INT UNSIGNED NOT NULL,
     order_subtotal      DECIMAL(12,2) NOT NULL DEFAULT 0,
     gmv_tier            VARCHAR(50)   NOT NULL DEFAULT '',
+    -- Rate columns store fractions (0.0000–0.9999 = 0%–99.99%); sufficient for all commission rates
     base_rate           DECIMAL(6,4)  NOT NULL DEFAULT 0,
     category_rate       DECIMAL(6,4)  NOT NULL DEFAULT 0,
     plan_discount       DECIMAL(6,4)  NOT NULL DEFAULT 0,

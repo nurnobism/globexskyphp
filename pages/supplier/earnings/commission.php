@@ -12,6 +12,9 @@ $supplierId = (int)$_SESSION['user_id'];
 // Stats
 $stats = getCommissionStats($supplierId);
 
+// Load tier config dynamically for the info box
+$tierConfig = getCommissionTierConfig();
+
 // Pagination + filters
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 20;
@@ -241,10 +244,14 @@ include __DIR__ . '/../../../includes/header.php';
                         Higher sales volumes unlock lower commission rates:
                     </p>
                     <ul class="small text-muted mt-2 mb-0">
-                        <li>Starter ($0–$10K GMV): <strong>12%</strong></li>
-                        <li>Growth ($10K–$50K GMV): <strong>10%</strong></li>
-                        <li>Scale ($50K–$200K GMV): <strong>8%</strong></li>
-                        <li>Enterprise ($200K+ GMV): <strong>6%</strong></li>
+                        <?php foreach ($tierConfig as $tc): ?>
+                        <li>
+                            <?= e($tc['tier_name']) ?>
+                            ($<?= number_format((float)$tc['min_gmv']) ?>
+                            <?= $tc['max_gmv'] !== null ? '–$' . number_format((float)$tc['max_gmv']) : '+'?> GMV):
+                            <strong><?= round((float)$tc['base_rate'] * 100, 2) ?>%</strong>
+                        </li>
+                        <?php endforeach; ?>
                     </ul>
                 </div>
                 <div class="col-md-6">
