@@ -132,7 +132,7 @@ include __DIR__ . '/../../includes/header.php';
             <?php if ($showTaxOnProduct && $productTaxRate > 0): ?>
             <div class="mb-2">
                 <?php if ($taxInclusive): ?>
-                <small class="text-muted"><i class="bi bi-info-circle me-1"></i>Price includes <?= $productTaxRate ?>% <?= e($taxLabel) ?> (incl. <?= e($taxLabel) ?>)</small>
+                <small class="text-muted"><i class="bi bi-info-circle me-1"></i>Price includes <?= $productTaxRate ?>% <?= e($taxLabel) ?></small>
                 <?php else: ?>
                 <small class="text-muted"><i class="bi bi-receipt me-1"></i>Plus <?= $productTaxRate ?>% <?= e($taxLabel) ?> at checkout
                     (<strong><?= formatMoney(round($product['price'] * $productTaxRate / 100, 2)) ?></strong>)

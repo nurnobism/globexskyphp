@@ -56,7 +56,9 @@ try {
     if ($filterCode !== '') { $where .= ' AND country_code = ?'; $params[] = $filterCode; }
     if ($filterName !== '') { $where .= ' AND (country_name LIKE ? OR state_name LIKE ? OR tax_name LIKE ?)'; $params = array_merge($params, ["%$filterName%","%$filterName%","%$filterName%"]); }
 
-    $total = (int)$db->prepare("SELECT COUNT(*) FROM tax_rates $where")->execute($params) && ($stmt2 = $db->prepare("SELECT COUNT(*) FROM tax_rates $where")) && $stmt2->execute($params) ? $stmt2->fetchColumn() : 0;
+    $cntStmt = $db->prepare("SELECT COUNT(*) FROM tax_rates $where");
+    $cntStmt->execute($params);
+    $total = (int)$cntStmt->fetchColumn();
 
     $stmt  = $db->prepare("SELECT * FROM tax_rates $where ORDER BY country_name ASC, state_name ASC LIMIT $perPage OFFSET $offset");
     $stmt->execute($params);

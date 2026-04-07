@@ -46,7 +46,7 @@ function getCountryList(): array
         ['code' => 'GR', 'name' => 'Greece',               'flag' => '🇬🇷', 'continent' => 'Europe'],
         ['code' => 'CZ', 'name' => 'Czech Republic',       'flag' => '🇨🇿', 'continent' => 'Europe'],
         ['code' => 'HU', 'name' => 'Hungary',              'flag' => '🇭🇺', 'continent' => 'Europe'],
-        ['code' => 'RO', 'name' => 'Romania',              'flag' => '🇷🴵', 'continent' => 'Europe'],
+        ['code' => 'RO', 'name' => 'Romania',              'flag' => '🇷🇴', 'continent' => 'Europe'],
         ['code' => 'RU', 'name' => 'Russia',               'flag' => '🇷🇺', 'continent' => 'Europe'],
         ['code' => 'TR', 'name' => 'Turkey',               'flag' => '🇹🇷', 'continent' => 'Europe'],
         ['code' => 'UA', 'name' => 'Ukraine',              'flag' => '🇺🇦', 'continent' => 'Europe'],

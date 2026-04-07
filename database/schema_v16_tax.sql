@@ -174,7 +174,7 @@ ON DUPLICATE KEY UPDATE
 INSERT INTO tax_rates (country_code, country_name, state_code, state_name, rate, tax_name, is_active)
 VALUES
     ('CA', 'Canada', 'ON', 'Ontario',             13.00, 'HST', 1),
-    ('CA', 'Canada', 'QC', 'Quebec',              14.975,'QST', 1),
+    ('CA', 'Canada', 'QC', 'Quebec',              14.975,'GST+QST', 1),
     ('CA', 'Canada', 'BC', 'British Columbia',    12.00, 'HST', 1),
     ('CA', 'Canada', 'AB', 'Alberta',              5.00, 'GST', 1),
     ('CA', 'Canada', 'NS', 'Nova Scotia',         15.00, 'HST', 1)

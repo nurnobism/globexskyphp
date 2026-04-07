@@ -99,10 +99,18 @@ switch ($action) {
     case 'validate_vat':
         if ($method !== 'POST') taxJson(['error' => 'POST required'], 405);
 
-        $vatNumber   = trim($_POST['vat_number']   ?? '');
+        $vatNumber   = strtoupper(trim(str_replace([' ', '-', '.'], '', $_POST['vat_number']   ?? '')));
         $countryCode = strtoupper(trim($_POST['country_code'] ?? ''));
 
         if ($vatNumber === '') taxJson(['error' => 'vat_number required'], 400);
+
+        // Extract country code from VAT number prefix if not explicitly provided
+        if ($countryCode === '' && strlen($vatNumber) >= 2) {
+            $prefix = substr($vatNumber, 0, 2);
+            if (ctype_alpha($prefix)) {
+                $countryCode = $prefix;
+            }
+        }
 
         $valid = validateVatNumber($vatNumber, $countryCode);
         taxJson(['success' => true, 'data' => ['valid' => $valid]]);

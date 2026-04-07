@@ -322,7 +322,11 @@ function validateVatNumber(string $vatNumber, string $countryCode): bool
 
     // Optional VIES live validation
     if (getTaxSetting('vies_validation_enabled', '0') === '1') {
-        return _viesValidate($countryCode, ltrim(substr($toMatch, strlen($countryCode)), '0') ?: $vatNumber);
+        // Pass the VAT number without the country code prefix to VIES
+        $vatWithoutPrefix = str_starts_with($toMatch, $countryCode)
+            ? substr($toMatch, strlen($countryCode))
+            : $toMatch;
+        return _viesValidate($countryCode, $vatWithoutPrefix);
     }
 
     return true;
