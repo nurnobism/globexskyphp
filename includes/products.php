@@ -369,8 +369,6 @@ function uploadProductImage(int $productId, int $supplierId, array $file, string
     // Plan limit: count existing images for this product, then compare to supplier limit
     if ($supplierId > 0) {
         $db       = getDB();
-        $existing = (int)$db->prepare('SELECT COUNT(*) FROM product_images WHERE product_id = ?')
-                             ->execute([$productId]) ? $db->query("SELECT COUNT(*) FROM product_images WHERE product_id = $productId")->fetchColumn() : 0;
         $existing = _countProductImages($productId);
         $plan     = getSupplierPlan($supplierId);
         $limit    = (int)($plan['limits_decoded']['images_per_product'] ?? 3);
