@@ -714,6 +714,48 @@ foreach ($pr4Components as $f) {
     assertSyntax("$root/$f");
 }
 
+// ── PR #7: Order Management ──────────────────────────────────
+echo "\nPR #7 Order Management database:\n";
+assertFile("$root/database/schema_v14_orders.sql");
+
+echo "\nPR #7 Order Management includes:\n";
+assertFile("$root/includes/orders.php");
+assertSyntax("$root/includes/orders.php");
+
+echo "\nPR #7 Order Management API:\n";
+assertFile("$root/api/orders.php");
+assertSyntax("$root/api/orders.php");
+
+echo "\nPR #7 Buyer order pages:\n";
+$pr7BuyerPages = [
+    'pages/account/orders/index.php',
+    'pages/account/orders/detail.php',
+];
+foreach ($pr7BuyerPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #7 Supplier order pages:\n";
+$pr7SupplierPages = [
+    'pages/supplier/orders/index.php',
+    'pages/supplier/orders/detail.php',
+];
+foreach ($pr7SupplierPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #7 Admin order pages:\n";
+$pr7AdminPages = [
+    'pages/admin/orders/index.php',
+    'pages/admin/orders/detail.php',
+];
+foreach ($pr7AdminPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
