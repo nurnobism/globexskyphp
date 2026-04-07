@@ -7,7 +7,6 @@ SET NAMES utf8mb4;
 
 -- -----------------------------------------------------------
 -- Commission Logs — full spec columns
--- ALTER existing table to add missing columns idempotently
 -- -----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS commission_logs (
     id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -15,7 +14,7 @@ CREATE TABLE IF NOT EXISTS commission_logs (
     supplier_id         INT UNSIGNED NOT NULL,
     order_subtotal      DECIMAL(12,2) NOT NULL DEFAULT 0,
     gmv_tier            VARCHAR(50)   NOT NULL DEFAULT '',
-    -- Rate columns store fractions (0.0000–0.9999 = 0%–99.99%); sufficient for all commission rates
+    -- Rate columns store fractions (0.0000-0.9999, e.g. 0.1200 = 12.00%)
     base_rate           DECIMAL(6,4)  NOT NULL DEFAULT 0,
     category_rate       DECIMAL(6,4)  NOT NULL DEFAULT 0,
     plan_discount       DECIMAL(6,4)  NOT NULL DEFAULT 0,
@@ -28,19 +27,60 @@ CREATE TABLE IF NOT EXISTS commission_logs (
     INDEX idx_created   (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Add columns to existing commission_logs if they were created by schema_v3.sql
--- (idempotent: ignore errors if column already exists)
-ALTER TABLE commission_logs
-    ADD COLUMN IF NOT EXISTS order_subtotal    DECIMAL(12,2) NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS gmv_tier          VARCHAR(50)   NOT NULL DEFAULT '',
-    ADD COLUMN IF NOT EXISTS base_rate         DECIMAL(6,4)  NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS category_rate     DECIMAL(6,4)  NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS plan_discount     DECIMAL(6,4)  NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS final_rate        DECIMAL(6,4)  NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS net_amount        DECIMAL(12,2) NOT NULL DEFAULT 0;
+-- Add new columns to commission_logs if the table was created by schema_v3.sql
+-- (uses INFORMATION_SCHEMA + PREPARE for MySQL 8.0 compatible idempotency)
+
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'commission_logs' AND COLUMN_NAME = 'order_subtotal');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE commission_logs ADD COLUMN order_subtotal DECIMAL(12,2) NOT NULL DEFAULT 0',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'commission_logs' AND COLUMN_NAME = 'gmv_tier');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE commission_logs ADD COLUMN gmv_tier VARCHAR(50) NOT NULL DEFAULT \'\'',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'commission_logs' AND COLUMN_NAME = 'base_rate');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE commission_logs ADD COLUMN base_rate DECIMAL(6,4) NOT NULL DEFAULT 0',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'commission_logs' AND COLUMN_NAME = 'category_rate');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE commission_logs ADD COLUMN category_rate DECIMAL(6,4) NOT NULL DEFAULT 0',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'commission_logs' AND COLUMN_NAME = 'plan_discount');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE commission_logs ADD COLUMN plan_discount DECIMAL(6,4) NOT NULL DEFAULT 0',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'commission_logs' AND COLUMN_NAME = 'final_rate');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE commission_logs ADD COLUMN final_rate DECIMAL(6,4) NOT NULL DEFAULT 0',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'commission_logs' AND COLUMN_NAME = 'net_amount');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE commission_logs ADD COLUMN net_amount DECIMAL(12,2) NOT NULL DEFAULT 0',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- -----------------------------------------------------------
--- Commission Tier Config — 90-day GMV based tiers
+-- Commission Tier Config -- 90-day GMV based tiers
 -- -----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS commission_tier_config (
     id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -56,15 +96,15 @@ CREATE TABLE IF NOT EXISTS commission_tier_config (
     INDEX idx_min_gmv (min_gmv)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Default tier config (Starter/Growth/Scale/Enterprise — 90-day GMV)
+-- Default tier config (Starter/Growth/Scale/Enterprise -- 90-day GMV)
 INSERT IGNORE INTO commission_tier_config (tier_name, min_gmv, max_gmv, base_rate, sort_order) VALUES
-    ('Starter',    0,      9999.99,  0.12, 1),
-    ('Growth',  10000,  49999.99,  0.10, 2),
-    ('Scale',   50000, 199999.99,  0.08, 3),
-    ('Enterprise', 200000, NULL,   0.06, 4);
+    ('Starter',    0,         9999.99,  0.12, 1),
+    ('Growth',     10000,    49999.99,  0.10, 2),
+    ('Scale',      50000,   199999.99,  0.08, 3),
+    ('Enterprise', 200000,       NULL,  0.06, 4);
 
 -- -----------------------------------------------------------
--- Category Commission Rates — ensure table exists with
+-- Category Commission Rates -- ensure table exists with
 -- all columns the engine expects
 -- -----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS category_commission_rates (
@@ -78,5 +118,9 @@ CREATE TABLE IF NOT EXISTS category_commission_rates (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Add override_rate column to existing table if it only has the old "rate" column
-ALTER TABLE category_commission_rates
-    ADD COLUMN IF NOT EXISTS override_rate DECIMAL(6,4) NOT NULL DEFAULT 0;
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'category_commission_rates' AND COLUMN_NAME = 'override_rate');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE category_commission_rates ADD COLUMN override_rate DECIMAL(6,4) NOT NULL DEFAULT 0',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
