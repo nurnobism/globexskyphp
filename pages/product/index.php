@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/middleware.php';
+require_once __DIR__ . '/../../includes/coupons.php';
 
 $db       = getDB();
 $page     = max(1, (int)get('page', 1));
@@ -100,6 +101,10 @@ include __DIR__ . '/../../includes/header.php';
                 $inStock    = (int)($p['stock_qty'] ?? 0) > 0;
                 ?>
                 <div class="col">
+                    <?php
+                        $promoForProduct = getActivePromotionForProduct((int)$p['id']);
+                        $promoPriceForProduct = $promoForProduct ? getPromotionPriceCalc((float)$p['price'], $promoForProduct) : null;
+                    ?>
                     <div class="card h-100 border-0 shadow-sm product-card position-relative">
                         <!-- Wishlist heart icon -->
                         <?php if (isLoggedIn()): ?>
@@ -109,6 +114,11 @@ include __DIR__ . '/../../includes/header.php';
                                 title="Save to wishlist">
                             <i class="bi bi-heart text-danger"></i>
                         </button>
+                        <?php endif; ?>
+                        <?php if ($promoPriceForProduct !== null): ?>
+                        <div class="position-absolute top-0 start-0 m-2" style="z-index:2">
+                            <span class="badge bg-danger">🔥 SALE</span>
+                        </div>
                         <?php endif; ?>
 
                         <a href="<?= APP_URL ?>/pages/product/detail.php?slug=<?= urlencode($p['slug']) ?>">
@@ -131,7 +141,12 @@ include __DIR__ . '/../../includes/header.php';
                             <?php endif; ?>
                             <div class="mt-auto pt-2 d-flex justify-content-between align-items-center">
                                 <div>
+                                    <?php if ($promoPriceForProduct !== null): ?>
+                                    <span class="fw-bold text-danger fs-5"><?= formatMoney($promoPriceForProduct) ?></span>
+                                    <span class="text-muted text-decoration-line-through small"><?= formatMoney($p['price']) ?></span>
+                                    <?php else: ?>
                                     <span class="fw-bold text-primary fs-5"><?= formatMoney($p['price']) ?></span>
+                                    <?php endif; ?>
                                     <small class="text-muted">/ <?= e($p['unit'] ?? 'pc') ?></small>
                                 </div>
                                 <?php if ($hasVars || !$inStock): ?>

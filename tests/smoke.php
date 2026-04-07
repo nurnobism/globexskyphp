@@ -819,6 +819,47 @@ echo "\nPR #9 Plan limit enforcement:\n";
 assertFile("$root/pages/supplier/product-add.php");
 assertSyntax("$root/pages/supplier/product-add.php");
 
+// ── PR #13: Coupon & Promotion System ────────────────────────
+echo "\nPR #13 Coupon database:\n";
+assertFile("$root/database/schema_v16_coupons.sql");
+
+echo "\nPR #13 Coupon includes:\n";
+assertFile("$root/includes/coupons.php");
+assertSyntax("$root/includes/coupons.php");
+
+echo "\nPR #13 Coupon API:\n";
+assertFile("$root/api/coupons.php");
+assertSyntax("$root/api/coupons.php");
+
+echo "\nPR #13 Promotions API:\n";
+assertFile("$root/api/promotions.php");
+assertSyntax("$root/api/promotions.php");
+
+echo "\nPR #13 Supplier coupon pages:\n";
+$pr13SupplierPages = [
+    'pages/supplier/marketing/coupons.php',
+    'pages/supplier/marketing/coupon-form.php',
+];
+foreach ($pr13SupplierPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #13 Admin marketing pages:\n";
+$pr13AdminPages = [
+    'pages/admin/marketing/coupons.php',
+    'pages/admin/marketing/promotions.php',
+    'pages/admin/marketing/coupon-analytics.php',
+];
+foreach ($pr13AdminPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #13 Promotion banner component:\n";
+assertFile("$root/pages/components/promotion-banner.php");
+assertSyntax("$root/pages/components/promotion-banner.php");
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
