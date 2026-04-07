@@ -406,9 +406,9 @@ function updateSku(int $skuId, int $supplierId, array $data): bool
         $params[] = max(0, (int)$data['stock']);
     }
     if (array_key_exists('weight_override', $data)) {
-        $w = $data['weight_override'] === '' || $data['weight_override'] === null ? null : (float)$data['weight_override'];
+        $weight = ($data['weight_override'] === '' || $data['weight_override'] === null) ? null : (float)$data['weight_override'];
         $sets[]   = 'weight_override = ?';
-        $params[] = $w !== null ? max(0, $w) : null;
+        $params[] = $weight !== null ? max(0, $weight) : null;
     }
     if (array_key_exists('image_url', $data)) {
         $sets[]   = 'image_url = ?';

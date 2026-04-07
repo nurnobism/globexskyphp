@@ -176,7 +176,7 @@ include __DIR__ . '/../../includes/header.php';
                     <?php foreach ($variants as $v): ?>
                     <?php $attrs = json_decode($v['attributes'] ?? '{}', true); ?>
                     <option value="<?= $v['id'] ?>" data-price="<?= $v['price'] ?>">
-                        <?= e(implode(', ', array_map(fn($k,$w)=>"$k: $w", array_keys($attrs), $attrs))) ?>
+                        <?= e(implode(', ', array_map(fn($k, $attrValue) => "$k: $attrValue", array_keys($attrs), $attrs))) ?>
                         <?php if ($v['price']): ?> — <?= formatMoney($v['price']) ?><?php endif; ?>
                     </option>
                     <?php endforeach; ?>
