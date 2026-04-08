@@ -175,7 +175,12 @@ include __DIR__ . '/../../includes/header.php';
                     <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
                         <a class="page-link" href="?tab=<?= urlencode($tab) ?>&page=<?= $page - 1 ?>">Previous</a>
                     </li>
-                    <?php for ($i = 1; $i <= min($pagination['last_page'], 10); $i++): ?>
+                    <?php
+                    $start = max(1, $page - 4);
+                    $end   = min($pagination['last_page'], $start + 9);
+                    $start = max(1, $end - 9);
+                    for ($i = $start; $i <= $end; $i++):
+                    ?>
                         <li class="page-item <?= $i === $page ? 'active' : '' ?>">
                             <a class="page-link" href="?tab=<?= urlencode($tab) ?>&page=<?= $i ?>"><?= $i ?></a>
                         </li>

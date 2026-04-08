@@ -411,16 +411,6 @@ function clearAll(PDO $db, int $userId): bool
         return false;
     }
 }
-{
-    try {
-        $stmt = $db->prepare('DELETE FROM notifications WHERE user_id = :user_id');
-        $stmt->execute([':user_id' => $userId]);
-        return true;
-    } catch (PDOException $e) {
-        error_log('clearAll error: ' . $e->getMessage());
-        return false;
-    }
-}
 
 // ── Core: groupNotifications() ───────────────────────────────────────────────
 
