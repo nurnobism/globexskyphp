@@ -107,6 +107,66 @@ SET @sql = IF(@col = 0,
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- -----------------------------------------------------------
+-- Extend coupons table (idempotent) — adds columns that may
+-- be missing if the base schema.sql created the table first.
+-- -----------------------------------------------------------
+SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'min_order_amount');
+SET @sql = IF(@col = 0,
+    'ALTER TABLE coupons ADD COLUMN min_order_amount DECIMAL(10,2) NOT NULL DEFAULT 0',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'max_discount_amount');
+SET @sql = IF(@col = 0,
+    'ALTER TABLE coupons ADD COLUMN max_discount_amount DECIMAL(10,2) DEFAULT NULL',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'per_user_limit');
+SET @sql = IF(@col = 0,
+    'ALTER TABLE coupons ADD COLUMN per_user_limit INT UNSIGNED NOT NULL DEFAULT 1',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'valid_from');
+SET @sql = IF(@col = 0,
+    'ALTER TABLE coupons ADD COLUMN valid_from DATETIME DEFAULT NULL',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'valid_to');
+SET @sql = IF(@col = 0,
+    'ALTER TABLE coupons ADD COLUMN valid_to DATETIME DEFAULT NULL',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'created_by');
+SET @sql = IF(@col = 0,
+    'ALTER TABLE coupons ADD COLUMN created_by INT UNSIGNED NOT NULL DEFAULT 0',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'creator_role');
+SET @sql = IF(@col = 0,
+    "ALTER TABLE coupons ADD COLUMN creator_role ENUM('admin','supplier') NOT NULL DEFAULT 'admin'",
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'description');
+SET @sql = IF(@col = 0,
+    'ALTER TABLE coupons ADD COLUMN description TEXT DEFAULT NULL',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- -----------------------------------------------------------
 -- Seed: sample coupons
 -- -----------------------------------------------------------
 INSERT IGNORE INTO coupons
