@@ -1,8 +1,8 @@
 -- schema_v17_tracking.sql — Parcel Tracking Integration (PR #15)
--- Creates: carriers, shipments, shipment_events tables
+-- Creates: shipping_carriers, shipments, shipment_events tables
 
 -- ── Carriers ──────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS `carriers` (
+CREATE TABLE IF NOT EXISTS `shipping_carriers` (
     `id`                   INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `code`                 VARCHAR(32)  NOT NULL UNIQUE,
     `name`                 VARCHAR(100) NOT NULL,
@@ -13,12 +13,12 @@ CREATE TABLE IF NOT EXISTS `carriers` (
     `is_active`            TINYINT(1)   NOT NULL DEFAULT 1,
     `sort_order`           SMALLINT     NOT NULL DEFAULT 0,
     `created_at`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX `idx_carriers_code` (`code`),
-    INDEX `idx_carriers_active` (`is_active`)
+    INDEX `idx_sc_code` (`code`),
+    INDEX `idx_sc_active` (`is_active`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Seed carriers
-INSERT IGNORE INTO `carriers`
+INSERT IGNORE INTO `shipping_carriers`
     (`code`, `name`, `logo_url`, `tracking_url_template`, `api_endpoint`, `api_key_setting`, `is_active`, `sort_order`)
 VALUES
     ('dhl',           'DHL',           '/assets/carriers/dhl.png',           'https://www.dhl.com/en/express/tracking.html?AWB={tracking_number}',      'https://api-eu.dhl.com/track/shipments',      'carrier_api_dhl',           1, 10),

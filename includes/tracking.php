@@ -46,7 +46,7 @@ function getCarriers(): array
         $db   = getDB();
         $stmt = $db->query(
             'SELECT code, name, logo_url, tracking_url_template, api_endpoint, api_key_setting, is_active, sort_order
-             FROM carriers WHERE is_active = 1 ORDER BY sort_order ASC'
+             FROM shipping_carriers WHERE is_active = 1 ORDER BY sort_order ASC'
         );
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         if ($rows) {
