@@ -1067,6 +1067,30 @@ echo "\nPR #16 Admin carry management:\n";
 assertFile("$root/pages/admin/logistics/carry.php");
 assertSyntax("$root/pages/admin/logistics/carry.php");
 
+// ── PR #17: Address Management ────────────────────────────────
+echo "\nPR #17 Address database schema:\n";
+assertFile("$root/database/schema_v17_addresses.sql");
+
+echo "\nPR #17 Address includes:\n";
+assertFile("$root/includes/countries_data.php");
+assertSyntax("$root/includes/countries_data.php");
+assertFile("$root/includes/addresses.php");
+assertSyntax("$root/includes/addresses.php");
+
+echo "\nPR #17 Address API:\n";
+assertFile("$root/api/addresses.php");
+assertSyntax("$root/api/addresses.php");
+
+echo "\nPR #17 Address pages:\n";
+$pr17Pages = [
+    'pages/account/addresses/index.php',
+    'pages/account/addresses/form.php',
+];
+foreach ($pr17Pages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
