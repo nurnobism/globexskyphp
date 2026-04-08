@@ -326,6 +326,18 @@ foreach ($phase5WebmailPages as $f) {
     assertSyntax("$root/$f");
 }
 
+// ── PR #20: Webmail System ────────────────────────────────────
+echo "\nPR #20 Webmail System database:\n";
+assertFile("$root/database/schema_v20_webmail.sql");
+
+echo "\nPR #20 Webmail library:\n";
+assertFile("$root/includes/webmail.php");
+assertSyntax("$root/includes/webmail.php");
+
+echo "\nPR #20 Webmail API:\n";
+assertFile("$root/api/webmail.php");
+assertSyntax("$root/api/webmail.php");
+
 echo "\nPhase 5 email templates:\n";
 $phase5Templates = [
     'templates/emails/base.php',
