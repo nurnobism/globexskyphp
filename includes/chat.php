@@ -278,9 +278,7 @@ function sendMessage(int $conversationId, int $senderId, string $content, string
     $allowedTypes = ['text', 'image', 'file', 'system', 'product_link', 'order_link'];
     if (!in_array($type, $allowedTypes, true)) $type = 'text';
 
-    // Sanitise content against XSS
-    $content = htmlspecialchars($content, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-
+    // Validate content (do not HTML-encode at storage time — sanitise at output)
     if ($content === '' && empty($attachments)) return false;
 
     // Verify sender is a participant
@@ -388,7 +386,6 @@ function deleteMessage(int $messageId, int $userId): bool|string
  */
 function editMessage(int $messageId, int $userId, string $newContent): bool|string
 {
-    $newContent = htmlspecialchars($newContent, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     if (trim($newContent) === '') return false;
 
     try {
@@ -520,7 +517,8 @@ function searchMessages(int $userId, string $query, int $page = 1, int $perPage 
     $page    = max(1, $page);
     $perPage = min(50, max(1, $perPage));
     $offset  = ($page - 1) * $perPage;
-    $like    = '%' . $query . '%';
+    $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $query);
+    $like    = '%' . $escaped . '%';
 
     try {
         $db   = getDB();
@@ -564,7 +562,8 @@ function searchConversations(int $userId, string $query): array
 {
     $query = trim($query);
     if (strlen($query) < 2) return [];
-    $like = '%' . $query . '%';
+    $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $query);
+    $like = '%' . $escaped . '%';
 
     try {
         $db   = getDB();
@@ -638,7 +637,7 @@ function notifySocketServer(int $conversationId, int $senderId, int $messageId, 
             "Authorization: Bearer $apiKey",
         ],
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 2,
+        CURLOPT_TIMEOUT        => 1,
         CURLOPT_CONNECTTIMEOUT => 1,
     ]);
     curl_exec($ch);

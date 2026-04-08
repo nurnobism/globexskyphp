@@ -40,8 +40,13 @@ const db = mysql.createPool({
 // --- Express app ---
 const app = express();
 
+// Build a safe CORS origin list; never pass '*' alongside credentials:true
+const corsOrigins = CORS_ORIGIN === '*'
+    ? false // disables the wildcard-with-credentials footgun; warn was already emitted above
+    : CORS_ORIGIN.split(',').map(o => o.trim()).filter(Boolean);
+
 app.use(cors({
-    origin: CORS_ORIGIN,
+    origin: corsOrigins || false,
     methods: ['GET', 'POST'],
     credentials: true,
 }));
@@ -103,10 +108,14 @@ app.post('/internal/chat-message', requireInternalKey, (req, res) => {
 
 // Admin broadcast to all connected clients
 app.post('/internal/broadcast', requireInternalKey, (req, res) => {
-    const { event, data } = req.body || {};
+    const { event, data, scope } = req.body || {};
     if (!event) return res.status(400).json({ error: 'event required' });
-    io.to('admin:broadcast').emit(event, data || {});
-    io.emit(event, data || {});
+    // scope='all' broadcasts to every connected socket; default is admin room only
+    if (scope === 'all') {
+        io.emit(event, data || {});
+    } else {
+        io.to('admin:broadcast').emit(event, data || {});
+    }
     res.json({ success: true });
 });
 
@@ -116,7 +125,7 @@ const server = http.createServer(app);
 // --- Socket.io ---
 const io = new Server(server, {
     cors: {
-        origin: CORS_ORIGIN,
+        origin: corsOrigins || false,
         methods: ['GET', 'POST'],
         credentials: true,
     },
