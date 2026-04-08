@@ -973,6 +973,62 @@ echo "\nPR #13 Promotion banner component:\n";
 assertFile("$root/pages/components/promotion-banner.php");
 assertSyntax("$root/pages/components/promotion-banner.php");
 
+// ── PR #14: Shipping Calculator — Zone-Based Rates ───────────
+echo "\nPR #14 Shipping database:\n";
+assertFile("$root/database/schema_v17_shipping.sql");
+
+echo "\nPR #14 Shipping includes:\n";
+assertFile("$root/includes/shipping.php");
+assertSyntax("$root/includes/shipping.php");
+
+echo "\nPR #14 Shipping API:\n";
+assertFile("$root/api/shipping.php");
+assertSyntax("$root/api/shipping.php");
+
+echo "\nPR #14 Admin shipping pages:\n";
+$pr14AdminPages = [
+    'pages/admin/shipping/zones.php',
+    'pages/admin/shipping/methods.php',
+    'pages/admin/shipping/settings.php',
+];
+foreach ($pr14AdminPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #14 Supplier shipping pages:\n";
+assertFile("$root/pages/supplier/shipping/index.php");
+assertSyntax("$root/pages/supplier/shipping/index.php");
+
+echo "\nPR #14 Checkout & product integration:\n";
+assertSyntax("$root/pages/checkout/index.php");
+assertSyntax("$root/pages/product/detail.php");
+assertSyntax("$root/includes/checkout.php");
+
+// ── PR #15: Parcel Tracking Integration ──────────────────────
+echo "\nPR #15 Tracking database:\n";
+assertFile("$root/database/schema_v17_tracking.sql");
+
+echo "\nPR #15 Tracking includes:\n";
+assertFile("$root/includes/tracking.php");
+assertSyntax("$root/includes/tracking.php");
+
+echo "\nPR #15 Tracking API:\n";
+assertFile("$root/api/tracking.php");
+assertSyntax("$root/api/tracking.php");
+
+echo "\nPR #15 Buyer tracking page:\n";
+assertFile("$root/pages/account/orders/tracking.php");
+assertSyntax("$root/pages/account/orders/tracking.php");
+
+echo "\nPR #15 Supplier ship form:\n";
+assertFile("$root/pages/supplier/orders/ship.php");
+assertSyntax("$root/pages/supplier/orders/ship.php");
+
+echo "\nPR #15 Admin tracking dashboard:\n";
+assertFile("$root/pages/admin/logistics/tracking.php");
+assertSyntax("$root/pages/admin/logistics/tracking.php");
+
 // ── PR #16: Carry Service ─────────────────────────────────────
 echo "\nPR #16 Carry Service database:\n";
 assertFile("$root/database/schema_v17_carry.sql");

@@ -8,7 +8,8 @@ SET NAMES utf8mb4;
 -- -----------------------------------------------------------
 -- coupons — Full coupon definitions
 -- -----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS coupons (
+DROP TABLE IF EXISTS coupons;
+CREATE TABLE coupons (
     id                          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     code                        VARCHAR(50)   NOT NULL,
     type                        ENUM('percentage','fixed','free_shipping','bxgy') NOT NULL DEFAULT 'percentage',
@@ -107,8 +108,8 @@ SET @sql = IF(@col = 0,
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- -----------------------------------------------------------
--- Extend coupons table with v16 columns (idempotent — safe when schema.sql
--- already created a basic coupons table without these columns)
+-- Extend coupons table (idempotent) — adds columns that may
+-- be missing if the base schema.sql created the table first.
 -- -----------------------------------------------------------
 SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'min_order_amount');
@@ -132,13 +133,6 @@ SET @sql = IF(@col = 0,
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'usage_count');
-SET @sql = IF(@col = 0,
-    'ALTER TABLE coupons ADD COLUMN usage_count INT UNSIGNED NOT NULL DEFAULT 0',
-    'SELECT 1');
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
-SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'valid_from');
 SET @sql = IF(@col = 0,
     'ALTER TABLE coupons ADD COLUMN valid_from DATETIME DEFAULT NULL',
@@ -149,27 +143,6 @@ SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'valid_to');
 SET @sql = IF(@col = 0,
     'ALTER TABLE coupons ADD COLUMN valid_to DATETIME DEFAULT NULL',
-    'SELECT 1');
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
-SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'applicable_categories_json');
-SET @sql = IF(@col = 0,
-    'ALTER TABLE coupons ADD COLUMN applicable_categories_json JSON DEFAULT NULL',
-    'SELECT 1');
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
-SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'applicable_products_json');
-SET @sql = IF(@col = 0,
-    'ALTER TABLE coupons ADD COLUMN applicable_products_json JSON DEFAULT NULL',
-    'SELECT 1');
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
-SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'applicable_suppliers_json');
-SET @sql = IF(@col = 0,
-    'ALTER TABLE coupons ADD COLUMN applicable_suppliers_json JSON DEFAULT NULL',
     'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
@@ -191,27 +164,6 @@ SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'description');
 SET @sql = IF(@col = 0,
     'ALTER TABLE coupons ADD COLUMN description TEXT DEFAULT NULL',
-    'SELECT 1');
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
-SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'buy_x');
-SET @sql = IF(@col = 0,
-    'ALTER TABLE coupons ADD COLUMN buy_x TINYINT UNSIGNED NOT NULL DEFAULT 2',
-    'SELECT 1');
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
-SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'get_y');
-SET @sql = IF(@col = 0,
-    'ALTER TABLE coupons ADD COLUMN get_y TINYINT UNSIGNED NOT NULL DEFAULT 1',
-    'SELECT 1');
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
-SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'deleted_at');
-SET @sql = IF(@col = 0,
-    'ALTER TABLE coupons ADD COLUMN deleted_at DATETIME DEFAULT NULL',
     'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
