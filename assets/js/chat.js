@@ -1,489 +1,649 @@
 /**
- * chat.js — Real-Time Chat for GlobexSky B2B Platform
- * Depends on window.CHAT_CONFIG = { userId, appUrl, csrf, activeRoom? }
+ * chat.js - Real-Time Chat for GlobexSky B2B Platform
+ * Depends on window.CHAT_CONFIG = { userId, appUrl, csrf, activeRoom?, page? }
+ *
+ * Supports layouts:
+ *   - inbox        (pages/messages/inbox.php)        - sidebar + panel
+ *   - conversation (pages/messages/conversation.php) - panel only, room pre-opened
+ *   - legacy       (pages/messages/index.php)        - backward compat
  */
 (function () {
     'use strict';
 
-    const cfg = window.CHAT_CONFIG || {};
-    const APP_URL = cfg.appUrl || '';
-    const SELF_ID = cfg.userId || 0;
-    const CSRF    = cfg.csrf   || '';
+    var cfg     = window.CHAT_CONFIG || {};
+    var APP_URL = cfg.appUrl || '';
+    var SELF_ID = cfg.userId || 0;
+    var CSRF    = cfg.csrf   || '';
 
-    let currentRoomId  = cfg.activeRoom || null;
-    let pollTimer      = null;
-    let typingTimer    = null;
-    let lastMessageId  = 0;
-    let isTyping       = false;
-    let currentFilter  = 'all';
-    let allRooms       = [];
+    var currentRoomId = cfg.activeRoom || null;
+    var pollTimer     = null;
+    var typingTimer   = null;
+    var lastMessageId = 0;
+    var isTyping      = false;
+    var currentTab    = 'all';
+    var allRooms      = [];
+    var pendingFiles  = [];
 
-    // ── DOM refs ──────────────────────────────────────────────────────────────
-    const roomList        = document.getElementById('roomList');
-    const roomSearch      = document.getElementById('roomSearch');
-    const chatMessages    = document.getElementById('chatMessages');
-    const messageInput    = document.getElementById('messageInput');
-    const sendBtn         = document.getElementById('sendBtn');
-    const emptyState      = document.getElementById('emptyState');
-    const activeChat      = document.getElementById('activeChat');
-    const chatHeaderName  = document.getElementById('chatHeaderName');
-    const chatHeaderAvatar= document.getElementById('chatHeaderAvatar');
-    const chatHeaderStatus= document.getElementById('chatHeaderStatus');
-    const typingIndicator = document.getElementById('typingIndicator');
-    const typingName      = document.getElementById('typingName');
-    const messagesLoading = document.getElementById('messagesLoading');
-    const fileAttach      = document.getElementById('fileAttach');
-    const attachPreview   = document.getElementById('attachPreview');
+    // Emoji set (surrogate pairs / direct 4-digit escapes for ES5 compatibility)
+    var EMOJI_SET = [
+        '\uD83D\uDE0A','\uD83D\uDE02','\uD83D\uDE0D','\uD83E\uDD70','\uD83D\uDE0E',
+        '\uD83D\uDE22','\uD83D\uDE21','\uD83D\uDC4D','\uD83D\uDC4E','\uD83D\uDC4F',
+        '\uD83D\uDE4F','\uD83D\uDCAA','\uD83C\uDF89','\u2705','\u274C','\u26A1',
+        '\uD83D\uDD25','\uD83D\uDCAF','\uD83D\uDE80','\uD83D\uDCBC','\uD83D\uDCE6',
+        '\uD83E\uDD1D','\uD83D\uDCB0','\uD83D\uDCC8','\uD83D\uDCE7','\uD83D\uDCDE',
+        '\uD83C\uDF0D','\uD83D\uDD50','\uD83D\uDCAC','\uD83D\uDCDD','\u2B50','\uD83C\uDFC6'
+    ];
 
-    // ── Init ──────────────────────────────────────────────────────────────────
+    // DOM refs
+    var convList      = document.getElementById('convList')   || document.getElementById('roomList');
+    var convSearch    = document.getElementById('convSearch') || document.getElementById('roomSearch');
+    var chatMessages  = document.getElementById('chatMessages');
+    var messageInput  = document.getElementById('messageInput');
+    var sendBtn       = document.getElementById('sendBtn');
+    var emptyState    = document.getElementById('emptyState');
+    var activeChat    = document.getElementById('activeChat');
+    var chatHeaderName   = document.getElementById('chatHeaderName');
+    var chatHeaderAvatar = document.getElementById('chatHeaderAvatar');
+    var chatHeaderStatus = document.getElementById('chatHeaderStatus');
+    var typingIndicator  = document.getElementById('typingIndicator');
+    var typingName       = document.getElementById('typingName');
+    var messagesLoading  = document.getElementById('messagesLoading');
+    var fileAttach       = document.getElementById('fileAttach');
+    var attachPreview    = document.getElementById('attachPreview');
+
+    // Init
     function init() {
+        buildEmojiPicker();
         loadRooms();
         bindEvents();
-
         if (currentRoomId) {
             openRoom(currentRoomId);
         }
     }
 
-    // ── Load room list ────────────────────────────────────────────────────────
+    // Load conversation list
     function loadRooms() {
         fetch(APP_URL + '/api/chat.php?action=get_rooms', {
             headers: { 'X-CSRF-Token': CSRF }
         })
-        .then(r => r.json())
-        .then(data => {
-            allRooms = data.rooms || [];
-            renderRooms(allRooms);
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            allRooms = data.data || data.rooms || [];
+            renderConvList(allRooms);
         })
-        .catch(() => {
-            if (roomList) {
-                roomList.innerHTML =
+        .catch(function() {
+            if (convList) {
+                convList.innerHTML =
                     '<div class="text-center py-4 text-danger small">' +
-                    '<i class="bi bi-exclamation-circle me-1"></i>Failed to load rooms.</div>';
+                    '<i class="bi bi-exclamation-circle me-1"></i>Failed to load conversations.</div>';
             }
         });
     }
 
-    function renderRooms(rooms) {
-        if (!roomList) return;
-        const loading = document.getElementById('roomListLoading');
-        if (loading) loading.remove();
-
+    function renderConvList(rooms) {
+        if (!convList) return;
+        ['convLoading', 'roomListLoading'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.remove();
+        });
         if (rooms.length === 0) {
-            roomList.innerHTML =
+            convList.innerHTML =
                 '<div class="text-center py-5 text-muted">' +
                 '<i class="bi bi-chat-square display-4 opacity-25"></i>' +
                 '<p class="small mt-2">No conversations yet.</p>' +
-                '<a href="' + APP_URL + '/pages/messages/compose.php" class="btn btn-sm btn-primary mt-1">' +
+                '<a href="' + APP_URL + '/pages/messages/new.php" class="btn btn-sm btn-primary mt-1">' +
                 '<i class="bi bi-pencil-square me-1"></i>Start a chat</a></div>';
             return;
         }
-
-        roomList.innerHTML = '';
-        rooms.forEach(room => {
-            const item = buildRoomItem(room);
-            roomList.appendChild(item);
+        convList.innerHTML = '';
+        rooms.forEach(function(room) {
+            convList.appendChild(buildConvItem(room));
         });
     }
 
-    function buildRoomItem(room) {
-        const div = document.createElement('div');
-        div.className = 'room-item p-3 d-flex gap-2 align-items-start' +
-                        (room.id == currentRoomId ? ' active' : '');
+    function buildConvItem(room) {
+        var div = document.createElement('div');
+        div.className = 'conv-item' + (room.id == currentRoomId ? ' active' : '');
         div.dataset.roomId = room.id;
 
-        const name     = escHtml(room.name || 'Chat');
-        const preview  = escHtml(truncate(room.last_message || 'No messages yet.', 45));
-        const time     = room.last_message_at ? timeAgo(room.last_message_at) : '';
-        const unread   = parseInt(room.unread_count || 0, 10);
-        const initial  = name.charAt(0).toUpperCase();
-        const isOrder  = room.type === 'order';
+        var name    = room.name || 'Chat';
+        var preview = truncate(room.last_message_preview || room.last_message || 'No messages yet.', 48);
+        var time    = room.last_message_at ? timeAgo(room.last_message_at) : '';
+        var unread  = parseInt(room.unread_count || 0, 10);
+        var initial = name.charAt(0).toUpperCase();
+        var typeLabel = (room.type && room.type !== 'direct')
+            ? '<span class="badge bg-warning text-dark ms-1" style="font-size:.6rem;">' + escHtml(room.type) + '</span>'
+            : '';
 
         div.innerHTML =
-            '<div class="avatar-circle">' + initial + '</div>' +
+            '<div class="chat-avatar" style="width:44px;height:44px;">' +
+              escHtml(initial) +
+            '</div>' +
             '<div class="flex-grow-1 overflow-hidden">' +
               '<div class="d-flex justify-content-between align-items-start">' +
-                '<span class="fw-semibold text-truncate small">' + name + '</span>' +
-                '<span class="text-muted" style="font-size:.7rem;white-space:nowrap;">' + time + '</span>' +
+                '<span class="fw-semibold text-truncate small">' + escHtml(name) + typeLabel + '</span>' +
+                '<span class="text-muted ms-1" style="font-size:.68rem;white-space:nowrap;">' + escHtml(time) + '</span>' +
               '</div>' +
               '<div class="d-flex justify-content-between align-items-center">' +
-                '<span class="text-muted text-truncate" style="font-size:.78rem;">' + preview + '</span>' +
-                (unread > 0
-                    ? '<span class="badge rounded-pill bg-primary ms-1">' + unread + '</span>'
-                    : '') +
+                '<span class="text-muted text-truncate" style="font-size:.78rem;">' + escHtml(preview) + '</span>' +
+                (unread > 0 ? '<span class="unread-badge ms-1">' + unread + '</span>' : '') +
               '</div>' +
-              (isOrder ? '<span class="badge bg-warning text-dark mt-1" style="font-size:.65rem;">Order</span>' : '') +
             '</div>';
 
-        div.addEventListener('click', () => openRoom(room.id));
+        div.addEventListener('click', function() { openRoom(room.id); });
         return div;
     }
 
-    // ── Open a room ───────────────────────────────────────────────────────────
+    // Open a room
     function openRoom(roomId) {
         currentRoomId = roomId;
         lastMessageId = 0;
 
-        // Highlight active room
-        document.querySelectorAll('.room-item').forEach(el => {
+        document.querySelectorAll('.conv-item, .room-item').forEach(function(el) {
             el.classList.toggle('active', el.dataset.roomId == roomId);
         });
 
-        if (emptyState)   emptyState.classList.add('d-none');
-        if (activeChat)   activeChat.classList.remove('d-none');
-        if (chatMessages) chatMessages.innerHTML = '';
-        if (messagesLoading) {
-            messagesLoading.style.display = 'block';
+        if (emptyState) emptyState.classList.add('d-none');
+        if (activeChat) activeChat.classList.remove('d-none');
+
+        if (chatMessages) {
+            chatMessages.querySelectorAll('.msg-row, [data-msg-id], .date-separator').forEach(function(m) {
+                m.remove();
+            });
+        }
+        if (messagesLoading) messagesLoading.style.display = 'block';
+
+        var sidebar = document.getElementById('chatSidebar');
+        if (sidebar && window.innerWidth < 768) {
+            sidebar.classList.add('chat-sidebar-mobile-hidden');
         }
 
-        // Load room details
         fetch(APP_URL + '/api/chat.php?action=get_room&room_id=' + roomId, {
             headers: { 'X-CSRF-Token': CSRF }
         })
-        .then(r => r.json())
-        .then(data => {
-            if (data.room) updateChatHeader(data.room);
-        })
-        .catch(() => {});
+        .then(function(r) { return r.json(); })
+        .then(function(data) { updateChatHeader(data.data || data.room || {}); })
+        .catch(function() {});
 
-        // Load messages
         loadMessages(roomId, true);
-
-        // Start polling
         stopPolling();
-        pollTimer = setInterval(() => pollMessages(roomId), 3000);
+        pollTimer = setInterval(function() { pollMessages(roomId); }, 3000);
 
-        // Update URL without reload
-        const newUrl = APP_URL + '/pages/messages/conversation.php?room_id=' + roomId;
+        var newUrl = APP_URL + '/pages/messages/conversation.php?room_id=' + roomId;
         if (window.history && window.history.pushState) {
-            window.history.pushState({ roomId }, '', newUrl);
+            window.history.pushState({ roomId: roomId }, '', newUrl);
         }
     }
 
     function updateChatHeader(room) {
-        if (chatHeaderName)   chatHeaderName.textContent  = room.name || 'Chat';
-        if (chatHeaderAvatar) chatHeaderAvatar.textContent = (room.name || '?').charAt(0).toUpperCase();
+        var name = room.name || 'Chat';
+        if (chatHeaderName)   chatHeaderName.textContent  = name;
+        if (chatHeaderAvatar) chatHeaderAvatar.textContent = name.charAt(0).toUpperCase();
 
-        const viewProfileLink = document.getElementById('viewProfileLink');
-        if (viewProfileLink && room.other_user_id) {
-            viewProfileLink.href =
-                APP_URL + '/pages/account/profile.php?id=' + room.other_user_id;
+        var statusDot  = chatHeaderStatus ? chatHeaderStatus.querySelector('.online-dot') : null;
+        var statusText = document.getElementById('chatHeaderStatusText');
+        if (statusDot) {
+            statusDot.classList.toggle('offline', !room.is_online);
+            statusDot.classList.toggle('pulse',    !!room.is_online);
+        }
+        if (statusText) statusText.textContent = room.is_online ? 'Online' : 'Offline';
+
+        var vpl = document.getElementById('viewProfileLink');
+        if (vpl && room.other_user_id) {
+            vpl.href = APP_URL + '/pages/account/profile.php?id=' + room.other_user_id;
         }
     }
 
-    // ── Load / poll messages ──────────────────────────────────────────────────
+    // Load / poll messages
     function loadMessages(roomId, initial) {
-        const url = APP_URL + '/api/chat.php?action=get_messages&room_id=' + roomId +
-                    (lastMessageId ? '&after_id=' + lastMessageId : '');
+        var url = (lastMessageId > 0)
+            ? APP_URL + '/api/chat.php?action=get_new&room_id=' + roomId + '&last_id=' + lastMessageId
+            : APP_URL + '/api/chat.php?action=get_messages&room_id=' + roomId;
 
         fetch(url, { headers: { 'X-CSRF-Token': CSRF } })
-        .then(r => r.json())
-        .then(data => {
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
             if (messagesLoading) messagesLoading.style.display = 'none';
-
-            const messages = data.messages || [];
+            var messages = data.data || data.messages || [];
             if (messages.length > 0) {
-                messages.forEach(m => appendMessage(m, initial && chatMessages.children.length === 0));
-                lastMessageId = messages[messages.length - 1].id;
+                var prevDate = null;
+                messages.forEach(function(m) {
+                    var msgDate = m.created_at ? m.created_at.substring(0, 10) : null;
+                    if (msgDate && msgDate !== prevDate) {
+                        appendDateSeparator(msgDate);
+                        prevDate = msgDate;
+                    }
+                    appendMessage(m, false);
+                });
+                lastMessageId = parseInt(messages[messages.length - 1].id, 10);
                 if (initial) scrollToBottom();
             }
-
-            if (data.typing_user) {
-                showTyping(data.typing_user);
-            } else {
-                hideTyping();
-            }
+            if (data.typing_user) { showTyping(data.typing_user); } else { hideTyping(); }
         })
-        .catch(() => {
-            if (messagesLoading) messagesLoading.style.display = 'none';
-        });
+        .catch(function() { if (messagesLoading) messagesLoading.style.display = 'none'; });
     }
 
     function pollMessages(roomId) {
         if (roomId !== currentRoomId) return;
         loadMessages(roomId, false);
-        // Also refresh room list occasionally to update previews / unread counts
     }
 
     function stopPolling() {
-        if (pollTimer) {
-            clearInterval(pollTimer);
-            pollTimer = null;
-        }
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     }
 
-    // ── Render a message bubble ───────────────────────────────────────────────
+    // Date separator
+    function appendDateSeparator(dateStr) {
+        if (!chatMessages) return;
+        var div = document.createElement('div');
+        div.className = 'date-separator';
+        div.innerHTML = '<span>' + escHtml(formatDateLabel(dateStr)) + '</span>';
+        chatMessages.appendChild(div);
+    }
+
+    function formatDateLabel(dateStr) {
+        var today = new Date();
+        var d     = new Date(dateStr);
+        if (isNaN(d)) return dateStr;
+        var todayStr     = today.toISOString().substring(0, 10);
+        var yesterdayStr = new Date(today - 86400000).toISOString().substring(0, 10);
+        if (dateStr === todayStr)     return 'Today';
+        if (dateStr === yesterdayStr) return 'Yesterday';
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    // Render message bubble
     function appendMessage(msg, skipScroll) {
-        const isSent = parseInt(msg.sender_id, 10) === SELF_ID;
-        const wrap   = document.createElement('div');
-        wrap.className = 'd-flex mb-2 ' + (isSent ? 'justify-content-end' : 'justify-content-start');
+        if (!chatMessages) return;
+        var body     = msg.message || msg.body || '';
+        var senderId = parseInt(msg.sender_id || msg.user_id || 0, 10);
+        var isSent   = senderId === SELF_ID;
+        var time     = msg.created_at ? timeAgo(msg.created_at) : '';
+        var isRead   = !!msg.is_read;
+        var msgType  = msg.type || 'text';
+
+        var wrap = document.createElement('div');
+        wrap.className = 'msg-row ' + (isSent ? 'sent' : 'received');
         wrap.dataset.msgId = msg.id;
 
-        const time  = msg.created_at ? timeAgo(msg.created_at) : '';
-        const text  = escHtml(msg.body || '');
-        const label = isSent ? '' :
-            '<div class="small text-muted mb-1 ms-1">' + escHtml(msg.sender_name || '') + '</div>';
+        var contentHtml = '';
+        if (msgType === 'image' && msg.file_url) {
+            contentHtml =
+                '<a href="' + escHtml(msg.file_url) + '" target="_blank" rel="noopener">' +
+                '<img src="' + escHtml(msg.file_url) + '" alt="image"' +
+                ' style="max-width:200px;max-height:200px;border-radius:.375rem;display:block;"></a>';
+        } else if (msgType === 'file' && msg.file_url) {
+            contentHtml =
+                '<a href="' + escHtml(msg.file_url) + '" class="msg-file" target="_blank" rel="noopener">' +
+                '<i class="bi bi-file-earmark me-1"></i>' + escHtml(msg.file_name || 'Attachment') + '</a>';
+        } else {
+            contentHtml = escHtml(body);
+        }
+
+        var senderLabel = (!isSent && msg.sender_name)
+            ? '<div class="msg-sender-name">' + escHtml(msg.sender_name) + '</div>' : '';
 
         wrap.innerHTML =
             '<div>' +
-              label +
-              '<div class="msg-bubble ' + (isSent ? 'sent' : 'received') + ' px-3 py-2">' +
-                text +
-              '</div>' +
-              '<div class="text-muted mt-1 ' + (isSent ? 'text-end' : '') + '" style="font-size:.68rem;">' +
-                time +
-                (isSent
-                    ? ' <i class="bi bi-check2' + (msg.is_read ? '-all text-info' : '') + '"></i>'
-                    : '') +
+              senderLabel +
+              '<div class="msg-bubble ' + (isSent ? 'sent' : 'received') + '">' + contentHtml + '</div>' +
+              '<div class="msg-meta ' + (isSent ? 'sent' : 'received') + '">' +
+                escHtml(time) +
+                (isSent ? ' <i class="bi bi-check2' + (isRead ? '-all msg-check read' : ' msg-check') + '"></i>' : '') +
               '</div>' +
             '</div>';
 
-        if (chatMessages) {
-            chatMessages.appendChild(wrap);
-            if (!skipScroll) scrollToBottom();
-        }
+        chatMessages.appendChild(wrap);
+        if (!skipScroll) scrollToBottom();
     }
 
     function scrollToBottom() {
-        if (chatMessages) {
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
+        if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    // ── Send message ──────────────────────────────────────────────────────────
-    function sendMessage() {
-        if (!currentRoomId) return;
-        const body = (messageInput ? messageInput.value.trim() : '');
-        if (!body) return;
-
-        if (messageInput) messageInput.value = '';
-        if (sendBtn) sendBtn.disabled = true;
-        stopTypingSignal();
-
-        fetch(APP_URL + '/api/chat.php?action=send_message', {
-            method:  'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-Token': CSRF
-            },
-            body: JSON.stringify({ room_id: currentRoomId, body, _csrf_token: CSRF })
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (sendBtn) sendBtn.disabled = false;
-            if (data.message) {
-                appendMessage(data.message, false);
-                updateRoomPreview(currentRoomId, body);
-            }
-        })
-        .catch(() => {
-            if (sendBtn) sendBtn.disabled = false;
+    // Re-render attach preview badges with correct indices
+    function renderAttachPreviews() {
+        if (!attachPreview) return;
+        attachPreview.innerHTML = '';
+        pendingFiles.forEach(function(f, i) {
+            var badge = document.createElement('span');
+            badge.className = 'badge bg-secondary d-inline-flex align-items-center gap-1 me-1 mb-1';
+            badge.innerHTML =
+                '<i class="bi bi-paperclip"></i>' + escHtml(truncate(f.name, 22)) +
+                '<button type="button" class="btn-close btn-close-white ms-1"' +
+                ' style="font-size:.5rem;" data-idx="' + i + '"></button>';
+            badge.querySelector('button').addEventListener('click', function() {
+                pendingFiles.splice(parseInt(this.dataset.idx, 10), 1);
+                renderAttachPreviews(); // re-render with updated indices
+            });
+            attachPreview.appendChild(badge);
         });
     }
 
-    function updateRoomPreview(roomId, body) {
-        const item = roomList ? roomList.querySelector('[data-room-id="' + roomId + '"]') : null;
+    // Send message
+    function sendMessage() {
+        if (!currentRoomId) return;
+        var body = messageInput ? messageInput.value.trim() : '';
+        if (!body && pendingFiles.length === 0) return;
+
+        if (messageInput) { messageInput.value = ''; messageInput.style.height = 'auto'; }
+        if (sendBtn) sendBtn.disabled = true;
+        stopTypingSignal();
+
+        if (pendingFiles.length > 0) {
+            uploadAndSendFiles(body);
+        } else {
+            sendTextMessage(body);
+        }
+    }
+
+    function sendTextMessage(body) {
+        var fd = new FormData();
+        fd.append('_csrf_token', CSRF);
+        fd.append('room_id',    currentRoomId);
+        fd.append('message',    body);
+        fd.append('type',       'text');
+
+        fetch(APP_URL + '/api/chat.php?action=send', {
+            method: 'POST', headers: { 'X-CSRF-Token': CSRF }, body: fd
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (sendBtn) sendBtn.disabled = false;
+            var msg = data.data || data.message || null;
+            if (msg) {
+                appendMessage(msg, false);
+                updateConvPreview(currentRoomId, body);
+            }
+        })
+        .catch(function() { if (sendBtn) sendBtn.disabled = false; });
+    }
+
+    function uploadAndSendFiles(caption) {
+        var file = pendingFiles.shift();
+        if (!file) {
+            if (caption) sendTextMessage(caption);
+            if (sendBtn) sendBtn.disabled = false;
+            if (attachPreview) attachPreview.innerHTML = '';
+            return;
+        }
+        var fd = new FormData();
+        fd.append('file', file);
+        fetch(APP_URL + '/api/chat.php?action=upload_file', {
+            method: 'POST', headers: { 'X-CSRF-Token': CSRF }, body: fd
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success && data.file_url) {
+                var fd2 = new FormData();
+                fd2.append('_csrf_token', CSRF);
+                fd2.append('room_id',    currentRoomId);
+                fd2.append('message',    caption || '');
+                fd2.append('type',       (data.mime_type && data.mime_type.startsWith('image/')) ? 'image' : 'file');
+                fd2.append('file_url',   data.file_url);
+                fd2.append('file_name',  data.file_name || file.name);
+                fd2.append('file_size',  data.file_size || file.size);
+                return fetch(APP_URL + '/api/chat.php?action=send', {
+                    method: 'POST', headers: { 'X-CSRF-Token': CSRF }, body: fd2
+                })
+                .then(function(r2) { return r2.json(); })
+                .then(function(d2) {
+                    var m = d2.data || d2.message || null;
+                    if (m) appendMessage(m, false);
+                    uploadAndSendFiles('');
+                });
+            }
+            uploadAndSendFiles(caption);
+        })
+        .catch(function() { uploadAndSendFiles(caption); });
+    }
+
+    function updateConvPreview(roomId, body) {
+        var item = convList ? convList.querySelector('[data-room-id="' + roomId + '"]') : null;
         if (!item) return;
-        const preview = item.querySelector('.text-muted.text-truncate');
-        if (preview) preview.textContent = truncate(body, 45);
-        const timeEl = item.querySelector('.text-muted[style]');
+        var preview = item.querySelector('.text-muted.text-truncate');
+        if (preview) preview.textContent = truncate(body, 48);
+        var timeEl = item.querySelector('[style*="white-space"]');
         if (timeEl) timeEl.textContent = 'Just now';
     }
 
-    // ── Typing indicator ──────────────────────────────────────────────────────
+    // Typing indicator
     function onTyping() {
-        if (!isTyping) {
-            isTyping = true;
-            sendTypingSignal(true);
-        }
+        if (!isTyping) { isTyping = true; sendTypingSignal(true); }
         clearTimeout(typingTimer);
         typingTimer = setTimeout(stopTypingSignal, 2500);
     }
 
     function stopTypingSignal() {
-        if (isTyping) {
-            isTyping = false;
-            sendTypingSignal(false);
-        }
+        if (isTyping) { isTyping = false; sendTypingSignal(false); }
         clearTimeout(typingTimer);
     }
 
     function sendTypingSignal(typing) {
         if (!currentRoomId) return;
+        var fd = new FormData();
+        fd.append('_csrf_token', CSRF);
+        fd.append('room_id', currentRoomId);
+        fd.append('typing', typing ? '1' : '0');
         fetch(APP_URL + '/api/chat.php?action=typing', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
-            body:    JSON.stringify({ room_id: currentRoomId, typing, _csrf_token: CSRF })
-        }).catch(() => {});
+            method: 'POST', headers: { 'X-CSRF-Token': CSRF }, body: fd
+        }).catch(function() {});
     }
 
     function showTyping(userName) {
-        if (typingIndicator) typingIndicator.style.display = 'flex';
-        if (typingName) typingName.textContent = escHtml(userName) + ' is typing…';
+        if (typingIndicator) typingIndicator.style.display = 'block';
+        if (typingName) typingName.textContent = escHtml(userName) + ' is typing\u2026';
     }
 
     function hideTyping() {
         if (typingIndicator) typingIndicator.style.display = 'none';
     }
 
-    // ── Room search + filter ──────────────────────────────────────────────────
-    function applyFilter() {
-        let filtered = allRooms.slice();
-
-        if (currentFilter === 'unread') {
-            filtered = filtered.filter(r => parseInt(r.unread_count || 0, 10) > 0);
-        } else if (currentFilter === 'orders') {
-            filtered = filtered.filter(r => r.type === 'order');
+    // Tab / filter
+    function applyTab() {
+        var filtered = allRooms.slice();
+        if (currentTab !== 'all') {
+            filtered = filtered.filter(function(r) {
+                var t = r.type || 'direct';
+                if (currentTab === 'direct')  return t === 'direct';
+                if (currentTab === 'group')   return t === 'group';
+                if (currentTab === 'support') return t === 'support';
+                if (currentTab === 'unread')  return parseInt(r.unread_count || 0, 10) > 0;
+                if (currentTab === 'orders')  return t === 'order';
+                return true;
+            });
         }
-
-        const q = roomSearch ? roomSearch.value.trim().toLowerCase() : '';
+        var q = convSearch ? convSearch.value.trim().toLowerCase() : '';
         if (q) {
-            filtered = filtered.filter(r =>
-                (r.name || '').toLowerCase().includes(q) ||
-                (r.last_message || '').toLowerCase().includes(q)
-            );
+            filtered = filtered.filter(function(r) {
+                return (r.name || '').toLowerCase().indexOf(q) !== -1 ||
+                       (r.last_message_preview || r.last_message || '').toLowerCase().indexOf(q) !== -1;
+            });
         }
-
-        renderRooms(filtered);
-
-        // Re-highlight active room
+        renderConvList(filtered);
         if (currentRoomId) {
-            const activeItem = roomList
-                ? roomList.querySelector('[data-room-id="' + currentRoomId + '"]')
-                : null;
-            if (activeItem) activeItem.classList.add('active');
+            var ai = convList ? convList.querySelector('[data-room-id="' + currentRoomId + '"]') : null;
+            if (ai) ai.classList.add('active');
         }
     }
 
-    // ── Bind events ───────────────────────────────────────────────────────────
-    function bindEvents() {
-        // Send on button click
-        if (sendBtn) {
-            sendBtn.addEventListener('click', sendMessage);
-        }
-
-        // Send on Enter (Shift+Enter = newline)
-        if (messageInput) {
-            messageInput.addEventListener('keydown', function (e) {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
+    // Emoji picker
+    function buildEmojiPicker() {
+        var picker = document.getElementById('emojiPicker');
+        if (!picker) return;
+        EMOJI_SET.forEach(function(em) {
+            var btn = document.createElement('span');
+            btn.className = 'emoji-btn-item';
+            btn.textContent = em;
+            btn.addEventListener('click', function() {
+                if (messageInput) {
+                    var pos = messageInput.selectionStart || messageInput.value.length;
+                    messageInput.value =
+                        messageInput.value.substring(0, pos) + em + messageInput.value.substring(pos);
+                    messageInput.focus();
+                    messageInput.selectionStart = messageInput.selectionEnd = pos + em.length;
                 }
+                picker.classList.add('d-none');
             });
+            picker.appendChild(btn);
+        });
+    }
 
-            // Auto-resize textarea
-            messageInput.addEventListener('input', function () {
+    // Events
+    function bindEvents() {
+        if (sendBtn) sendBtn.addEventListener('click', sendMessage);
+
+        if (messageInput) {
+            messageInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+            });
+            messageInput.addEventListener('input', function() {
                 this.style.height = 'auto';
                 this.style.height = Math.min(this.scrollHeight, 120) + 'px';
                 onTyping();
             });
         }
 
-        // Room search
-        if (roomSearch) {
-            roomSearch.addEventListener('input', applyFilter);
-        }
+        if (convSearch) convSearch.addEventListener('input', applyTab);
 
-        // Filter buttons
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.addEventListener('click', function () {
-                document.querySelectorAll('.filter-btn').forEach(b => {
+        // Inbox tabs (new layout)
+        document.querySelectorAll('.conv-tab').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.conv-tab').forEach(function(b) {
                     b.classList.remove('btn-primary', 'active');
                     b.classList.add('btn-outline-secondary');
                 });
                 this.classList.remove('btn-outline-secondary');
                 this.classList.add('btn-primary', 'active');
-                currentFilter = this.dataset.filter || 'all';
-                applyFilter();
+                currentTab = this.dataset.tab || 'all';
+                applyTab();
             });
         });
 
-        // File attach preview
-        if (fileAttach) {
-            fileAttach.addEventListener('change', function () {
-                if (!attachPreview) return;
-                attachPreview.innerHTML = '';
-                Array.from(this.files).forEach(f => {
-                    const badge = document.createElement('span');
-                    badge.className = 'badge bg-secondary d-flex align-items-center gap-1';
-                    badge.innerHTML =
-                        '<i class="bi bi-paperclip"></i>' + escHtml(truncate(f.name, 20)) +
-                        ' <button type="button" class="btn-close btn-close-white ms-1" style="font-size:.55rem;"></button>';
-                    attachPreview.appendChild(badge);
+        // Legacy filter buttons (index.php)
+        document.querySelectorAll('.filter-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.filter-btn').forEach(function(b) {
+                    b.classList.remove('btn-primary', 'active');
+                    b.classList.add('btn-outline-secondary');
                 });
+                this.classList.remove('btn-outline-secondary');
+                this.classList.add('btn-primary', 'active');
+                currentTab = this.dataset.filter || 'all';
+                applyTab();
+            });
+        });
+
+        var attachBtn = document.getElementById('attachBtn');
+        if (attachBtn && fileAttach) {
+            attachBtn.addEventListener('click', function() { fileAttach.click(); });
+        }
+
+        if (fileAttach) {
+            fileAttach.addEventListener('change', function() {
+                pendingFiles = Array.from(this.files);
+                renderAttachPreviews();
             });
         }
 
-        // Emoji button (placeholder — integrates with picker library if available)
-        const emojiBtn = document.getElementById('emojiBtn');
-        if (emojiBtn) {
-            emojiBtn.addEventListener('click', function () {
-                const emojis = ['😊','👍','🎉','✅','🚀','💼','📦','🤝'];
-                const rand   = emojis[Math.floor(Math.random() * emojis.length)];
-                if (messageInput) {
-                    messageInput.value += rand;
-                    messageInput.focus();
+        // Emoji toggle (new layout: emojiToggle + emojiPicker)
+        var emojiToggle = document.getElementById('emojiToggle');
+        var emojiPicker = document.getElementById('emojiPicker');
+        if (emojiToggle && emojiPicker) {
+            emojiToggle.addEventListener('click', function(e) {
+                e.stopPropagation();
+                emojiPicker.classList.toggle('d-none');
+            });
+            document.addEventListener('click', function(e) {
+                if (!emojiPicker.contains(e.target) && e.target !== emojiToggle) {
+                    emojiPicker.classList.add('d-none');
                 }
             });
         }
 
-        // Delete chat link
-        const deleteChatLink = document.getElementById('deleteChatLink');
-        if (deleteChatLink) {
-            deleteChatLink.addEventListener('click', function (e) {
-                e.preventDefault();
-                if (!currentRoomId) return;
-                if (!confirm('Delete this conversation? This cannot be undone.')) return;
-
-                fetch(APP_URL + '/api/chat.php?action=delete_room', {
-                    method:  'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
-                    body:    JSON.stringify({ room_id: currentRoomId, _csrf_token: CSRF })
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        window.location.href = APP_URL + '/pages/messages/index.php';
-                    }
-                })
-                .catch(() => {});
+        // Legacy emoji button (index.php / conversation.php)
+        var emojiBtn = document.getElementById('emojiBtn');
+        if (emojiBtn) {
+            emojiBtn.addEventListener('click', function() {
+                var em = EMOJI_SET[Math.floor(Math.random() * EMOJI_SET.length)];
+                if (messageInput) { messageInput.value += em; messageInput.focus(); }
             });
         }
 
-        // Browser back/forward
-        window.addEventListener('popstate', function (e) {
-            if (e.state && e.state.roomId) {
-                openRoom(e.state.roomId);
-            }
+        // Mobile back button
+        var backBtn = document.getElementById('backToListBtn');
+        if (backBtn) {
+            backBtn.addEventListener('click', function() {
+                var sidebar = document.getElementById('chatSidebar');
+                if (sidebar) sidebar.classList.remove('chat-sidebar-mobile-hidden');
+                stopPolling();
+            });
+        }
+
+        var muteLink = document.getElementById('muteLink');
+        if (muteLink) {
+            muteLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (!currentRoomId) return;
+                var fd = new FormData();
+                fd.append('_csrf_token', CSRF);
+                fd.append('room_id', currentRoomId);
+                fetch(APP_URL + '/api/chat.php?action=mute_room', {
+                    method: 'POST', headers: { 'X-CSRF-Token': CSRF }, body: fd
+                }).catch(function() {});
+            });
+        }
+
+        var deleteChatLink = document.getElementById('deleteChatLink');
+        if (deleteChatLink) {
+            deleteChatLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (!currentRoomId) return;
+                if (!confirm('Delete this conversation? This cannot be undone.')) return;
+                var fd = new FormData();
+                fd.append('_csrf_token', CSRF);
+                fd.append('room_id', currentRoomId);
+                fetch(APP_URL + '/api/chat.php?action=delete_room', {
+                    method: 'POST', headers: { 'X-CSRF-Token': CSRF }, body: fd
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        window.location.href = APP_URL + '/pages/messages/inbox.php';
+                    }
+                })
+                .catch(function() {});
+            });
+        }
+
+        window.addEventListener('popstate', function(e) {
+            if (e.state && e.state.roomId) openRoom(e.state.roomId);
         });
     }
 
-    // ── Utilities ─────────────────────────────────────────────────────────────
+    // Utilities
     function escHtml(str) {
-        const div = document.createElement('div');
+        var div = document.createElement('div');
         div.appendChild(document.createTextNode(String(str)));
         return div.innerHTML;
     }
 
     function truncate(str, len) {
-        return str.length > len ? str.substring(0, len) + '…' : str;
+        return str.length > len ? str.substring(0, len) + '\u2026' : str;
     }
 
     function timeAgo(dateStr) {
-        const now  = new Date();
-        const then = new Date(dateStr);
+        var now  = new Date();
+        var then = new Date(dateStr);
         if (isNaN(then)) return dateStr;
-        const diff = Math.floor((now - then) / 1000);
-
-        if (diff < 60)   return 'Just now';
-        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+        var diff = Math.floor((now - then) / 1000);
+        if (diff < 60)    return 'Just now';
+        if (diff < 3600)  return Math.floor(diff / 60) + 'm ago';
         if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-
-        const d = then;
-        return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
+        return then.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     }
 
-    // ── Bootstrap ─────────────────────────────────────────────────────────────
+    // Bootstrap
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
