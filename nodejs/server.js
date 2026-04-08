@@ -1,6 +1,8 @@
 require('dotenv').config();
+const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const mysql = require('mysql2/promise');
 
@@ -35,42 +37,81 @@ const db = mysql.createPool({
     queueLimit: 0,
 });
 
-// --- HTTP server ---
-// All request handling is consolidated here to avoid double-execution.
-const server = http.createServer((req, res) => {
-    if (req.method === 'POST' && req.url === '/internal/notify') {
-        const authHeader = req.headers['authorization'] || '';
-        if (authHeader !== `Bearer ${INTERNAL_API_KEY}`) {
-            res.writeHead(401, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ error: 'Unauthorized' }));
-        }
+// --- Express app ---
+const app = express();
 
-        let body = '';
-        req.on('data', (chunk) => { body += chunk; });
-        req.on('end', () => {
-            try {
-                const { targetUserId, notification } = JSON.parse(body);
-                const uid = parseInt(targetUserId, 10);
-                if (!Number.isFinite(uid) || !notification) {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    return res.end(JSON.stringify({ error: 'Valid targetUserId (integer) and notification required' }));
-                }
-                const delivered = pushNotificationToUser(uid, notification);
-                io.to(`user:${uid}`).emit('notification', notification);
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true, delivered }));
-            } catch (e) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Invalid JSON' }));
-            }
-        });
-        return;
+app.use(cors({
+    origin: CORS_ORIGIN,
+    methods: ['GET', 'POST'],
+    credentials: true,
+}));
+app.use(express.json());
+
+// Internal API key middleware
+function requireInternalKey(req, res, next) {
+    const authHeader = req.headers['authorization'] || '';
+    if (authHeader !== `Bearer ${INTERNAL_API_KEY}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
     }
+    next();
+}
 
-    // Health-check for all other requests
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'GlobexSky Realtime OK' }));
+// Health check
+app.get('/', (_req, res) => res.json({ status: 'GlobexSky Realtime OK' }));
+app.get('/health', (_req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
+
+// Online status check — lets PHP query whether a user is online
+app.get('/online-status/:userId', requireInternalKey, (req, res) => {
+    const uid = parseInt(req.params.userId, 10);
+    if (!Number.isFinite(uid)) {
+        return res.status(400).json({ error: 'Invalid userId' });
+    }
+    const sockets = userSockets.get(uid);
+    const isOnline = !!(sockets && sockets.size > 0);
+    res.json({ userId: uid, isOnline, connectedSockets: isOnline ? sockets.size : 0 });
 });
+
+// Push a notification to a specific user
+app.post('/internal/notify', requireInternalKey, (req, res) => {
+    const { targetUserId, notification } = req.body || {};
+    const uid = parseInt(targetUserId, 10);
+    if (!Number.isFinite(uid) || !notification) {
+        return res.status(400).json({ error: 'Valid targetUserId (integer) and notification required' });
+    }
+    const delivered = pushNotificationToUser(uid, notification);
+    io.to(`user:${uid}`).emit('notification', notification);
+    res.json({ success: true, delivered });
+});
+
+// PHP callback: new chat message — broadcast to conversation room
+app.post('/internal/chat-message', requireInternalKey, (req, res) => {
+    const { conversationId, senderId, messageId, content, type } = req.body || {};
+    if (!conversationId) {
+        return res.status(400).json({ error: 'conversationId required' });
+    }
+    const payload = {
+        id: messageId,
+        conversationId,
+        senderId,
+        content,
+        type: type || 'text',
+        sentAt: new Date().toISOString(),
+    };
+    io.to(`conversation:${conversationId}`).emit('new_message', payload);
+    res.json({ success: true });
+});
+
+// Admin broadcast to all connected clients
+app.post('/internal/broadcast', requireInternalKey, (req, res) => {
+    const { event, data } = req.body || {};
+    if (!event) return res.status(400).json({ error: 'event required' });
+    io.to('admin:broadcast').emit(event, data || {});
+    io.emit(event, data || {});
+    res.json({ success: true });
+});
+
+// --- HTTP server ---
+const server = http.createServer(app);
 
 // --- Socket.io ---
 const io = new Server(server, {
@@ -240,7 +281,60 @@ io.on('connection', async (socket) => {
     // Auto-join the user's personal notification room
     socket.join(`user:${userId}`);
 
-    // ── join_room ──────────────────────────────────────────────────────────────
+    // Admins also join the broadcast channel
+    if (socket.userRole === 'admin') {
+        socket.join('admin:broadcast');
+    }
+
+    // ── join_conversation ──────────────────────────────────────────────────────
+    socket.on('join_conversation', async ({ conversationId }, ack) => {
+        if (!conversationId) return ack && ack({ error: 'conversationId required' });
+        try {
+            const [rows] = await db.execute(
+                'SELECT id FROM conversation_participants WHERE conversation_id = ? AND user_id = ?',
+                [conversationId, userId]
+            );
+            if (!rows.length) return ack && ack({ error: 'Not a participant of this conversation' });
+            socket.join(`conversation:${conversationId}`);
+            console.log(`[join_conversation] user=${userId} conversation=${conversationId}`);
+            ack && ack({ success: true, conversationId });
+        } catch (err) {
+            console.error('[join_conversation] error:', err.message);
+            ack && ack({ error: 'Server error' });
+        }
+    });
+
+    // ── leave_conversation ─────────────────────────────────────────────────────
+    socket.on('leave_conversation', ({ conversationId }, ack) => {
+        if (!conversationId) return ack && ack({ error: 'conversationId required' });
+        socket.leave(`conversation:${conversationId}`);
+        console.log(`[leave_conversation] user=${userId} conversation=${conversationId}`);
+        ack && ack({ success: true });
+    });
+
+    // ── online_status — query whether a user is online ─────────────────────────
+    socket.on('online_status', ({ targetUserId }, ack) => {
+        const uid = parseInt(targetUserId, 10);
+        if (!Number.isFinite(uid)) return ack && ack({ error: 'targetUserId required' });
+        const sockets = userSockets.get(uid);
+        const isOnline = !!(sockets && sockets.size > 0);
+        ack && ack({ userId: uid, isOnline });
+    });
+
+    // ── new_notification — push to a specific user (admin only) ───────────────
+    socket.on('new_notification', (data, ack) => {
+        if (socket.userRole !== 'admin') return ack && ack({ error: 'Unauthorized' });
+        const { targetUserId, notification } = data || {};
+        const uid = parseInt(targetUserId, 10);
+        if (!Number.isFinite(uid) || !notification) {
+            return ack && ack({ error: 'Valid targetUserId (integer) and notification required' });
+        }
+        const delivered = pushNotificationToUser(uid, notification);
+        io.to(`user:${uid}`).emit('new_notification', notification);
+        ack && ack({ success: true, delivered });
+    });
+
+    // ── join_room (legacy alias for chat_rooms) ────────────────────────────────
     socket.on('join_room', async ({ roomId }, ack) => {
         if (!roomId) return ack && ack({ error: 'roomId required' });
 
@@ -257,7 +351,7 @@ io.on('connection', async (socket) => {
         }
     });
 
-    // ── leave_room ─────────────────────────────────────────────────────────────
+    // ── leave_room (legacy alias) ──────────────────────────────────────────────
     socket.on('leave_room', ({ roomId }, ack) => {
         if (!roomId) return ack && ack({ error: 'roomId required' });
         socket.leave(`room:${roomId}`);
