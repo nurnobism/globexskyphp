@@ -8,7 +8,8 @@ SET NAMES utf8mb4;
 -- -----------------------------------------------------------
 -- coupons — Full coupon definitions
 -- -----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS coupons (
+DROP TABLE IF EXISTS coupons;
+CREATE TABLE coupons (
     id                          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     code                        VARCHAR(50)   NOT NULL,
     type                        ENUM('percentage','fixed','free_shipping','bxgy') NOT NULL DEFAULT 'percentage',
