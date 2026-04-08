@@ -189,18 +189,38 @@ function updatePreference(PDO $db, int $userId, string $eventType, string $chann
     $col = $colMap[$channel];
 
     try {
-        $db->prepare(
-            "INSERT INTO notification_preferences (user_id, event_type, channel_in_app, channel_email, channel_push, channel_sms)
-             VALUES (?, ?, ?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE {$col} = VALUES({$col}), updated_at = NOW()"
-        )->execute([
-            $userId,
-            $eventType,
-            $channel === 'in_app' ? (int) $enabled : 1,
-            $channel === 'email'  ? (int) $enabled : 1,
-            $channel === 'push'   ? (int) $enabled : 0,
-            $channel === 'sms'    ? (int) $enabled : 0,
-        ]);
+        // Fetch existing row to preserve other channels (if any)
+        $existStmt = $db->prepare(
+            'SELECT channel_in_app, channel_email, channel_push, channel_sms
+               FROM notification_preferences
+              WHERE user_id = ? AND event_type = ? LIMIT 1'
+        );
+        $existStmt->execute([$userId, $eventType]);
+        $existing = $existStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($existing) {
+            // Row exists: update only the target column
+            $db->prepare(
+                "UPDATE notification_preferences SET {$col} = ?, updated_at = NOW()
+                  WHERE user_id = ? AND event_type = ?"
+            )->execute([(int) $enabled, $userId, $eventType]);
+        } else {
+            // No row yet: insert with defaults, then apply the target channel
+            $defaults = getDefaultPreferences();
+            $def      = $defaults[$eventType] ?? ['in_app' => 1, 'email' => 1, 'push' => 0, 'sms' => 0];
+            $def[$channel] = (int) $enabled;
+
+            // Re-apply critical constraints
+            if (in_array($eventType, $criticals, true)) {
+                $def['in_app'] = 1;
+                $def['email']  = 1;
+            }
+
+            $db->prepare(
+                'INSERT INTO notification_preferences (user_id, event_type, channel_in_app, channel_email, channel_push, channel_sms)
+                 VALUES (?, ?, ?, ?, ?, ?)'
+            )->execute([$userId, $eventType, $def['in_app'], $def['email'], $def['push'], $def['sms']]);
+        }
         return true;
     } catch (PDOException $e) {
         error_log('updatePreference error: ' . $e->getMessage());

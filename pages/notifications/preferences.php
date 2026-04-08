@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrf() && isset($_POST['mute_
     $mutePrefs = [];
     foreach ($eventTypes as $type => $meta) {
         if (in_array($meta['category'], $userCategories, true) && !in_array($type, $criticals, true)) {
-            $mutePrefs[$type] = ['in_app' => 0, 'email' => 0, 'push' => 0, 'sms' => 0];
+            $mutePrefs[$type] = ['in_app' => 1, 'email' => 0, 'push' => 0, 'sms' => 0];
         }
     }
     updateBulkPreferences($db, $userId, $mutePrefs);
