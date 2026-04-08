@@ -40,13 +40,15 @@ const db = mysql.createPool({
 // --- Express app ---
 const app = express();
 
-// Build a safe CORS origin list; never pass '*' alongside credentials:true
+// CORS_ORIGIN is a server-controlled environment variable, not user input.
+// When set to '*', we intentionally reject all cross-origin requests to avoid
+// the credentials+wildcard footgun; operators must set a specific origin in production.
 const corsOrigins = CORS_ORIGIN === '*'
-    ? false // disables the wildcard-with-credentials footgun; warn was already emitted above
+    ? false // disables CORS entirely when wildcard is set; warning was emitted at startup
     : CORS_ORIGIN.split(',').map(o => o.trim()).filter(Boolean);
 
 app.use(cors({
-    origin: corsOrigins || false,
+    origin: corsOrigins,
     methods: ['GET', 'POST'],
     credentials: true,
 }));
@@ -183,36 +185,36 @@ async function setUserOffline(userId) {
     }
 }
 
-async function saveMessage(roomId, senderId, message, type, extra) {
-    const { fileUrl = null, fileName = null, fileSize = null, replyToId = null } = extra || {};
+async function saveMessage(conversationId, senderId, content, type, extra) {
+    const { attachmentsJson = null } = extra || {};
+    const truncated = String(content || '').substring(0, 5000);
     const [result] = await db.execute(
-        `INSERT INTO chat_messages
-            (room_id, sender_id, message, type, file_url, file_name, file_size, reply_to_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [roomId, senderId, message, type || 'text', fileUrl, fileName, fileSize, replyToId]
+        `INSERT INTO messages
+            (conversation_id, sender_id, content, type, attachments_json, created_at)
+         VALUES (?, ?, ?, ?, ?, NOW())`,
+        [conversationId, senderId, truncated || null, type || 'text', attachmentsJson]
     );
-    // Update room's last-message preview
-    const preview = String(message || fileName || '').substring(0, 120);
+    const msgId = result.insertId;
     await db.execute(
-        `UPDATE chat_rooms
-         SET last_message_at = NOW(), last_message_preview = ?
+        `UPDATE conversations
+         SET last_message_id = ?, last_message_at = NOW(), updated_at = NOW()
          WHERE id = ?`,
-        [preview, roomId]
+        [msgId, conversationId]
     );
-    return result.insertId;
+    return msgId;
 }
 
 async function markMessageRead(messageId, userId) {
     try {
         await db.execute(
-            `INSERT IGNORE INTO message_read_receipts (message_id, user_id, read_at)
+            `INSERT IGNORE INTO message_reads (message_id, user_id, read_at)
              VALUES (?, ?, NOW())`,
             [messageId, userId]
         );
-        // Also bump participant last_read_at
+        // Also bump conversation_participants last_read_at
         await db.execute(
-            `UPDATE chat_participants SET last_read_at = NOW()
-             WHERE room_id = (SELECT room_id FROM chat_messages WHERE id = ?)
+            `UPDATE conversation_participants SET last_read_at = NOW()
+             WHERE conversation_id = (SELECT conversation_id FROM messages WHERE id = ?)
                AND user_id = ?`,
             [messageId, userId]
         );
@@ -221,16 +223,18 @@ async function markMessageRead(messageId, userId) {
     }
 }
 
-async function isRoomParticipant(roomId, userId) {
+async function isConversationParticipant(conversationId, userId) {
     const [rows] = await db.execute(
-        'SELECT id FROM chat_participants WHERE room_id = ? AND user_id = ?',
-        [roomId, userId]
+        'SELECT id FROM conversation_participants WHERE conversation_id = ? AND user_id = ?',
+        [conversationId, userId]
     );
     return rows.length > 0;
 }
 
 function broadcastOnlineStatus(userId, isOnline) {
-    io.emit('user_status', { userId, isOnline, lastSeen: new Date().toISOString() });
+    // Emit both event names for compatibility
+    io.emit('online_status', { userId, isOnline, lastSeen: new Date().toISOString() });
+    io.emit('user_status',   { userId, isOnline, lastSeen: new Date().toISOString() });
 }
 
 function pushNotificationToUser(targetUserId, notification) {
@@ -343,15 +347,13 @@ io.on('connection', async (socket) => {
         ack && ack({ success: true, delivered });
     });
 
-    // ── join_room (legacy alias for chat_rooms) ────────────────────────────────
+    // ── join_room (legacy alias for join_conversation) ────────────────────────
     socket.on('join_room', async ({ roomId }, ack) => {
         if (!roomId) return ack && ack({ error: 'roomId required' });
-
         try {
-            const allowed = await isRoomParticipant(roomId, userId);
+            const allowed = await isConversationParticipant(roomId, userId);
             if (!allowed) return ack && ack({ error: 'Not a participant of this room' });
-
-            socket.join(`room:${roomId}`);
+            socket.join(`conversation:${roomId}`);
             console.log(`[join_room] user=${userId} room=${roomId}`);
             ack && ack({ success: true, roomId });
         } catch (err) {
@@ -363,45 +365,42 @@ io.on('connection', async (socket) => {
     // ── leave_room (legacy alias) ──────────────────────────────────────────────
     socket.on('leave_room', ({ roomId }, ack) => {
         if (!roomId) return ack && ack({ error: 'roomId required' });
-        socket.leave(`room:${roomId}`);
+        socket.leave(`conversation:${roomId}`);
         console.log(`[leave_room] user=${userId} room=${roomId}`);
         ack && ack({ success: true });
     });
 
     // ── send_message ───────────────────────────────────────────────────────────
     socket.on('send_message', async (data, ack) => {
-        const { roomId, message, type = 'text', fileUrl, fileName, fileSize, replyToId } = data || {};
+        // Accept both conversationId and legacy roomId
+        const cid = parseInt(data && (data.conversationId || data.roomId), 10);
+        const content = (data && (data.content || data.message)) || '';
+        const type = (data && data.type) || 'text';
+        const attachments = (data && data.attachments) || null;
 
-        if (!roomId) return ack && ack({ error: 'roomId required' });
-        if (!message && !fileUrl) return ack && ack({ error: 'message or fileUrl required' });
+        if (!Number.isFinite(cid)) return ack && ack({ error: 'conversationId required' });
+        if (!content && !attachments) return ack && ack({ error: 'content required' });
 
         try {
-            const allowed = await isRoomParticipant(roomId, userId);
-            if (!allowed) return ack && ack({ error: 'Not a participant of this room' });
+            const allowed = await isConversationParticipant(cid, userId);
+            if (!allowed) return ack && ack({ error: 'Not a participant of this conversation' });
 
-            const messageId = await saveMessage(roomId, userId, message, type, {
-                fileUrl,
-                fileName,
-                fileSize,
-                replyToId,
-            });
+            const attachmentsJson = attachments ? JSON.stringify(attachments) : null;
+            const messageId = await saveMessage(cid, userId, content, type, { attachmentsJson });
 
             const payload = {
                 id: messageId,
-                roomId,
+                conversationId: cid,
                 senderId: userId,
                 senderName: socket.userName,
-                message,
+                content,
                 type,
-                fileUrl: fileUrl || null,
-                fileName: fileName || null,
-                fileSize: fileSize || null,
-                replyToId: replyToId || null,
+                attachments: attachments || null,
                 createdAt: new Date().toISOString(),
             };
 
-            // Broadcast to everyone in the room (including sender for multi-tab sync)
-            io.to(`room:${roomId}`).emit('new_message', payload);
+            // Broadcast to everyone in the conversation room
+            io.to(`conversation:${cid}`).emit('new_message', payload);
 
             ack && ack({ success: true, messageId });
         } catch (err) {
@@ -411,10 +410,11 @@ io.on('connection', async (socket) => {
     });
 
     // ── typing_start ───────────────────────────────────────────────────────────
-    socket.on('typing_start', ({ roomId }) => {
-        if (!roomId) return;
-        socket.to(`room:${roomId}`).emit('user_typing', {
-            roomId,
+    socket.on('typing_start', ({ conversationId, roomId }) => {
+        const cid = parseInt(conversationId || roomId, 10);
+        if (!Number.isFinite(cid)) return;
+        socket.to(`conversation:${cid}`).emit('user_typing', {
+            conversationId: cid,
             userId,
             userName: socket.userName,
             isTyping: true,
@@ -422,10 +422,11 @@ io.on('connection', async (socket) => {
     });
 
     // ── typing_stop ────────────────────────────────────────────────────────────
-    socket.on('typing_stop', ({ roomId }) => {
-        if (!roomId) return;
-        socket.to(`room:${roomId}`).emit('user_typing', {
-            roomId,
+    socket.on('typing_stop', ({ conversationId, roomId }) => {
+        const cid = parseInt(conversationId || roomId, 10);
+        if (!Number.isFinite(cid)) return;
+        socket.to(`conversation:${cid}`).emit('user_typing', {
+            conversationId: cid,
             userId,
             userName: socket.userName,
             isTyping: false,
@@ -433,16 +434,17 @@ io.on('connection', async (socket) => {
     });
 
     // ── read_receipt ───────────────────────────────────────────────────────────
-    socket.on('read_receipt', async ({ messageId, roomId }, ack) => {
+    socket.on('read_receipt', async ({ messageId, conversationId, roomId }, ack) => {
         if (!messageId) return ack && ack({ error: 'messageId required' });
+        const cid = parseInt(conversationId || roomId, 10);
 
         try {
             await markMessageRead(messageId, userId);
 
-            // Notify others in the room about the read receipt
-            if (roomId) {
-                socket.to(`room:${roomId}`).emit('message_read', {
+            if (Number.isFinite(cid)) {
+                socket.to(`conversation:${cid}`).emit('message_read', {
                     messageId,
+                    conversationId: cid,
                     userId,
                     readAt: new Date().toISOString(),
                 });
@@ -454,6 +456,7 @@ io.on('connection', async (socket) => {
             ack && ack({ error: 'Failed to record read receipt' });
         }
     });
+
 
     // ── push_notification (admin-only socket event) ────────────────────────────
     socket.on('push_notification', (data, ack) => {

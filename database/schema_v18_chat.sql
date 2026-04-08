@@ -8,12 +8,6 @@
 --   message_reads          — per-message read receipts
 -- ============================================================
 
--- Drop helper tables before parent to avoid FK conflicts
-DROP TABLE IF EXISTS message_reads;
-DROP TABLE IF EXISTS messages;
-DROP TABLE IF EXISTS conversation_participants;
-DROP TABLE IF EXISTS conversations;
-
 CREATE TABLE IF NOT EXISTS conversations (
     id                INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     type              ENUM('direct','group','support','admin') NOT NULL DEFAULT 'direct',

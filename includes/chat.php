@@ -37,7 +37,7 @@ function createConversation(array $participants, string $type, string $title, in
     if (!in_array($type, $allowed, true)) return false;
     if (empty($participants)) return false;
 
-    // Sanitise
+    // Sanitize
     $participants = array_values(array_unique(array_filter(array_map('intval', $participants))));
     if (!in_array($createdBy, $participants, true)) {
         $participants[] = $createdBy;
@@ -278,7 +278,7 @@ function sendMessage(int $conversationId, int $senderId, string $content, string
     $allowedTypes = ['text', 'image', 'file', 'system', 'product_link', 'order_link'];
     if (!in_array($type, $allowedTypes, true)) $type = 'text';
 
-    // Validate content (do not HTML-encode at storage time — sanitise at output)
+    // Validate content (do not HTML-encode at storage time — sanitize at output)
     if ($content === '' && empty($attachments)) return false;
 
     // Verify sender is a participant
