@@ -1091,6 +1091,26 @@ foreach ($pr17Pages as $f) {
     assertSyntax("$root/$f");
 }
 
+// ── PR #23: Notification Preferences & System Messages ───────
+echo "\nPR #23 Notification Preferences database schema:\n";
+assertFile("$root/database/schema_v23_notification_prefs.sql");
+
+echo "\nPR #23 Notification Preferences engine include:\n";
+assertFile("$root/includes/notification_preferences.php");
+assertSyntax("$root/includes/notification_preferences.php");
+
+echo "\nPR #23 Notification Preferences pages:\n";
+$pr23Pages = [
+    'pages/notifications/preferences.php',
+    'pages/supplier/settings/notifications.php',
+    'pages/admin/settings/notifications.php',
+    'pages/admin/messages/system.php',
+];
+foreach ($pr23Pages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
