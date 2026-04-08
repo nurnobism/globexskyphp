@@ -17,8 +17,8 @@
 CREATE TABLE IF NOT EXISTS shipping_zones (
     id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name          VARCHAR(100) NOT NULL,
-    countries_json TEXT         NOT NULL DEFAULT '[]' COMMENT 'JSON array of ISO country codes',
-    states_json   TEXT         NOT NULL DEFAULT '[]' COMMENT 'JSON array of "CC-ST" codes',
+    countries_json TEXT         NOT NULL COMMENT 'JSON array of ISO country codes',
+    states_json   TEXT         NOT NULL COMMENT 'JSON array of "CC-ST" codes',
     is_default    TINYINT(1)   NOT NULL DEFAULT 0,
     sort_order    SMALLINT     NOT NULL DEFAULT 0,
     is_active     TINYINT(1)   NOT NULL DEFAULT 1,
