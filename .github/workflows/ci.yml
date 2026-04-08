@@ -158,6 +158,9 @@ jobs:
           if [ -f database/schema_v16_coupons.sql ]; then
             mysql -h 127.0.0.1 -u root -proot globexsky_test < database/schema_v16_coupons.sql
           fi
+          if [ -f database/schema_v17_shipping.sql ]; then
+            mysql -h 127.0.0.1 -u root -proot globexsky_test < database/schema_v17_shipping.sql
+          fi
           if [ -f database/schema_v17_tracking.sql ]; then
             mysql -h 127.0.0.1 -u root -proot globexsky_test < database/schema_v17_tracking.sql
           fi
