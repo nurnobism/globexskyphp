@@ -3,6 +3,9 @@ require_once __DIR__ . '/../../includes/middleware.php';
 require_once __DIR__ . '/../../includes/variations.php';
 require_once __DIR__ . '/../../includes/coupons.php';
 require_once __DIR__ . '/../../includes/tax_engine.php';
+if (file_exists(__DIR__ . '/../../includes/shipping.php')) {
+    require_once __DIR__ . '/../../includes/shipping.php';
+}
 
 $slug = get('slug', '');
 $id   = (int)get('id', 0);
@@ -56,6 +59,23 @@ $taxInclusive     = getTaxSetting('tax_inclusive', '0') === '1';
 $productTaxRate   = 0.0;
 if ($showTaxOnProduct) {
     $productTaxRate = getDefaultTaxRate();
+}
+
+// Shipping estimate feature
+$showShippingEstimate = function_exists('isFeatureEnabled') && isFeatureEnabled('shipping_calculator')
+    && function_exists('_getShippingSettingFloat')
+    && _getShippingSettingFloat('shipping_show_estimate', 1.0) > 0;
+
+// Pre-fill country from user's default address
+$estimateCountry = '';
+if (isLoggedIn()) {
+    try {
+        $addrStmt = $db->prepare(
+            'SELECT country FROM user_addresses WHERE user_id = ? AND is_default = 1 LIMIT 1'
+        );
+        $addrStmt->execute([$_SESSION['user_id']]);
+        $estimateCountry = (string)($addrStmt->fetchColumn() ?: '');
+    } catch (PDOException $e) { /* ignore */ }
 }
 
 $pageTitle = $product['name'];
@@ -287,6 +307,32 @@ include __DIR__ . '/../../includes/header.php';
             </div>
         </div>
     </div>
+
+    <!-- Shipping Estimate -->
+    <?php if ($showShippingEstimate): ?>
+    <div class="card border-0 shadow-sm mb-4 mt-4">
+        <div class="card-header bg-white fw-semibold d-flex align-items-center">
+            <i class="bi bi-truck text-success me-2"></i>Shipping Estimate
+        </div>
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold mb-1">Country</label>
+                    <input type="text" id="shippingEstimateCountry" class="form-control form-control-sm"
+                           placeholder="e.g. US, DE, SG"
+                           value="<?= htmlspecialchars($estimateCountry) ?>"
+                           maxlength="2">
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-sm btn-outline-success w-100" id="btnEstimateShipping">
+                        <i class="bi bi-calculator me-1"></i>Estimate Shipping
+                    </button>
+                </div>
+            </div>
+            <div id="shippingEstimateResult" class="mt-3" style="display:none"></div>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <!-- Tabs: Description, Specs, Reviews -->
     <ul class="nav nav-tabs mt-5" id="productTabs">
@@ -566,5 +612,58 @@ function toggleWishlist(productId) {
     tick();
     setInterval(tick, 1000);
 })();
+
+<?php if ($showShippingEstimate): ?>
+// Shipping estimate
+document.getElementById('btnEstimateShipping')?.addEventListener('click', async () => {
+    const countryCode = (document.getElementById('shippingEstimateCountry')?.value || '').trim().toUpperCase();
+    const resultEl    = document.getElementById('shippingEstimateResult');
+    if (!countryCode || countryCode.length < 2) {
+        resultEl.innerHTML = '<div class="alert alert-warning py-2 small">Please enter a 2-letter country code (e.g. US, DE).</div>';
+        resultEl.style.display = '';
+        return;
+    }
+
+    const btn = document.getElementById('btnEstimateShipping');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Estimating…';
+
+    try {
+        const res  = await fetch(`/api/shipping.php?action=estimate&product_id=<?= (int)$product['id'] ?>&country_code=${encodeURIComponent(countryCode)}`);
+        const data = await res.json();
+
+        if (!data.success || !data.data?.available) {
+            resultEl.innerHTML = '<div class="alert alert-secondary py-2 small">' + (data.data?.message || 'No shipping available to this location.') + '</div>';
+        } else {
+            const d = data.data;
+            let html = '<div class="row g-2">';
+            (d.options || []).forEach(opt => {
+                const isCheapest = d.cheapest?.id === opt.id;
+                const isFastest  = d.fastest?.id  === opt.id;
+                html += `<div class="col-md-6">
+                    <div class="border rounded p-2 small ${isCheapest ? 'border-success' : ''}">
+                        <span class="fw-semibold">${opt.name}</span>
+                        ${isCheapest ? '<span class="badge bg-success ms-1">Cheapest</span>' : ''}
+                        ${isFastest  ? '<span class="badge bg-info text-dark ms-1">Fastest</span>'  : ''}
+                        <div class="text-muted">${opt.cost === 0 ? '<span class="text-success fw-bold">Free</span>' : '$' + opt.cost.toFixed(2)}</div>
+                        <div class="text-muted">${opt.delivery_estimate}</div>
+                    </div>
+                </div>`;
+            });
+            html += '</div>';
+            if (d.handling_days > 0) {
+                html += `<div class="text-muted small mt-2"><i class="bi bi-box-seam me-1"></i>Ships within ${d.handling_days} business day${d.handling_days === 1 ? '' : 's'}</div>`;
+            }
+            resultEl.innerHTML = html;
+        }
+    } catch (e) {
+        resultEl.innerHTML = '<div class="alert alert-danger py-2 small">Could not retrieve shipping estimate.</div>';
+    }
+
+    resultEl.style.display = '';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-calculator me-1"></i>Estimate Shipping';
+});
+<?php endif; ?>
 </script>
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

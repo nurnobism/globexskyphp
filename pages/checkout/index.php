@@ -280,6 +280,22 @@ include __DIR__ . '/../../includes/header.php';
                 </div>
                 <p class="text-muted small"><i class="bi bi-pencil me-1"></i><a href="/pages/cart/index.php">Edit cart</a></p>
 
+                <!-- Shipping Method Selection (zone-based) -->
+                <?php if (isFeatureEnabled('shipping_calculator')): ?>
+                <div class="card border-0 shadow-sm mb-3" id="shippingMethodCard">
+                    <div class="card-header bg-white fw-semibold d-flex align-items-center">
+                        <i class="bi bi-truck text-success me-2"></i>Shipping Method
+                        <span class="spinner-border spinner-border-sm ms-2 d-none" id="shippingMethodSpinner"></span>
+                    </div>
+                    <div class="card-body" id="shippingMethodBody">
+                        <div class="text-muted small">
+                            <i class="bi bi-geo-alt me-1"></i>Select an address in Step 1 to see shipping options.
+                        </div>
+                    </div>
+                </div>
+                <input type="hidden" id="selectedShippingMethodId" name="shipping_method_id" value="">
+                <?php endif; ?>
+
                 <!-- Coupon Input Section -->
                 <div class="card border-0 shadow-sm mb-3">
                     <div class="card-body py-3">
@@ -585,6 +601,9 @@ function selectAddress(addrId) {
         card.classList.toggle('selected-addr', sel);
     });
     recalcTotals(addrId);
+    <?php if (isFeatureEnabled('shipping_calculator')): ?>
+    fetchShippingMethods(addrId);
+    <?php endif; ?>
 }
 
 function toggleNewAddressForm() {
@@ -642,6 +661,105 @@ async function recalcTotals(addrId) {
         }
     } catch (e) { /* silent */ }
 }
+
+<?php if (isFeatureEnabled('shipping_calculator')): ?>
+async function fetchShippingMethods(addrId) {
+    const spinner    = document.getElementById('shippingMethodSpinner');
+    const bodyEl     = document.getElementById('shippingMethodBody');
+    const methodInput = document.getElementById('selectedShippingMethodId');
+    if (!bodyEl) return;
+
+    spinner?.classList.remove('d-none');
+    bodyEl.innerHTML = '<div class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Loading shipping options…</div>';
+
+    try {
+        const fd = new FormData();
+        fd.append('_csrf_token', CSRF_TOKEN);
+        fd.append('address_id',  addrId);
+        const res  = await fetch('/api/shipping.php?action=calculate', { method: 'POST', body: fd });
+        const data = await res.json();
+
+        if (!data.success || !data.data?.methods?.length) {
+            bodyEl.innerHTML = '<div class="text-muted small"><i class="bi bi-info-circle me-1"></i>No shipping methods available for this address.</div>';
+            return;
+        }
+
+        const methods = data.data.methods;
+        let html = '<div class="list-group list-group-flush">';
+        methods.forEach((m, idx) => {
+            const checkedAttr = idx === 0 ? 'checked' : '';
+            const fmtCost = m.cost === 0 ? '<span class="text-success fw-bold">Free</span>' : `$${parseFloat(m.cost).toFixed(2)}`;
+            html += `<label class="list-group-item list-group-item-action py-2 px-0 cursor-pointer" style="cursor:pointer">
+                <div class="d-flex align-items-center gap-2">
+                    <input class="form-check-input me-1 shipping-method-radio" type="radio"
+                           name="shipping_method_radio" value="${m.id}"
+                           data-cost="${m.cost}" ${checkedAttr} style="flex-shrink:0">
+                    <div class="flex-grow-1">
+                        <span class="fw-semibold">${m.name}</span>
+                        <span class="text-muted small ms-2">${m.delivery_estimate}</span>
+                    </div>
+                    <span>${fmtCost}</span>
+                </div>
+            </label>`;
+        });
+        html += '</div>';
+        bodyEl.innerHTML = html;
+
+        // Set default
+        if (methods[0]) {
+            methodInput.value = methods[0].id;
+            updateShippingCostDisplay(methods[0].cost);
+        }
+
+        // On change
+        bodyEl.querySelectorAll('.shipping-method-radio').forEach(radio => {
+            radio.addEventListener('change', () => {
+                methodInput.value = radio.value;
+                updateShippingCostDisplay(parseFloat(radio.dataset.cost));
+                // Recalc totals with selected method
+                recalcTotalsWithMethod(addrId, parseInt(radio.value));
+            });
+        });
+    } catch (e) {
+        bodyEl.innerHTML = '<div class="text-muted small">Could not load shipping options.</div>';
+    }
+    spinner?.classList.add('d-none');
+}
+
+function updateShippingCostDisplay(cost) {
+    const el = document.getElementById('sumShipping');
+    if (el) el.innerHTML = cost === 0 ? '<span class="text-success">Free</span>' : '$' + parseFloat(cost).toFixed(2);
+    // Update grand total
+    const subtotal   = parseFloat(document.getElementById('sumSubtotal')?.textContent?.replace('$','')) || 0;
+    const taxStr     = document.getElementById('sumTax')?.textContent?.replace('$','') || '0';
+    const tax        = parseFloat(taxStr) || 0;
+    const couponAmt  = parseFloat(document.getElementById('sumCouponAmt')?.textContent?.replace('$','')) || 0;
+    const total      = Math.max(0, subtotal + cost + tax - couponAmt);
+    const totalEl    = document.getElementById('sumTotal');
+    if (totalEl) totalEl.textContent = '$' + total.toFixed(2);
+    const confirmTotalEl = document.getElementById('confirmTotal');
+    if (confirmTotalEl) confirmTotalEl.textContent = '$' + total.toFixed(2);
+}
+
+async function recalcTotalsWithMethod(addrId, shippingMethodId) {
+    try {
+        const fd = new FormData();
+        fd.append('_csrf_token',      CSRF_TOKEN);
+        fd.append('address_id',       addrId);
+        fd.append('shipping_method_id', shippingMethodId);
+        const res  = await fetch('/api/checkout.php?action=calculate_totals', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.total !== undefined) {
+            const fmt = v => '$' + parseFloat(v).toFixed(2);
+            document.getElementById('sumSubtotal').textContent  = fmt(data.subtotal);
+            document.getElementById('sumTax').textContent       = fmt(data.tax);
+            document.getElementById('sumTotal').textContent     = fmt(data.total);
+            const confirmTotalEl = document.getElementById('confirmTotal');
+            if (confirmTotalEl) confirmTotalEl.textContent = fmt(data.total);
+        }
+    } catch (e) { /* silent */ }
+}
+<?php endif; ?>
 
 async function recalcTax(addrId, subtotal) {
     try {
@@ -996,6 +1114,13 @@ function selectCoupon(code) {
     document.getElementById('couponCodeInput').value = code;
     applyCouponCode();
 }
+
+<?php if (isFeatureEnabled('shipping_calculator') && $defaultAddr): ?>
+// Trigger shipping rates fetch on page load
+document.addEventListener('DOMContentLoaded', () => {
+    if (selectedAddrId) fetchShippingMethods(selectedAddrId);
+});
+<?php endif; ?>
 </script>
 
 <?php include __DIR__ . '/../../includes/footer.php'; ?>

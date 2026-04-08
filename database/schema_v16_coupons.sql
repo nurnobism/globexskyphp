@@ -8,7 +8,8 @@ SET NAMES utf8mb4;
 -- -----------------------------------------------------------
 -- coupons — Full coupon definitions
 -- -----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS coupons (
+DROP TABLE IF EXISTS coupons;
+CREATE TABLE coupons (
     id                          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     code                        VARCHAR(50)   NOT NULL,
     type                        ENUM('percentage','fixed','free_shipping','bxgy') NOT NULL DEFAULT 'percentage',
@@ -107,8 +108,8 @@ SET @sql = IF(@col = 0,
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- -----------------------------------------------------------
--- Extend coupons table with v16 columns (idempotent)
--- The base schema.sql creates coupons with fewer columns; add missing ones.
+-- Extend coupons table (idempotent) — adds columns that may
+-- be missing if the base schema.sql created the table first.
 -- -----------------------------------------------------------
 SET @col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'coupons' AND COLUMN_NAME = 'min_order_amount');
