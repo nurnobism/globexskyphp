@@ -1091,6 +1091,10 @@ foreach ($pr17Pages as $f) {
     assertSyntax("$root/$f");
 }
 
+// ── PR #18: Socket.io Chat Infrastructure ────────────────────
+echo "\nPR #18 Chat database schema:\n";
+assertFile("$root/database/schema_v18_chat.sql");
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
