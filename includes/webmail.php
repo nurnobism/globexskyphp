@@ -77,7 +77,7 @@ define('WEBMAIL_MAX_ATTACHMENT_SIZE', 10 * 1024 * 1024); // 10 MB
  * @param int    $perPage Items per page
  * @return array{data: array, total: int, pages: int, current: int}
  */
-function wmPageinate(PDO $db, string $sql, array $params, int $page, int $perPage = 20): array
+function wmPaginate(PDO $db, string $sql, array $params, int $page, int $perPage = 20): array
 {
     $countSql  = 'SELECT COUNT(*) FROM (' . $sql . ') AS _wmc';
     $cStmt     = $db->prepare($countSql);
@@ -688,7 +688,7 @@ function wmGetInbox(int $userId, array $filters = [], int $page = 1, int $perPag
                 WHERE $whereClause
                 ORDER BY wm.created_at DESC";
 
-        return wmPageinate($db, $sql, $params, $page, $perPage);
+        return wmPaginate($db, $sql, $params, $page, $perPage);
     } catch (PDOException $e) {
         error_log('wmGetInbox error: ' . $e->getMessage());
         return ['data' => [], 'total' => 0, 'pages' => 1, 'current' => $page];
@@ -712,7 +712,7 @@ function wmGetSent(int $userId, int $page = 1, int $perPage = 20): array
                 FROM webmail_messages wm
                 WHERE wm.sender_id = ? AND wm.is_draft = 0
                 ORDER BY wm.created_at DESC";
-        return wmPageinate($db, $sql, [$userId], $page, $perPage);
+        return wmPaginate($db, $sql, [$userId], $page, $perPage);
     } catch (PDOException $e) {
         error_log('wmGetSent error: ' . $e->getMessage());
         return ['data' => [], 'total' => 0, 'pages' => 1, 'current' => $page];
@@ -735,7 +735,7 @@ function wmGetDrafts(int $userId, int $page = 1, int $perPage = 20): array
                 FROM webmail_messages wm
                 WHERE wm.sender_id = ? AND wm.is_draft = 1
                 ORDER BY wm.updated_at DESC';
-        return wmPageinate($db, $sql, [$userId], $page, $perPage);
+        return wmPaginate($db, $sql, [$userId], $page, $perPage);
     } catch (PDOException $e) {
         error_log('wmGetDrafts error: ' . $e->getMessage());
         return ['data' => [], 'total' => 0, 'pages' => 1, 'current' => $page];
@@ -763,7 +763,7 @@ function wmGetTrash(int $userId, int $page = 1, int $perPage = 20): array
                 JOIN users u ON u.id = wm.sender_id
                 WHERE wr.user_id = ? AND wr.is_trashed = 1
                 ORDER BY wr.trashed_at DESC";
-        return wmPageinate($db, $sql, [$userId], $page, $perPage);
+        return wmPaginate($db, $sql, [$userId], $page, $perPage);
     } catch (PDOException $e) {
         error_log('wmGetTrash error: ' . $e->getMessage());
         return ['data' => [], 'total' => 0, 'pages' => 1, 'current' => $page];
@@ -792,7 +792,7 @@ function wmGetStarred(int $userId, int $page = 1, int $perPage = 20): array
                 JOIN users u ON u.id = wm.sender_id
                 WHERE wr.user_id = ? AND wr.is_starred = 1 AND wr.is_trashed = 0 AND wr.is_deleted = 0
                 ORDER BY wm.created_at DESC";
-        return wmPageinate($db, $sql, [$userId], $page, $perPage);
+        return wmPaginate($db, $sql, [$userId], $page, $perPage);
     } catch (PDOException $e) {
         error_log('wmGetStarred error: ' . $e->getMessage());
         return ['data' => [], 'total' => 0, 'pages' => 1, 'current' => $page];
@@ -821,7 +821,7 @@ function wmGetByLabel(int $userId, string $label, int $page = 1, int $perPage = 
                 JOIN users u ON u.id = wm.sender_id
                 WHERE wr.user_id = ? AND wr.label = ? AND wr.is_trashed = 0 AND wr.is_deleted = 0
                 ORDER BY wm.created_at DESC";
-        return wmPageinate($db, $sql, [$userId, $label], $page, $perPage);
+        return wmPaginate($db, $sql, [$userId, $label], $page, $perPage);
     } catch (PDOException $e) {
         error_log('wmGetByLabel error: ' . $e->getMessage());
         return ['data' => [], 'total' => 0, 'pages' => 1, 'current' => $page];
@@ -1266,7 +1266,7 @@ function wmSearchMail(int $userId, string $query, array $filters = [], int $page
                 WHERE $whereClause
                 ORDER BY wm.created_at DESC";
 
-        return wmPageinate($db, $sql, $params, $page, $perPage);
+        return wmPaginate($db, $sql, $params, $page, $perPage);
     } catch (PDOException $e) {
         error_log('wmSearchMail error: ' . $e->getMessage());
         return ['data' => [], 'total' => 0, 'pages' => 1, 'current' => $page];
