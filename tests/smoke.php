@@ -301,6 +301,25 @@ foreach ($phase5ChatPages as $f) {
     assertSyntax("$root/$f");
 }
 
+// ── PR #19: Chat UI ──────────────────────────────────────────
+echo "\nPR #19 Chat UI — database schema:\n";
+assertFile("$root/database/schema_v18_chat.sql");
+
+echo "\nPR #19 Chat UI — pages:\n";
+$pr19ChatPages = [
+    'pages/messages/inbox.php',
+    'pages/messages/contacts.php',
+    'pages/messages/new.php',
+];
+foreach ($pr19ChatPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #19 Chat UI — assets:\n";
+assertFile("$root/assets/css/chat.css");
+assertFile("$root/assets/js/chat.js");
+
 echo "\nPhase 5 notification pages:\n";
 $phase5NotifPages = [
     'pages/notifications/index.php',
