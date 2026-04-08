@@ -28,8 +28,24 @@ if (!defined('MAIL_HOST')) {
 require_once __DIR__ . '/../templates/emails/base.php';
 require_once __DIR__ . '/../templates/emails/welcome.php';
 require_once __DIR__ . '/../templates/emails/order-confirmation.php';
+require_once __DIR__ . '/../templates/emails/order-placed.php';
+require_once __DIR__ . '/../templates/emails/order-confirmed.php';
+require_once __DIR__ . '/../templates/emails/order-shipped.php';
+require_once __DIR__ . '/../templates/emails/order-delivered.php';
+require_once __DIR__ . '/../templates/emails/order-cancelled.php';
+require_once __DIR__ . '/../templates/emails/new-order.php';
 require_once __DIR__ . '/../templates/emails/password-reset.php';
+require_once __DIR__ . '/../templates/emails/password-changed.php';
+require_once __DIR__ . '/../templates/emails/email-verification.php';
 require_once __DIR__ . '/../templates/emails/new-message.php';
+require_once __DIR__ . '/../templates/emails/payout-processed.php';
+require_once __DIR__ . '/../templates/emails/payout-rejected.php';
+require_once __DIR__ . '/../templates/emails/plan-expires-soon.php';
+require_once __DIR__ . '/../templates/emails/plan-expired.php';
+require_once __DIR__ . '/../templates/emails/kyc-approved.php';
+require_once __DIR__ . '/../templates/emails/kyc-rejected.php';
+require_once __DIR__ . '/../templates/emails/dispute-opened.php';
+require_once __DIR__ . '/../templates/emails/invoice.php';
 
 /**
  * Send an HTML email via SMTP (PHPMailer) or fall back to PHP mail().
@@ -247,4 +263,287 @@ function sendNewMessageNotification(PDO $db, int $userId, string $senderName, st
         "New message from {$senderName} — " . (defined('APP_NAME') ? APP_NAME : 'GlobexSky'),
         $html
     );
+}
+
+// ── PR #22 additions ───────────────────────────────────────────────────────
+
+/**
+ * Send a raw HTML email without using a named template.
+ *
+ * @param string|array $to       Recipient address or ['email' => 'Name'] map
+ * @param string       $subject  Email subject
+ * @param string       $htmlBody Full HTML body
+ * @param string       $textBody Plain-text alternative (auto-stripped if empty)
+ * @return bool
+ */
+function sendRawEmail(string|array $to, string $subject, string $htmlBody, string $textBody = ''): bool
+{
+    return sendEmail($to, $subject, $htmlBody, $textBody);
+}
+
+/**
+ * Send the same email to multiple recipients in a loop.
+ *
+ * Each recipient may override $data by supplying an array entry that is itself
+ * an array with keys 'email', 'name', and optionally 'data'.
+ *
+ * @param array  $recipients  [['email'=>'a@b.com','name'=>'Alice','data'=>[…]], …]
+ * @param string $subject     Email subject
+ * @param string $htmlBody    Rendered HTML body (use placeholder-replaced content)
+ * @param string $textBody    Plain-text alternative
+ * @return int  Number of successful deliveries
+ */
+function sendBulkEmail(array $recipients, string $subject, string $htmlBody, string $textBody = ''): int
+{
+    $sent = 0;
+    foreach ($recipients as $r) {
+        $email = is_array($r) ? ($r['email'] ?? '') : (string)$r;
+        if (!$email) {
+            continue;
+        }
+        if (sendEmail($email, $subject, $htmlBody, $textBody)) {
+            $sent++;
+        }
+    }
+    return $sent;
+}
+
+/**
+ * Add an email to the outbound queue (processed by cron).
+ *
+ * @param PDO    $db       Database connection
+ * @param string $toEmail  Recipient email address
+ * @param string $toName   Recipient display name
+ * @param string $subject  Email subject
+ * @param string $template Template identifier (filename without extension)
+ * @param array  $data     Template variables
+ * @return bool
+ */
+function queueEmail(PDO $db, string $toEmail, string $toName, string $subject, string $template, array $data = []): bool
+{
+    try {
+        $stmt = $db->prepare(
+            'INSERT INTO email_queue (to_email, to_name, subject, template, data_json)
+             VALUES (:to_email, :to_name, :subject, :template, :data_json)'
+        );
+        return $stmt->execute([
+            ':to_email'  => $toEmail,
+            ':to_name'   => $toName,
+            ':subject'   => $subject,
+            ':template'  => $template,
+            ':data_json' => json_encode($data, JSON_UNESCAPED_UNICODE),
+        ]);
+    } catch (PDOException $e) {
+        error_log('queueEmail DB error: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Process pending emails from the queue (called by a cron job).
+ *
+ * @param PDO $db    Database connection
+ * @param int $limit Maximum number of emails to process per run
+ * @return array ['sent' => int, 'failed' => int]
+ */
+function processEmailQueue(PDO $db, int $limit = 50): array
+{
+    $sent   = 0;
+    $failed = 0;
+
+    try {
+        $stmt = $db->prepare(
+            "SELECT * FROM email_queue
+             WHERE status = 'pending' AND attempts < 3
+             ORDER BY created_at ASC
+             LIMIT :lim"
+        );
+        $stmt->bindValue(':lim', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log('processEmailQueue fetch error: ' . $e->getMessage());
+        return ['sent' => 0, 'failed' => 0];
+    }
+
+    foreach ($rows as $row) {
+        // Mark as processing
+        try {
+            $db->prepare("UPDATE email_queue SET status='processing', attempts=attempts+1 WHERE id=:id")
+               ->execute([':id' => $row['id']]);
+        } catch (PDOException $e) {
+            continue;
+        }
+
+        $htmlBody = (string)($row['html_body'] ?? '');
+        $success  = false;
+
+        if ($htmlBody !== '') {
+            $success = sendEmail($row['to_email'], $row['subject'], $htmlBody);
+        } else {
+            error_log("processEmailQueue: no html_body for queue id={$row['id']}");
+        }
+
+        $newStatus = $success ? 'sent' : 'failed';
+        $sentAt    = $success ? date('Y-m-d H:i:s') : null;
+
+        try {
+            $upd = $db->prepare(
+                "UPDATE email_queue
+                 SET status=:status, sent_at=:sent_at
+                 WHERE id=:id"
+            );
+            $upd->execute([
+                ':status'  => $newStatus,
+                ':sent_at' => $sentAt,
+                ':id'      => $row['id'],
+            ]);
+        } catch (PDOException $e) {
+            error_log('processEmailQueue update error: ' . $e->getMessage());
+        }
+
+        // Log delivery
+        _logEmailDelivery(
+            $db,
+            $row['to_email'],
+            $row['to_name'] ?? '',
+            $row['subject'],
+            $row['template'] ?? '',
+            $success ? 'sent' : 'failed',
+            $success ? 'OK' : 'send failed'
+        );
+
+        $success ? $sent++ : $failed++;
+    }
+
+    return ['sent' => $sent, 'failed' => $failed];
+}
+
+/**
+ * Retrieve the email delivery log with optional filters.
+ *
+ * @param PDO    $db      Database connection
+ * @param array  $filters ['status'=>'sent|failed', 'template'=>'...', 'to_email'=>'...']
+ * @param int    $page    1-based page number
+ * @param int    $perPage Results per page
+ * @return array ['data' => rows, 'total' => int, 'pages' => int]
+ */
+function getEmailLog(PDO $db, array $filters = [], int $page = 1, int $perPage = 25): array
+{
+    $where  = [];
+    $params = [];
+
+    if (!empty($filters['status'])) {
+        $where[]            = 'status = :status';
+        $params[':status']  = $filters['status'];
+    }
+    if (!empty($filters['template'])) {
+        $where[]             = 'template = :template';
+        $params[':template'] = $filters['template'];
+    }
+    if (!empty($filters['to_email'])) {
+        $where[]              = 'to_email LIKE :to_email';
+        $params[':to_email']  = '%' . $filters['to_email'] . '%';
+    }
+
+    $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+    $offset      = max(0, ($page - 1) * $perPage);
+
+    try {
+        $countStmt = $db->prepare("SELECT COUNT(*) FROM email_logs {$whereClause}");
+        $countStmt->execute($params);
+        $total = (int)$countStmt->fetchColumn();
+
+        $dataStmt = $db->prepare(
+            "SELECT * FROM email_logs {$whereClause}
+             ORDER BY created_at DESC
+             LIMIT :limit OFFSET :offset"
+        );
+        foreach ($params as $k => $v) {
+            $dataStmt->bindValue($k, $v);
+        }
+        $dataStmt->bindValue(':limit',  $perPage, PDO::PARAM_INT);
+        $dataStmt->bindValue(':offset', $offset,  PDO::PARAM_INT);
+        $dataStmt->execute();
+        $data = $dataStmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log('getEmailLog DB error: ' . $e->getMessage());
+        return ['data' => [], 'total' => 0, 'pages' => 0];
+    }
+
+    return [
+        'data'  => $data,
+        'total' => $total,
+        'pages' => max(1, (int)ceil($total / $perPage)),
+    ];
+}
+
+/**
+ * Test SMTP connectivity by sending a test email.
+ *
+ * @param string $testAddress  Address to send the test to (defaults to MAIL_FROM_EMAIL)
+ * @return array ['success' => bool, 'message' => string]
+ */
+function testSmtp(string $testAddress = ''): array
+{
+    if (!$testAddress) {
+        $testAddress = defined('MAIL_FROM_EMAIL') ? MAIL_FROM_EMAIL : '';
+    }
+
+    if (!$testAddress) {
+        return ['success' => false, 'message' => 'No test address provided and MAIL_FROM_EMAIL is not configured.'];
+    }
+
+    $appName = defined('APP_NAME') ? APP_NAME : 'GlobexSky';
+    $subject = "[{$appName}] SMTP Test — " . date('Y-m-d H:i:s');
+    $body    = "<p>This is an automated SMTP test from <strong>{$appName}</strong>. "
+             . "If you received this email, your SMTP configuration is working correctly.</p>";
+
+    $ok = sendEmail($testAddress, $subject, $body, strip_tags($body));
+
+    return [
+        'success' => $ok,
+        'message' => $ok
+            ? "Test email sent successfully to {$testAddress}."
+            : "Failed to send test email. Check PHP error log for details.",
+    ];
+}
+
+/**
+ * Internal helper: log an email delivery to the email_logs table.
+ *
+ * @param PDO    $db
+ * @param string $toEmail
+ * @param string $toName
+ * @param string $subject
+ * @param string $template
+ * @param string $status   'sent' or 'failed'
+ * @param string $smtpResponse
+ * @return void
+ */
+function _logEmailDelivery(
+    PDO    $db,
+    string $toEmail,
+    string $toName,
+    string $subject,
+    string $template,
+    string $status,
+    string $smtpResponse = ''
+): void {
+    try {
+        $stmt = $db->prepare(
+            'INSERT INTO email_logs (to_email, to_name, subject, template, status, smtp_response)
+             VALUES (:to_email, :to_name, :subject, :template, :status, :smtp_response)'
+        );
+        $stmt->execute([
+            ':to_email'      => $toEmail,
+            ':to_name'       => $toName,
+            ':subject'       => substr($subject, 0, 500),
+            ':template'      => substr($template, 0, 100),
+            ':status'        => $status,
+            ':smtp_response' => substr($smtpResponse, 0, 1000),
+        ]);
+    } catch (PDOException $e) {
+        error_log('_logEmailDelivery DB error: ' . $e->getMessage());
+    }
 }

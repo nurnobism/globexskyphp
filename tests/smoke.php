@@ -1091,6 +1091,49 @@ foreach ($pr17Pages as $f) {
     assertSyntax("$root/$f");
 }
 
+// ── PR #22: Email Templates & PHPMailer Integration ──────────
+echo "\nPR #22 Email database schema:\n";
+assertFile("$root/database/schema_v22_email.sql");
+
+echo "\nPR #22 Mailer include:\n";
+assertFile("$root/includes/mailer.php");
+assertSyntax("$root/includes/mailer.php");
+
+echo "\nPR #22 Email templates:\n";
+$pr22Templates = [
+    'templates/emails/base.php',
+    'templates/emails/welcome.php',
+    'templates/emails/email-verification.php',
+    'templates/emails/password-reset.php',
+    'templates/emails/password-changed.php',
+    'templates/emails/order-placed.php',
+    'templates/emails/order-confirmation.php',
+    'templates/emails/order-confirmed.php',
+    'templates/emails/order-shipped.php',
+    'templates/emails/order-delivered.php',
+    'templates/emails/order-cancelled.php',
+    'templates/emails/new-order.php',
+    'templates/emails/payout-processed.php',
+    'templates/emails/payout-rejected.php',
+    'templates/emails/plan-expires-soon.php',
+    'templates/emails/plan-expired.php',
+    'templates/emails/kyc-approved.php',
+    'templates/emails/kyc-rejected.php',
+    'templates/emails/new-message.php',
+    'templates/emails/dispute-opened.php',
+    'templates/emails/invoice.php',
+];
+foreach ($pr22Templates as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #22 Admin email pages:\n";
+assertFile("$root/pages/admin/settings/email.php");
+assertSyntax("$root/pages/admin/settings/email.php");
+assertFile("$root/pages/admin/settings/email-templates.php");
+assertSyntax("$root/pages/admin/settings/email-templates.php");
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
