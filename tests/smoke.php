@@ -1029,6 +1029,44 @@ echo "\nPR #15 Admin tracking dashboard:\n";
 assertFile("$root/pages/admin/logistics/tracking.php");
 assertSyntax("$root/pages/admin/logistics/tracking.php");
 
+// ── PR #16: Carry Service ─────────────────────────────────────
+echo "\nPR #16 Carry Service database:\n";
+assertFile("$root/database/schema_v17_carry.sql");
+
+echo "\nPR #16 Carry Service includes:\n";
+assertFile("$root/includes/carry.php");
+assertSyntax("$root/includes/carry.php");
+
+echo "\nPR #16 Carry Service API:\n";
+assertFile("$root/api/carry.php");
+assertSyntax("$root/api/carry.php");
+
+echo "\nPR #16 Carry browse/buyer pages:\n";
+$pr16CarryPages = [
+    'pages/carry/index.php',
+    'pages/carry/trip-detail.php',
+    'pages/carry/my-requests.php',
+];
+foreach ($pr16CarryPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #16 Carrier dashboard & management pages:\n";
+$pr16CarrierPages = [
+    'pages/carrier/dashboard.php',
+    'pages/carrier/trips/index.php',
+    'pages/carrier/requests/index.php',
+];
+foreach ($pr16CarrierPages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #16 Admin carry management:\n";
+assertFile("$root/pages/admin/logistics/carry.php");
+assertSyntax("$root/pages/admin/logistics/carry.php");
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";

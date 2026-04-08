@@ -164,6 +164,9 @@ jobs:
           if [ -f database/schema_v17_tracking.sql ]; then
             mysql -h 127.0.0.1 -u root -proot globexsky_test < database/schema_v17_tracking.sql
           fi
+          if [ -f database/schema_v17_carry.sql ]; then
+            mysql -h 127.0.0.1 -u root -proot globexsky_test < database/schema_v17_carry.sql
+          fi
 
       - name: Run smoke tests
         run: php tests/smoke.php
