@@ -305,12 +305,10 @@ include __DIR__ . '/../../includes/header.php';
 
             const subjectEl = document.getElementById('subjectInput');
 
-            // POST as form-encoded (API accepts both form and JSON)
+            // POST as form-encoded — participants field carries the recipient for create_room
             const fd = new FormData();
             fd.append('_csrf_token',  CSRF);
-            fd.append('recipient_id', recipientIdInput.value);
             fd.append('subject',      subjectEl ? subjectEl.value.trim() : '');
-            fd.append('body',         body);
             fd.append('type',         'direct');
             fd.append('participants', JSON.stringify([parseInt(recipientIdInput.value, 10)]));
 

@@ -24,13 +24,14 @@
     var allRooms      = [];
     var pendingFiles  = [];
 
-    // Emoji set (unicode escapes for safe embedding)
+    // Emoji set (surrogate pairs / direct 4-digit escapes for ES5 compatibility)
     var EMOJI_SET = [
-        '\u{1F60A}','\u{1F602}','\u{1F60D}','\u{1F970}','\u{1F60E}','\u{1F622}','\u{1F621}',
-        '\u{1F44D}','\u{1F44E}','\u{1F44F}','\u{1F64F}','\u{1F4AA}','\u{1F389}',
-        '\u2705','\u274C','\u26A1','\u{1F525}','\u{1F4AF}','\u{1F680}','\u{1F4BC}',
-        '\u{1F4E6}','\u{1F91D}','\u{1F4B0}','\u{1F4C8}','\u{1F4E7}','\u{1F4DE}',
-        '\u{1F30D}','\u{1F550}','\u{1F4AC}','\u{1F4DD}','\u2B50','\u{1F3C6}'
+        '\uD83D\uDE0A','\uD83D\uDE02','\uD83D\uDE0D','\uD83E\uDD70','\uD83D\uDE0E',
+        '\uD83D\uDE22','\uD83D\uDE21','\uD83D\uDC4D','\uD83D\uDC4E','\uD83D\uDC4F',
+        '\uD83D\uDE4F','\uD83D\uDCAA','\uD83C\uDF89','\u2705','\u274C','\u26A1',
+        '\uD83D\uDD25','\uD83D\uDCAF','\uD83D\uDE80','\uD83D\uDCBC','\uD83D\uDCE6',
+        '\uD83E\uDD1D','\uD83D\uDCB0','\uD83D\uDCC8','\uD83D\uDCE7','\uD83D\uDCDE',
+        '\uD83C\uDF0D','\uD83D\uDD50','\uD83D\uDCAC','\uD83D\uDCDD','\u2B50','\uD83C\uDFC6'
     ];
 
     // DOM refs
@@ -300,6 +301,25 @@
         if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
+    // Re-render attach preview badges with correct indices
+    function renderAttachPreviews() {
+        if (!attachPreview) return;
+        attachPreview.innerHTML = '';
+        pendingFiles.forEach(function(f, i) {
+            var badge = document.createElement('span');
+            badge.className = 'badge bg-secondary d-inline-flex align-items-center gap-1 me-1 mb-1';
+            badge.innerHTML =
+                '<i class="bi bi-paperclip"></i>' + escHtml(truncate(f.name, 22)) +
+                '<button type="button" class="btn-close btn-close-white ms-1"' +
+                ' style="font-size:.5rem;" data-idx="' + i + '"></button>';
+            badge.querySelector('button').addEventListener('click', function() {
+                pendingFiles.splice(parseInt(this.dataset.idx, 10), 1);
+                renderAttachPreviews(); // re-render with updated indices
+            });
+            attachPreview.appendChild(badge);
+        });
+    }
+
     // Send message
     function sendMessage() {
         if (!currentRoomId) return;
@@ -522,21 +542,7 @@
         if (fileAttach) {
             fileAttach.addEventListener('change', function() {
                 pendingFiles = Array.from(this.files);
-                if (!attachPreview) return;
-                attachPreview.innerHTML = '';
-                pendingFiles.forEach(function(f, i) {
-                    var badge = document.createElement('span');
-                    badge.className = 'badge bg-secondary d-inline-flex align-items-center gap-1 me-1 mb-1';
-                    badge.innerHTML =
-                        '<i class="bi bi-paperclip"></i>' + escHtml(truncate(f.name, 22)) +
-                        '<button type="button" class="btn-close btn-close-white ms-1"' +
-                        ' style="font-size:.5rem;" data-idx="' + i + '"></button>';
-                    badge.querySelector('button').addEventListener('click', function() {
-                        pendingFiles.splice(parseInt(this.dataset.idx, 10), 1);
-                        badge.remove();
-                    });
-                    attachPreview.appendChild(badge);
-                });
+                renderAttachPreviews();
             });
         }
 

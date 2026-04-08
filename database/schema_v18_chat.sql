@@ -13,8 +13,7 @@ ALTER TABLE chat_rooms
     ADD COLUMN IF NOT EXISTS created_by            INT UNSIGNED DEFAULT NULL,
     ADD COLUMN IF NOT EXISTS is_active             TINYINT(1) NOT NULL DEFAULT 1,
     ADD COLUMN IF NOT EXISTS last_message_at       DATETIME DEFAULT NULL,
-    ADD COLUMN IF NOT EXISTS last_message_preview  VARCHAR(255) DEFAULT NULL,
-    MODIFY COLUMN IF EXISTS type ENUM('direct','order','inquiry','support','group') NOT NULL DEFAULT 'direct';
+    ADD COLUMN IF NOT EXISTS last_message_preview  VARCHAR(255) DEFAULT NULL;
 
 ALTER TABLE chat_rooms
     ADD INDEX IF NOT EXISTS idx_active_last (is_active, last_message_at);
