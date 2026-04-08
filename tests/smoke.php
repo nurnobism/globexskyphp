@@ -1091,6 +1091,80 @@ foreach ($pr17Pages as $f) {
     assertSyntax("$root/$f");
 }
 
+// ── PR #21: Notification Engine ───────────────────────────────
+echo "\nPR #21 Notification database schema:\n";
+assertFile("$root/database/schema_v21_notifications.sql");
+
+echo "\nPR #21 Notification engine includes:\n";
+assertFile("$root/includes/notifications.php");
+assertSyntax("$root/includes/notifications.php");
+
+echo "\nPR #21 Notification API:\n";
+assertFile("$root/api/notifications.php");
+assertSyntax("$root/api/notifications.php");
+
+echo "\nPR #21 Notification pages:\n";
+$pr21Pages = [
+    'pages/notifications/index.php',
+    'pages/notifications/settings.php',
+    'pages/notifications/preferences.php',
+];
+foreach ($pr21Pages as $f) {
+    assertFile("$root/$f");
+    assertSyntax("$root/$f");
+}
+
+echo "\nPR #21 Notification engine functions:\n";
+$notifSource = file_get_contents("$root/includes/notifications.php");
+$requiredFunctions = [
+    'notify',
+    'getNotifications',
+    'getUnreadCount',
+    'markAsRead',
+    'markAllAsRead',
+    'deleteNotification',
+    'clearAll',
+    'groupNotifications',
+    'getNotificationEventTypes',
+    'getNotificationIcon',
+    'formatTimeAgo',
+    'createNotification',
+    'getUserNotifications',
+    'createBulkNotification',
+];
+foreach ($requiredFunctions as $fn) {
+    if (strpos($notifSource, "function $fn(") !== false) {
+        ok("notifications.php defines function $fn()");
+    } else {
+        fail("notifications.php missing function $fn()");
+    }
+}
+
+echo "\nPR #21 Notification API actions:\n";
+$apiSource = file_get_contents("$root/api/notifications.php");
+$requiredActions = ['list','unread_count','mark_read','mark_all_read','delete','clear_all','preferences','update_preferences'];
+foreach ($requiredActions as $action) {
+    if (strpos($apiSource, "case '$action':") !== false) {
+        ok("api/notifications.php handles action '$action'");
+    } else {
+        fail("api/notifications.php missing action '$action'");
+    }
+}
+
+echo "\nPR #21 Notification event types (50+):\n";
+preg_match_all("/'([a-z0-9_.]+)'\s*=>/", $notifSource, $m);
+$eventTypes = array_unique(array_filter($m[1], fn($t) => str_contains($t, '.') || in_array($t, [
+    'order_placed','order_shipped','order_delivered','order_cancelled','order_refunded',
+    'payment_received','payment_failed','message_received','product_approved','product_rejected',
+    'low_stock','account_verified','password_changed','promo','system',
+])));
+$evtCount = count($eventTypes);
+if ($evtCount >= 50) {
+    ok("notifications.php defines $evtCount event types (>= 50 required)");
+} else {
+    fail("notifications.php only defines $evtCount event types (need >= 50)");
+}
+
 // ── Summary ──────────────────────────────────────────────────
 $total = $passed + count($errors);
 echo "\n=== Results: $passed/$total passed";
