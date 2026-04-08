@@ -1,6 +1,8 @@
 require('dotenv').config();
+const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const mysql = require('mysql2/promise');
 
@@ -35,47 +37,97 @@ const db = mysql.createPool({
     queueLimit: 0,
 });
 
-// --- HTTP server ---
-// All request handling is consolidated here to avoid double-execution.
-const server = http.createServer((req, res) => {
-    if (req.method === 'POST' && req.url === '/internal/notify') {
-        const authHeader = req.headers['authorization'] || '';
-        if (authHeader !== `Bearer ${INTERNAL_API_KEY}`) {
-            res.writeHead(401, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ error: 'Unauthorized' }));
-        }
+// --- Express app ---
+const app = express();
 
-        let body = '';
-        req.on('data', (chunk) => { body += chunk; });
-        req.on('end', () => {
-            try {
-                const { targetUserId, notification } = JSON.parse(body);
-                const uid = parseInt(targetUserId, 10);
-                if (!Number.isFinite(uid) || !notification) {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    return res.end(JSON.stringify({ error: 'Valid targetUserId (integer) and notification required' }));
-                }
-                const delivered = pushNotificationToUser(uid, notification);
-                io.to(`user:${uid}`).emit('notification', notification);
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true, delivered }));
-            } catch (e) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Invalid JSON' }));
-            }
-        });
-        return;
+// CORS_ORIGIN is a server-controlled environment variable, not user input.
+// When set to '*', we intentionally reject all cross-origin requests to avoid
+// the credentials+wildcard footgun; operators must set a specific origin in production.
+const corsOrigins = CORS_ORIGIN === '*'
+    ? false // disables CORS entirely when wildcard is set; warning was emitted at startup
+    : CORS_ORIGIN.split(',').map(o => o.trim()).filter(Boolean);
+
+app.use(cors({
+    origin: corsOrigins,
+    methods: ['GET', 'POST'],
+    credentials: true,
+}));
+app.use(express.json());
+
+// Internal API key middleware
+function requireInternalKey(req, res, next) {
+    const authHeader = req.headers['authorization'] || '';
+    if (authHeader !== `Bearer ${INTERNAL_API_KEY}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
     }
+    next();
+}
 
-    // Health-check for all other requests
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'GlobexSky Realtime OK' }));
+// Health check
+app.get('/', (_req, res) => res.json({ status: 'GlobexSky Realtime OK' }));
+app.get('/health', (_req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
+
+// Online status check — lets PHP query whether a user is online
+app.get('/online-status/:userId', requireInternalKey, (req, res) => {
+    const uid = parseInt(req.params.userId, 10);
+    if (!Number.isFinite(uid)) {
+        return res.status(400).json({ error: 'Invalid userId' });
+    }
+    const sockets = userSockets.get(uid);
+    const isOnline = !!(sockets && sockets.size > 0);
+    res.json({ userId: uid, isOnline, connectedSockets: isOnline ? sockets.size : 0 });
 });
+
+// Push a notification to a specific user
+app.post('/internal/notify', requireInternalKey, (req, res) => {
+    const { targetUserId, notification } = req.body || {};
+    const uid = parseInt(targetUserId, 10);
+    if (!Number.isFinite(uid) || !notification) {
+        return res.status(400).json({ error: 'Valid targetUserId (integer) and notification required' });
+    }
+    const delivered = pushNotificationToUser(uid, notification);
+    io.to(`user:${uid}`).emit('notification', notification);
+    res.json({ success: true, delivered });
+});
+
+// PHP callback: new chat message — broadcast to conversation room
+app.post('/internal/chat-message', requireInternalKey, (req, res) => {
+    const { conversationId, senderId, messageId, content, type } = req.body || {};
+    if (!conversationId) {
+        return res.status(400).json({ error: 'conversationId required' });
+    }
+    const payload = {
+        id: messageId,
+        conversationId,
+        senderId,
+        content,
+        type: type || 'text',
+        sentAt: new Date().toISOString(),
+    };
+    io.to(`conversation:${conversationId}`).emit('new_message', payload);
+    res.json({ success: true });
+});
+
+// Admin broadcast to all connected clients
+app.post('/internal/broadcast', requireInternalKey, (req, res) => {
+    const { event, data, scope } = req.body || {};
+    if (!event) return res.status(400).json({ error: 'event required' });
+    // scope='all' broadcasts to every connected socket; default is admin room only
+    if (scope === 'all') {
+        io.emit(event, data || {});
+    } else {
+        io.to('admin:broadcast').emit(event, data || {});
+    }
+    res.json({ success: true });
+});
+
+// --- HTTP server ---
+const server = http.createServer(app);
 
 // --- Socket.io ---
 const io = new Server(server, {
     cors: {
-        origin: CORS_ORIGIN,
+        origin: corsOrigins || false,
         methods: ['GET', 'POST'],
         credentials: true,
     },
@@ -133,36 +185,36 @@ async function setUserOffline(userId) {
     }
 }
 
-async function saveMessage(roomId, senderId, message, type, extra) {
-    const { fileUrl = null, fileName = null, fileSize = null, replyToId = null } = extra || {};
+async function saveMessage(conversationId, senderId, content, type, extra) {
+    const { attachmentsJson = null } = extra || {};
+    const truncated = String(content || '').substring(0, 5000);
     const [result] = await db.execute(
-        `INSERT INTO chat_messages
-            (room_id, sender_id, message, type, file_url, file_name, file_size, reply_to_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [roomId, senderId, message, type || 'text', fileUrl, fileName, fileSize, replyToId]
+        `INSERT INTO messages
+            (conversation_id, sender_id, content, type, attachments_json, created_at)
+         VALUES (?, ?, ?, ?, ?, NOW())`,
+        [conversationId, senderId, truncated || null, type || 'text', attachmentsJson]
     );
-    // Update room's last-message preview
-    const preview = String(message || fileName || '').substring(0, 120);
+    const msgId = result.insertId;
     await db.execute(
-        `UPDATE chat_rooms
-         SET last_message_at = NOW(), last_message_preview = ?
+        `UPDATE conversations
+         SET last_message_id = ?, last_message_at = NOW(), updated_at = NOW()
          WHERE id = ?`,
-        [preview, roomId]
+        [msgId, conversationId]
     );
-    return result.insertId;
+    return msgId;
 }
 
 async function markMessageRead(messageId, userId) {
     try {
         await db.execute(
-            `INSERT IGNORE INTO message_read_receipts (message_id, user_id, read_at)
+            `INSERT IGNORE INTO message_reads (message_id, user_id, read_at)
              VALUES (?, ?, NOW())`,
             [messageId, userId]
         );
-        // Also bump participant last_read_at
+        // Also bump conversation_participants last_read_at
         await db.execute(
-            `UPDATE chat_participants SET last_read_at = NOW()
-             WHERE room_id = (SELECT room_id FROM chat_messages WHERE id = ?)
+            `UPDATE conversation_participants SET last_read_at = NOW()
+             WHERE conversation_id = (SELECT conversation_id FROM messages WHERE id = ?)
                AND user_id = ?`,
             [messageId, userId]
         );
@@ -171,16 +223,18 @@ async function markMessageRead(messageId, userId) {
     }
 }
 
-async function isRoomParticipant(roomId, userId) {
+async function isConversationParticipant(conversationId, userId) {
     const [rows] = await db.execute(
-        'SELECT id FROM chat_participants WHERE room_id = ? AND user_id = ?',
-        [roomId, userId]
+        'SELECT id FROM conversation_participants WHERE conversation_id = ? AND user_id = ?',
+        [conversationId, userId]
     );
     return rows.length > 0;
 }
 
 function broadcastOnlineStatus(userId, isOnline) {
-    io.emit('user_status', { userId, isOnline, lastSeen: new Date().toISOString() });
+    // Emit both event names for compatibility
+    io.emit('online_status', { userId, isOnline, lastSeen: new Date().toISOString() });
+    io.emit('user_status',   { userId, isOnline, lastSeen: new Date().toISOString() });
 }
 
 function pushNotificationToUser(targetUserId, notification) {
@@ -240,15 +294,66 @@ io.on('connection', async (socket) => {
     // Auto-join the user's personal notification room
     socket.join(`user:${userId}`);
 
-    // ── join_room ──────────────────────────────────────────────────────────────
+    // Admins also join the broadcast channel
+    if (socket.userRole === 'admin') {
+        socket.join('admin:broadcast');
+    }
+
+    // ── join_conversation ──────────────────────────────────────────────────────
+    socket.on('join_conversation', async ({ conversationId }, ack) => {
+        if (!conversationId) return ack && ack({ error: 'conversationId required' });
+        try {
+            const [rows] = await db.execute(
+                'SELECT id FROM conversation_participants WHERE conversation_id = ? AND user_id = ?',
+                [conversationId, userId]
+            );
+            if (!rows.length) return ack && ack({ error: 'Not a participant of this conversation' });
+            socket.join(`conversation:${conversationId}`);
+            console.log(`[join_conversation] user=${userId} conversation=${conversationId}`);
+            ack && ack({ success: true, conversationId });
+        } catch (err) {
+            console.error('[join_conversation] error:', err.message);
+            ack && ack({ error: 'Server error' });
+        }
+    });
+
+    // ── leave_conversation ─────────────────────────────────────────────────────
+    socket.on('leave_conversation', ({ conversationId }, ack) => {
+        if (!conversationId) return ack && ack({ error: 'conversationId required' });
+        socket.leave(`conversation:${conversationId}`);
+        console.log(`[leave_conversation] user=${userId} conversation=${conversationId}`);
+        ack && ack({ success: true });
+    });
+
+    // ── online_status — query whether a user is online ─────────────────────────
+    socket.on('online_status', ({ targetUserId }, ack) => {
+        const uid = parseInt(targetUserId, 10);
+        if (!Number.isFinite(uid)) return ack && ack({ error: 'targetUserId required' });
+        const sockets = userSockets.get(uid);
+        const isOnline = !!(sockets && sockets.size > 0);
+        ack && ack({ userId: uid, isOnline });
+    });
+
+    // ── new_notification — push to a specific user (admin only) ───────────────
+    socket.on('new_notification', (data, ack) => {
+        if (socket.userRole !== 'admin') return ack && ack({ error: 'Unauthorized' });
+        const { targetUserId, notification } = data || {};
+        const uid = parseInt(targetUserId, 10);
+        if (!Number.isFinite(uid) || !notification) {
+            return ack && ack({ error: 'Valid targetUserId (integer) and notification required' });
+        }
+        const delivered = pushNotificationToUser(uid, notification);
+        io.to(`user:${uid}`).emit('new_notification', notification);
+        ack && ack({ success: true, delivered });
+    });
+
+    // ── join_room (legacy alias for join_conversation) ────────────────────────
     socket.on('join_room', async ({ roomId }, ack) => {
         if (!roomId) return ack && ack({ error: 'roomId required' });
-
         try {
-            const allowed = await isRoomParticipant(roomId, userId);
+            const allowed = await isConversationParticipant(roomId, userId);
             if (!allowed) return ack && ack({ error: 'Not a participant of this room' });
-
-            socket.join(`room:${roomId}`);
+            socket.join(`conversation:${roomId}`);
             console.log(`[join_room] user=${userId} room=${roomId}`);
             ack && ack({ success: true, roomId });
         } catch (err) {
@@ -257,48 +362,45 @@ io.on('connection', async (socket) => {
         }
     });
 
-    // ── leave_room ─────────────────────────────────────────────────────────────
+    // ── leave_room (legacy alias) ──────────────────────────────────────────────
     socket.on('leave_room', ({ roomId }, ack) => {
         if (!roomId) return ack && ack({ error: 'roomId required' });
-        socket.leave(`room:${roomId}`);
+        socket.leave(`conversation:${roomId}`);
         console.log(`[leave_room] user=${userId} room=${roomId}`);
         ack && ack({ success: true });
     });
 
     // ── send_message ───────────────────────────────────────────────────────────
     socket.on('send_message', async (data, ack) => {
-        const { roomId, message, type = 'text', fileUrl, fileName, fileSize, replyToId } = data || {};
+        // Accept both conversationId and legacy roomId
+        const cid = parseInt(data && (data.conversationId || data.roomId), 10);
+        const content = (data && (data.content || data.message)) || '';
+        const type = (data && data.type) || 'text';
+        const attachments = (data && data.attachments) || null;
 
-        if (!roomId) return ack && ack({ error: 'roomId required' });
-        if (!message && !fileUrl) return ack && ack({ error: 'message or fileUrl required' });
+        if (!Number.isFinite(cid)) return ack && ack({ error: 'conversationId required' });
+        if (!content && !attachments) return ack && ack({ error: 'content required' });
 
         try {
-            const allowed = await isRoomParticipant(roomId, userId);
-            if (!allowed) return ack && ack({ error: 'Not a participant of this room' });
+            const allowed = await isConversationParticipant(cid, userId);
+            if (!allowed) return ack && ack({ error: 'Not a participant of this conversation' });
 
-            const messageId = await saveMessage(roomId, userId, message, type, {
-                fileUrl,
-                fileName,
-                fileSize,
-                replyToId,
-            });
+            const attachmentsJson = attachments ? JSON.stringify(attachments) : null;
+            const messageId = await saveMessage(cid, userId, content, type, { attachmentsJson });
 
             const payload = {
                 id: messageId,
-                roomId,
+                conversationId: cid,
                 senderId: userId,
                 senderName: socket.userName,
-                message,
+                content,
                 type,
-                fileUrl: fileUrl || null,
-                fileName: fileName || null,
-                fileSize: fileSize || null,
-                replyToId: replyToId || null,
+                attachments: attachments || null,
                 createdAt: new Date().toISOString(),
             };
 
-            // Broadcast to everyone in the room (including sender for multi-tab sync)
-            io.to(`room:${roomId}`).emit('new_message', payload);
+            // Broadcast to everyone in the conversation room
+            io.to(`conversation:${cid}`).emit('new_message', payload);
 
             ack && ack({ success: true, messageId });
         } catch (err) {
@@ -308,10 +410,11 @@ io.on('connection', async (socket) => {
     });
 
     // ── typing_start ───────────────────────────────────────────────────────────
-    socket.on('typing_start', ({ roomId }) => {
-        if (!roomId) return;
-        socket.to(`room:${roomId}`).emit('user_typing', {
-            roomId,
+    socket.on('typing_start', ({ conversationId, roomId }) => {
+        const cid = parseInt(conversationId || roomId, 10);
+        if (!Number.isFinite(cid)) return;
+        socket.to(`conversation:${cid}`).emit('user_typing', {
+            conversationId: cid,
             userId,
             userName: socket.userName,
             isTyping: true,
@@ -319,10 +422,11 @@ io.on('connection', async (socket) => {
     });
 
     // ── typing_stop ────────────────────────────────────────────────────────────
-    socket.on('typing_stop', ({ roomId }) => {
-        if (!roomId) return;
-        socket.to(`room:${roomId}`).emit('user_typing', {
-            roomId,
+    socket.on('typing_stop', ({ conversationId, roomId }) => {
+        const cid = parseInt(conversationId || roomId, 10);
+        if (!Number.isFinite(cid)) return;
+        socket.to(`conversation:${cid}`).emit('user_typing', {
+            conversationId: cid,
             userId,
             userName: socket.userName,
             isTyping: false,
@@ -330,16 +434,17 @@ io.on('connection', async (socket) => {
     });
 
     // ── read_receipt ───────────────────────────────────────────────────────────
-    socket.on('read_receipt', async ({ messageId, roomId }, ack) => {
+    socket.on('read_receipt', async ({ messageId, conversationId, roomId }, ack) => {
         if (!messageId) return ack && ack({ error: 'messageId required' });
+        const cid = parseInt(conversationId || roomId, 10);
 
         try {
             await markMessageRead(messageId, userId);
 
-            // Notify others in the room about the read receipt
-            if (roomId) {
-                socket.to(`room:${roomId}`).emit('message_read', {
+            if (Number.isFinite(cid)) {
+                socket.to(`conversation:${cid}`).emit('message_read', {
                     messageId,
+                    conversationId: cid,
                     userId,
                     readAt: new Date().toISOString(),
                 });
@@ -351,6 +456,7 @@ io.on('connection', async (socket) => {
             ack && ack({ error: 'Failed to record read receipt' });
         }
     });
+
 
     // ── push_notification (admin-only socket event) ────────────────────────────
     socket.on('push_notification', (data, ack) => {
